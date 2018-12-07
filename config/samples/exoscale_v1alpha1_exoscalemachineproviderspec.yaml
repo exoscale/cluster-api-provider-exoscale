@@ -1,0 +1,9 @@
+apiVersion: exoscale.cluster.k8s.io/v1alpha1
+kind: ExoscaleMachineProviderSpec
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: exoscalemachineproviderspec-sample
+spec:
+  # Add fields here
+  foo: bar

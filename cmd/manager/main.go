@@ -17,12 +17,18 @@ limitations under the License.
 package main
 
 import (
+	"flag"
+	"fmt"
 	"os"
 
-	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"sigs.k8s.io/cluster-api-provider-exoscale/pkg/apis"
-	"sigs.k8s.io/cluster-api-provider-exoscale/pkg/controller"
-	"sigs.k8s.io/cluster-api-provider-exoscale/pkg/webhook"
+	"sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/actuators/cluster"
+	"sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/actuators/machine"
+	clusterapis "sigs.k8s.io/cluster-api/pkg/apis"
+	"sigs.k8s.io/cluster-api/pkg/apis/cluster/common"
+	"sigs.k8s.io/cluster-api/pkg/client/clientset_generated/clientset"
+	capicluster "sigs.k8s.io/cluster-api/pkg/controller/cluster"
+	capimachine "sigs.k8s.io/cluster-api/pkg/controller/machine"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
@@ -30,51 +36,59 @@ import (
 )
 
 func main() {
-	logf.SetLogger(logf.ZapLogger(false))
-	log := logf.Log.WithName("entrypoint")
-
-	// Get a config to talk to the apiserver
-	log.Info("setting up client for manager")
-	cfg, err := config.GetConfig()
-	if err != nil {
-		log.Error(err, "unable to set up client config")
-		os.Exit(1)
+	cfg := config.GetConfigOrDie()
+	if cfg == nil {
+		panic(fmt.Errorf("GetConfigOrDie didn't die"))
 	}
 
-	// Create a new Cmd to provide shared dependencies and start components
-	log.Info("setting up manager")
+	flag.Parse()
+	log := logf.Log.WithName("exoscale-controller-manager")
+	logf.SetLogger(logf.ZapLogger(false))
+	entryLog := log.WithName("entrypoint")
+
+	// Setup a Manager
 	mgr, err := manager.New(cfg, manager.Options{})
 	if err != nil {
-		log.Error(err, "unable to set up overall controller manager")
+		entryLog.Error(err, "unable to set up overall controller manager")
 		os.Exit(1)
 	}
 
-	log.Info("Registering Components.")
+	cs, err := clientset.NewForConfig(cfg)
+	if err != nil {
+		panic(err)
+	}
 
-	// Setup Scheme for all resources
-	log.Info("setting up scheme")
+	clusterActuator, err := cluster.NewActuator(cluster.ActuatorParams{
+		ClustersGetter: cs.ClusterV1alpha1(),
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	machineActuator, err := machine.NewActuator(machine.ActuatorParams{
+		MachinesGetter: cs.ClusterV1alpha1(),
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	// Register our cluster deployer (the interface is in clusterctl and we define the Deployer interface on the actuator)
+	common.RegisterClusterProvisioner("exoscale", clusterActuator)
+
 	if err := apis.AddToScheme(mgr.GetScheme()); err != nil {
-		log.Error(err, "unable add APIs to scheme")
-		os.Exit(1)
+		panic(err)
 	}
 
-	// Setup all Controllers
-	log.Info("Setting up controller")
-	if err := controller.AddToManager(mgr); err != nil {
-		log.Error(err, "unable to register controllers to the manager")
-		os.Exit(1)
+	if err := clusterapis.AddToScheme(mgr.GetScheme()); err != nil {
+		panic(err)
 	}
 
-	log.Info("setting up webhooks")
-	if err := webhook.AddToManager(mgr); err != nil {
-		log.Error(err, "unable to register webhooks to the manager")
-		os.Exit(1)
-	}
+	capimachine.AddWithActuator(mgr, machineActuator)
 
-	// Start the Cmd
-	log.Info("Starting the Cmd.")
+	capicluster.AddWithActuator(mgr, clusterActuator)
+
 	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
-		log.Error(err, "unable to run the manager")
+		entryLog.Error(err, "unable to run manager")
 		os.Exit(1)
 	}
 }

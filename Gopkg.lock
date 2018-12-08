@@ -666,6 +666,16 @@
   branch = "master"
   name = "sigs.k8s.io/cluster-api"
   packages = [
+    "cmd/clusterctl/clientcmd",
+    "cmd/clusterctl/clusterdeployer",
+    "cmd/clusterctl/clusterdeployer/bootstrap",
+    "cmd/clusterctl/clusterdeployer/bootstrap/existing",
+    "cmd/clusterctl/clusterdeployer/bootstrap/minikube",
+    "cmd/clusterctl/clusterdeployer/clusterclient",
+    "cmd/clusterctl/cmd",
+    "cmd/clusterctl/phases",
+    "cmd/clusterctl/providercomponents",
+    "cmd/clusterctl/validation",
     "pkg/apis",
     "pkg/apis/cluster/common",
     "pkg/apis/cluster/v1alpha1",
@@ -675,6 +685,7 @@
     "pkg/controller/cluster",
     "pkg/controller/error",
     "pkg/controller/machine",
+    "pkg/controller/noderefutil",
     "pkg/util"
   ]
   revision = "03e4ed8c40c6b7c839fc4c864e6e39077170d353"
@@ -745,6 +756,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "f5429c369d5e21b5a26d6f5607a4a3be353299a294fbce4ea3f4024aadcf3f1b"
+  inputs-digest = "cd530fe6b0759ea6deaee87deda7460db09d84f2df019ccd99aa10fac359b533"
   solver-name = "gps-cdcl"
   solver-version = 1

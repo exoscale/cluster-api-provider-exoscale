@@ -114,7 +114,7 @@ spec:
               fieldPath: metadata.namespace
         - name: SECRET_NAME
           value: cluster-api-provider-exoscale-webhook-server-secret
-        image: IMAGE_URL
+        image: pierro777/cluster-api-provider-exoscale
         imagePullPolicy: Always
         name: manager
         ports:

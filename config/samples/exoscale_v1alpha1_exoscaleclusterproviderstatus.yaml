@@ -3,7 +3,7 @@ kind: ExoscaleClusterProviderStatus
 metadata:
   labels:
     controller-tools.k8s.io: "1.0"
-  name: exoscaleclusterproviderstatus-sample
+  name: exoscaleclusterproviderstatus
 spec:
   # Add fields here
   foo: bar

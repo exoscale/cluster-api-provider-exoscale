@@ -2,11 +2,16 @@
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 
-all: test manager
+all: test manager clusterctl
 
 # Run tests
 test: generate fmt vet manifests
 	go test ./pkg/... ./cmd/... -coverprofile cover.out
+
+
+# Build clusterctl binary
+clusterctl: generate fmt vet
+	go build -o bin/clusterctl sigs.k8s.io/cluster-api-provider-exoscale/cmd/clusterctl
 
 # Build manager binary
 manager: generate fmt vet

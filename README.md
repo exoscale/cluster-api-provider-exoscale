@@ -8,14 +8,14 @@
 
 ## Building, Running and Testing
 
-## Start minikube and deploy the provider
+### Start minikube and deploy the provider
 
 ```bash
 minikube start
 make deploy
 ```
 
-## Verify deployment
+### Verify deployment
 
 ```bash
 kubectl logs cluster-api-provider-exoscale-controller-manager-0 -n cluster-api-provider-exoscale-system  

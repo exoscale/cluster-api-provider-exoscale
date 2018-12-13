@@ -15,6 +15,11 @@
 minikube start
 make deploy
 ```
+then
+
+```
+go run cmd/manager/main.go
+```
 
 ### Verify deployment
 

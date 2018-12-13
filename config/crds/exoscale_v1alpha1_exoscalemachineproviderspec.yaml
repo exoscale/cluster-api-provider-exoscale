@@ -21,8 +21,44 @@ spec:
         metadata:
           type: object
         spec:
+          properties:
+            disk:
+              format: int64
+              type: integer
+            sshkey:
+              type: string
+            template:
+              type: string
+            type:
+              type: string
+            zone:
+              type: string
+          required:
+          - zone
+          - template
+          - type
+          - disk
+          - sshkey
           type: object
         status:
+          properties:
+            disk:
+              format: int64
+              type: integer
+            sshkey:
+              type: string
+            template:
+              type: string
+            type:
+              type: string
+            zone:
+              type: string
+          required:
+          - zone
+          - template
+          - type
+          - disk
+          - sshkey
           type: object
   version: v1alpha1
 status:

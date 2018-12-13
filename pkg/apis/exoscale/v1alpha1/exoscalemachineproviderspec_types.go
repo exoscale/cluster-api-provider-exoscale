@@ -25,12 +25,30 @@ import (
 
 // ExoscaleMachineProviderSpecSpec defines the desired state of ExoscaleMachineProviderSpec
 type ExoscaleMachineProviderSpecSpec struct {
+	Zone              string `json:"zone"`
+	Template          string `json:"template"`
+	Type              string `json:"type"`
+	Disk              int    `json:"disk"`
+	Sshkey            string `json:"sshkey"`
+	Ipv6              bool   `json:"ipv6"`
+	SecurityGroup     string `json:"security-group"`
+	AntiAffinityGroup string `json:"anti-affinity-group"`
+	CloudInit         string `json:"cloud-init"`
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 }
 
 // ExoscaleMachineProviderSpecStatus defines the observed state of ExoscaleMachineProviderSpec
 type ExoscaleMachineProviderSpecStatus struct {
+	Zone              string `json:"zone"`
+	Template          string `json:"template"`
+	Type              string `json:"type"`
+	Disk              int    `json:"disk"`
+	Sshkey            string `json:"sshkey"`
+	Ipv6              bool   `json:"ipv6"`
+	SecurityGroup     string `json:"security-group"`
+	AntiAffinityGroup string `json:"anti-affinity-group"`
+	CloudInit         string `json:"cloud-init"`
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 }

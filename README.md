@@ -16,17 +16,19 @@
 minikube start
 make deploy
 ```
+### Verify deployment
+
+```bash
+kubectl logs cluster-api-provider-exoscale-controller-manager-0 -n cluster-api-provider-exoscale-system  
+```
+
 then
 
 ```
 go run cmd/manager/main.go
 ```
 
-### Verify deployment
 
-```bash
-kubectl logs cluster-api-provider-exoscale-controller-manager-0 -n cluster-api-provider-exoscale-system  
-```
 
 ## Clusterctl
 

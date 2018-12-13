@@ -2,9 +2,10 @@
 
 ## Prerequisites
 
-- Install [`dep`][install-dep]
 - Install [`kubectl`][kubectl-install]
 - Install [`minikube`][install-minikube]
+
+- set ENV variable to `GO111MODULE=off`
 
 ## Building, Running and Testing
 
@@ -19,6 +20,12 @@ make deploy
 
 ```bash
 kubectl logs cluster-api-provider-exoscale-controller-manager-0 -n cluster-api-provider-exoscale-system  
+```
+
+## Clusterctl
+
+```bash
+go run cmd/clusterctl/main.go
 ```
 
 [kubebuilder-book]: https://book.kubebuilder.io/

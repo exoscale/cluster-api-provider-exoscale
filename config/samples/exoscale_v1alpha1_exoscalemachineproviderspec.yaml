@@ -5,5 +5,14 @@ metadata:
     controller-tools.k8s.io: "1.0"
   name: exoscalemachineproviderspec
 spec:
-  # Add fields here
-  foo: bar
+  # Exoscale fied spec
+  zone: ch-dk-2
+  template: "Linux Ubuntu 18.04 LTS 64-bit"
+  type: medium
+  disk: 50
+  sshkey: pierre
+  ipv6: false
+  security-group: cluster-api
+  anti-affinity-group: ""
+  cloud-init: ""
+

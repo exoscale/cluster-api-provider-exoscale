@@ -25,12 +25,16 @@ import (
 
 // ExoscaleClusterProviderStatusSpec defines the desired state of ExoscaleClusterProviderStatus
 type ExoscaleClusterProviderStatusSpec struct {
+	Zone   string `json:"zone"`
+	SSHKey string `json:"sshkey"`
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 }
 
 // ExoscaleClusterProviderStatusStatus defines the observed state of ExoscaleClusterProviderStatus
 type ExoscaleClusterProviderStatusStatus struct {
+	Zone   string `json:"zone"`
+	SSHKey string `json:"sshkey"`
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 }

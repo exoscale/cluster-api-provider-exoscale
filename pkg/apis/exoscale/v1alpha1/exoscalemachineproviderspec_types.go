@@ -29,7 +29,7 @@ type ExoscaleMachineProviderSpecSpec struct {
 	Template          string `json:"template"`
 	Type              string `json:"type"`
 	Disk              int    `json:"disk"`
-	Sshkey            string `json:"sshkey"`
+	SSHKey            string `json:"sshkey"`
 	Ipv6              bool   `json:"ipv6"`
 	SecurityGroup     string `json:"security-group"`
 	AntiAffinityGroup string `json:"anti-affinity-group"`
@@ -44,7 +44,7 @@ type ExoscaleMachineProviderSpecStatus struct {
 	Template          string `json:"template"`
 	Type              string `json:"type"`
 	Disk              int    `json:"disk"`
-	Sshkey            string `json:"sshkey"`
+	SSHKey            string `json:"sshkey"`
 	Ipv6              bool   `json:"ipv6"`
 	SecurityGroup     string `json:"security-group"`
 	AntiAffinityGroup string `json:"anti-affinity-group"`

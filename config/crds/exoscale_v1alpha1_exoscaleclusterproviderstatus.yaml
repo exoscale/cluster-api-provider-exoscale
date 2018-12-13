@@ -21,8 +21,24 @@ spec:
         metadata:
           type: object
         spec:
+          properties:
+            sshkey:
+              type: string
+            zone:
+              type: string
+          required:
+          - zone
+          - sshkey
           type: object
         status:
+          properties:
+            sshkey:
+              type: string
+            zone:
+              type: string
+          required:
+          - zone
+          - sshkey
           type: object
   version: v1alpha1
 status:

@@ -4,6 +4,7 @@
 
 - Install [`kubectl`][kubectl-install]
 - Install [`minikube`][install-minikube]
+- Install [`kustomize`][install-kustomize]
 
 - set ENV variable to `GO111MODULE=off`
 

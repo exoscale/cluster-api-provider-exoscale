@@ -23,6 +23,7 @@ import (
 	"log"
 
 	"github.com/exoscale/egoscale"
+	"k8s.io/klog"
 
 	yaml "gopkg.in/yaml.v2"
 	exoscalev1 "sigs.k8s.io/cluster-api-provider-exoscale/pkg/apis/exoscale/v1alpha1"
@@ -33,7 +34,8 @@ import (
 
 const (
 	//ProviderName Exoscale provider name
-	ProviderName = "exoscale"
+	ProviderName            = "exoscale"
+	ExoscaleIPAnnotationKey = "exoscale-ip"
 )
 
 // Actuator is responsible for performing machine reconciliation
@@ -144,15 +146,22 @@ func (a *Actuator) Exists(ctx context.Context, cluster *clusterv1.Cluster, machi
 // (https://github.com/kubernetes-sigs/cluster-api/issues/160).
 
 // GetIP returns IP address of the machine in the cluster.
-func (a *Actuator) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (string, error) {
+func (*Actuator) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (string, error) {
 	log.Printf("Getting IP of machine %v for cluster %v.", machine.Name, cluster.Name)
-	return "", fmt.Errorf("TODO: Not yet implemented")
+	if machine.ObjectMeta.Annotations != nil {
+		if ip, ok := machine.ObjectMeta.Annotations[ExoscaleIPAnnotationKey]; ok {
+			klog.Infof("Returning IP from machine annotation %s", ip)
+			return ip, nil
+		}
+	}
+
+	return "", errors.New("could not get IP")
 }
 
 // GetKubeConfig gets a kubeconfig from the master.
-func (a *Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Machine) (string, error) {
+func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Machine) (string, error) {
 	log.Printf("Getting IP of machine %v for cluster %v.", master.Name, cluster.Name)
-	return "", fmt.Errorf("TODO: Not yet implemented")
+	return "", fmt.Errorf("Provisionner exoscale GetKubeConfig() not yet implemented")
 }
 
 func machineSpecFromProviderSpec(providerSpec clusterv1.ProviderSpec) (*exoscalev1.ExoscaleMachineProviderSpecSpec, error) {

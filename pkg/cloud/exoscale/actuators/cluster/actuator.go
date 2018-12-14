@@ -59,17 +59,13 @@ func (a *Actuator) Delete(cluster *clusterv1.Cluster) error {
 	return fmt.Errorf("TODO: Not yet implemented")
 }
 
-// // Deprecated interface for Provider specific logic. Please do not extend or add. This interface should be removed
-// // once issues/158 and issues/160 below are fixed.
-// type ProviderDeployer interface {
-// 	// TODO: This requirement can be removed once after: https://github.com/kubernetes-sigs/cluster-api/issues/158
-// 	GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (string, error)
-// 	// TODO: This requirement can be removed after: https://github.com/kubernetes-sigs/cluster-api/issues/160
-// 	GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Machine) (string, error)
-// }
+// The Machine Actuator interface must implement GetIP and GetKubeConfig functions as a workaround for issues
+// cluster-api#158 (https://github.com/kubernetes-sigs/cluster-api/issues/158) and cluster-api#160
+// (https://github.com/kubernetes-sigs/cluster-api/issues/160).
 
-//GetIP return IP of deployed instance in actuator
+// GetIP returns IP address of the machine in the cluster.
 func (*Actuator) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (string, error) {
+	log.Printf("Getting IP of machine %v for cluster %v.", machine.Name, cluster.Name)
 	if machine.ObjectMeta.Annotations != nil {
 		if ip, ok := machine.ObjectMeta.Annotations[ExoscaleIPAnnotationKey]; ok {
 			klog.Infof("Returning IP from machine annotation %s", ip)
@@ -80,7 +76,8 @@ func (*Actuator) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (
 	return "", errors.New("could not get IP")
 }
 
-//GetKubeConfig return kube config of deployed k8s cluster
+// GetKubeConfig gets a kubeconfig from the master.
 func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Machine) (string, error) {
+	log.Printf("Getting IP of machine %v for cluster %v.", master.Name, cluster.Name)
 	return "", fmt.Errorf("Provisionner exoscale GetKubeConfig() not yet implemented")
 }

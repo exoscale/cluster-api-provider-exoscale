@@ -23,6 +23,12 @@
   version = "v2.8.0"
 
 [[projects]]
+  name = "github.com/exoscale/egoscale"
+  packages = ["."]
+  revision = "8ed07774d753a0929bac9befb5228f2eacc5f84d"
+  version = "v0.13.0"
+
+[[projects]]
   name = "github.com/ghodss/yaml"
   packages = ["."]
   revision = "0ca9ea5df5451ffdf184b4428c902747c2c11cd7"
@@ -264,6 +270,12 @@
   ]
   revision = "d87f08a7d80821c797ffc8eb8f4e01675f378736"
   version = "v1.0.0"
+
+[[projects]]
+  name = "github.com/satori/go.uuid"
+  packages = ["."]
+  revision = "f58768cc1a7a7e77a3bd49e98cdd21419399b6a3"
+  version = "v1.2.0"
 
 [[projects]]
   name = "github.com/spf13/afero"
@@ -756,6 +768,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "cd530fe6b0759ea6deaee87deda7460db09d84f2df019ccd99aa10fac359b533"
+  inputs-digest = "b1da1c9e299d5e36a3b7feb5df409d6060c3b5a38586c7f5890aa4cb4532e04d"
   solver-name = "gps-cdcl"
   solver-version = 1

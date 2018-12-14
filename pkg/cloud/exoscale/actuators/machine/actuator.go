@@ -18,14 +18,21 @@ package machine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 
+	"github.com/exoscale/egoscale"
+
+	yaml "gopkg.in/yaml.v2"
+	exoscalev1 "sigs.k8s.io/cluster-api-provider-exoscale/pkg/apis/exoscale/v1alpha1"
+	exoclient "sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/client"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	client "sigs.k8s.io/cluster-api/pkg/client/clientset_generated/clientset/typed/cluster/v1alpha1"
 )
 
 const (
+	//ProviderName Exoscale provider name
 	ProviderName = "exoscale"
 )
 
@@ -49,12 +56,74 @@ func NewActuator(params ActuatorParams) (*Actuator, error) {
 // Create creates a machine and is invoked by the Machine Controller
 func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
 	log.Printf("Creating machine %v for cluster %v.", machine.Name, cluster.Name)
-	return fmt.Errorf("TODO: Not yet implemented")
+
+	providerSpec, err := machineSpecFromProviderSpec(machine.Spec.ProviderSpec)
+	if err != nil {
+		return fmt.Errorf("Cannot unmarshal providerSpec field: %v", err)
+	}
+
+	exoClient := exoclient.Client
+
+	//Prerequisite
+	// create or upload an sshkey in exoscale
+	// put sshkey name in machine spec provider yml
+
+	z, err := exoClient.Get(&egoscale.Zone{Name: providerSpec.Zone})
+	if err != nil {
+		return fmt.Errorf("Invalid exoscale zone %q. providerSpec field: %v", providerSpec.Zone, err)
+	}
+	zone := z.(*egoscale.Zone)
+
+	t, err := exoClient.Get(&egoscale.Template{Name: providerSpec.Template, ZoneID: zone.ID})
+	if err != nil {
+		return fmt.Errorf("Invalid exoscale template %q. providerSpec field: %v", providerSpec.Zone, err)
+	}
+	template := t.(*egoscale.Template)
+
+	sg, err := exoClient.Get(&egoscale.SecurityGroup{Name: providerSpec.SecurityGroup})
+	if err != nil {
+		return fmt.Errorf("Invalid exoscale security-group %q. providerSpec field: %v", providerSpec.Zone, err)
+	}
+	securityGroup := sg.(*egoscale.SecurityGroup)
+
+	so, err := exoClient.Get(&egoscale.ServiceOffering{Name: providerSpec.Type})
+	if err != nil {
+		return fmt.Errorf("Invalid exoscale service-Offering %q. providerSpec field: %v", providerSpec.Zone, err)
+	}
+	serviceOffering := so.(*egoscale.ServiceOffering)
+
+	req := egoscale.DeployVirtualMachine{
+		Name: machine.Name,
+		//UserData:          userData,
+		ZoneID:           zone.ID,
+		TemplateID:       template.ID,
+		RootDiskSize:     int64(providerSpec.Disk),
+		KeyPair:          providerSpec.SSHKey,
+		SecurityGroupIDs: []egoscale.UUID{*securityGroup.ID},
+		IP6:              &providerSpec.Ipv6,
+		//NetworkIDs:        pvs,
+		ServiceOfferingID: serviceOffering.ID,
+		//AffinityGroupIDs:  affinitygroups,
+	}
+
+	resp, err := exoclient.Client.Request(req)
+	if err != nil {
+		return fmt.Errorf("exoscale failed to DeployVirtualMachine %v", err)
+	}
+
+	vm := resp.(*egoscale.VirtualMachine)
+
+	log.Println("Deployed instance:", vm.Name, "IP:", vm.IP().String())
+
+	machine.Annotations["exoscale-ip"] = vm.IP().String()
+
+	return nil
 }
 
 // Delete deletes a machine and is invoked by the Machine Controller
 func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
 	log.Printf("Deleting machine %v for cluster %v.", machine.Name, cluster.Name)
+
 	return fmt.Errorf("TODO: Not yet implemented")
 }
 
@@ -84,4 +153,16 @@ func (a *Actuator) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine)
 func (a *Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Machine) (string, error) {
 	log.Printf("Getting IP of machine %v for cluster %v.", master.Name, cluster.Name)
 	return "", fmt.Errorf("TODO: Not yet implemented")
+}
+
+func machineSpecFromProviderSpec(providerSpec clusterv1.ProviderSpec) (*exoscalev1.ExoscaleMachineProviderSpecSpec, error) {
+	if providerSpec.Value == nil {
+		return nil, errors.New("no such providerSpec found in manifest")
+	}
+
+	var config exoscalev1.ExoscaleMachineProviderSpecSpec
+	if err := yaml.Unmarshal(providerSpec.Value.Raw, &config); err != nil {
+		return nil, err
+	}
+	return &config, nil
 }

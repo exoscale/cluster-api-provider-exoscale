@@ -774,8 +774,8 @@
   version = "kubernetes-1.11.2"
 
 [[projects]]
-  branch = "master"
-  digest = "1:b11533d0d337c776e3ee4d59f86ca302a66a777b40a289d97cb59a638179f31e"
+  branch = "release-1.11"
+  digest = "1:7320216e50843bfc1092d20b535a20683abc967e0eba38441c85c3265da10a34"
   name = "k8s.io/code-generator"
   packages = [
     "cmd/client-gen",
@@ -788,11 +788,10 @@
     "cmd/client-gen/types",
     "cmd/deepcopy-gen",
     "cmd/deepcopy-gen/args",
-    "pkg/namer",
     "pkg/util",
   ]
   pruneopts = "T"
-  revision = "3a2206dd6a78497deceb3ae058417fdeb2036c7e"
+  revision = "f8cba74510f397bac80157a6c4ccb0ffbc31b9d0"
 
 [[projects]]
   branch = "master"
@@ -933,6 +932,7 @@
   input-imports = [
     "github.com/emicklei/go-restful",
     "github.com/exoscale/egoscale",
+    "github.com/golang/glog",
     "github.com/onsi/ginkgo",
     "github.com/onsi/gomega",
     "github.com/spf13/viper",

@@ -43,7 +43,7 @@ spec:
       containers:
       - command:
         - /root/manager
-        image: controller:latest
+        image: "exoscale/cluster-api-provider-exoscale:latest"
         imagePullPolicy: Always
         name: manager
         env:

@@ -1,29 +1,24 @@
-# Adds namespace to all resources.
-namespace: cluster-api-provider-exoscale-system
-
-# Value of this field is prepended to the
-# names of all resources, e.g. a deployment named
-# "wordpress" becomes "alices-wordpress".
-# Note that it should also match with the prefix (text before '-') of the namespace
-# field above.
-namePrefix: cluster-api-provider-exoscale-
-
-# Labels to add to all resources and selectors.
-#commonLabels:
-#  someName: someValue
-
-# Each entry in this list must resolve to an existing
-# resource definition in YAML.  These are the resource
-# files that kustomize reads, modifies and emits as a
-# YAML string, with resources separated by document
-# markers ("---").
+---
+apiVersion: v1
+kind: Kustomization
+namespace: exoscale-provider-system
+namePrefix: exoscale-provider-
+nameSuffix: -v1alpha1
 resources:
+- ../crds/exoscale_v1alpha1_exoscaleclusterproviderspec.yaml
+- ../crds/exoscale_v1alpha1_exoscaleclusterproviderstatus.yaml
+- ../crds/exoscale_v1alpha1_exoscalemachineproviderspec.yaml
+- ../crds/exoscale_v1alpha1_exoscalemachineproviderstatus.yaml
 - ../rbac/rbac_role.yaml
 - ../rbac/rbac_role_binding.yaml
 - ../manager/manager.yaml
-
-patches:
-- manager_image_patch.yaml
+- ../../vendor/sigs.k8s.io/cluster-api/crds/cluster_v1alpha1_cluster.yaml
+- ../../vendor/sigs.k8s.io/cluster-api/crds/cluster_v1alpha1_machine.yaml
+- ../../vendor/sigs.k8s.io/cluster-api/crds/cluster_v1alpha1_machinedeployment.yaml
+- ../../vendor/sigs.k8s.io/cluster-api/crds/cluster_v1alpha1_machineset.yaml
+- ../../vendor/sigs.k8s.io/cluster-api/rbac/rbac_role.yaml
+- ../../vendor/sigs.k8s.io/cluster-api/rbac/rbac_role_binding.yaml
+- ../../vendor/sigs.k8s.io/cluster-api/manager/manager.yaml
 
 vars:
 - name: WEBHOOK_SECRET_NAME

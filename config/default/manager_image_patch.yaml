@@ -7,6 +7,6 @@ spec:
   template:
     spec:
       containers:
-      # Change the value of image field below to your controller image URL
-      - image: pierro777/cluster-api-provider-exoscale
+      # change the image value below to your controller image URL
+      - image: "pierro777/cluster-api-provider-exoscale:latest"
         name: manager

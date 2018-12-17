@@ -46,6 +46,7 @@ vet:
 
 # Generate code
 generate:
+	go install sigs.k8s.io/cluster-api-provider-exoscale/vendor/k8s.io/code-generator/cmd/deepcopy-gen
 	go generate ./pkg/... ./cmd/...
 
 # Build the docker image

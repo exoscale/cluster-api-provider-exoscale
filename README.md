@@ -22,7 +22,7 @@ make deploy
 kubectl logs cluster-api-provider-exoscale-controller-manager-0 -n cluster-api-provider-exoscale-system  
 ```
 
-then
+Then
 
 ```
 go run cmd/manager/main.go
@@ -32,9 +32,7 @@ go run cmd/manager/main.go
 
 ## Clusterctl
 
-```bash
-go run cmd/clusterctl/main.go
-```
+See [cmd/clusterctl](https://github.com/pierre-emmanuelJ/cluster-api-provider-exoscale/tree/master/cmd/clusterctl)
 
 [kubebuilder-book]: https://book.kubebuilder.io/
 [install-dep]: https://github.com/golang/dep/blob/master/docs/installation.md

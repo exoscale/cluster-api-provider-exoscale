@@ -3,9 +3,9 @@ kind: Secret
 type: Opaque
 metadata:
   name: machine-controller-sshkeys
-  namespace: openstack-provider-system
+  namespace: exoscale-provider-system
 data:
-  user: $MACHINE_CONTROLLER_SSH_USER
+  user: ubuntu
   private: $MACHINE_CONTROLLER_SSH_PRIVATE
   public: $MACHINE_CONTROLLER_SSH_PUBLIC
 ---
@@ -14,15 +14,15 @@ kind: Secret
 type: Opaque
 metadata:
   name: cloud-config
-  namespace: openstack-provider-system
+  namespace: exoscale-provider-system
 data:
-  clouds.yaml: $OPENSTACK_CLOUD_CONFIG
+  clouds.yaml: $exoscale_CLOUD_CONFIG
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: machine-setup
-  namespace: openstack-provider-system
+  namespace: exoscale-provider-system
 data:
   machine_setup_configs.yaml: |-
     items:
@@ -94,14 +94,14 @@ data:
         Environment="KUBELET_DNS_ARGS=--cluster-dns=${CLUSTER_DNS_SERVER} --cluster-domain=${CLUSTER_DNS_DOMAIN}"
         EOF
 
-        echo $OPENSTACK_CLOUD_PROVIDER_CONF | base64 -d > /etc/kubernetes/cloud.conf
+        echo $exoscale_CLOUD_PROVIDER_CONF | base64 -d > /etc/kubernetes/cloud.conf
 
         systemctl daemon-reload
         systemctl restart kubelet.service
 
         # Set up kubeadm config file to pass parameters to kubeadm init.
         # We're using 443 until this bug is fixed
-        # https://github.com/kubernetes-sigs/cluster-api-provider-openstack/issues/64
+        # https://github.com/kubernetes-sigs/cluster-api-provider-exoscale/issues/64
         cat > /etc/kubernetes/kubeadm_config.yaml <<EOF
         apiVersion: kubeadm.k8s.io/v1alpha3
         kind: InitConfiguration
@@ -111,7 +111,7 @@ data:
           bindPort: 443
         nodeRegistration:
           kubeletExtraArgs:
-            cloud-provider: "openstack"
+            cloud-provider: "exoscale"
             cloud-config: "/etc/kubernetes/cloud.conf"
         ---
         apiVersion: kubeadm.k8s.io/v1alpha3
@@ -122,7 +122,7 @@ data:
         clusterName: kubernetes
         controlPlaneEndpoint: ""
         apiServerExtraArgs:
-          cloud-provider: "openstack"
+          cloud-provider: "exoscale"
           cloud-config: "/etc/kubernetes/cloud.conf"
         apiServerExtraVolumes:
         - name: cloud
@@ -132,7 +132,7 @@ data:
           cluster-cidr: ${POD_CIDR}
           service-cluster-ip-range: ${SERVICE_CIDR}
           allocate-node-cidrs: "true"
-          cloud-provider: "openstack"
+          cloud-provider: "exoscale"
           cloud-config: "/etc/kubernetes/cloud.conf"
         controllerManagerExtraVolumes:
         - name: cloud
@@ -225,7 +225,7 @@ data:
         CLUSTER_DNS_SERVER=$(prips ${SERVICE_CIDR} | head -n 11 | tail -n 1)
 
         # Write the cloud.conf so that the kubelet can use it.
-        echo $OPENSTACK_CLOUD_PROVIDER_CONF | base64 -d > /etc/kubernetes/cloud.conf
+        echo $exoscale_CLOUD_PROVIDER_CONF | base64 -d > /etc/kubernetes/cloud.conf
 
         # Set up kubeadm config file to pass to kubeadm join.
         cat > /etc/kubernetes/kubeadm_config.yaml <<EOF
@@ -233,7 +233,7 @@ data:
         kind: JoinConfiguration
         nodeRegistration:
           kubeletExtraArgs:
-            cloud-provider: "openstack"
+            cloud-provider: "exoscale"
             cloud-config: "/etc/kubernetes/cloud.conf"
         token: ${TOKEN}
         discoveryTokenAPIServers:

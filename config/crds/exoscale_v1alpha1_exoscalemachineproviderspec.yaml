@@ -31,11 +31,14 @@ spec:
               type: string
             type:
               type: string
+            user:
+              type: string
             zone:
               type: string
           required:
           - zone
           - template
+          - user
           - type
           - disk
           - sshkey
@@ -51,11 +54,14 @@ spec:
               type: string
             type:
               type: string
+            user:
+              type: string
             zone:
               type: string
           required:
           - zone
           - template
+          - user
           - type
           - disk
           - sshkey

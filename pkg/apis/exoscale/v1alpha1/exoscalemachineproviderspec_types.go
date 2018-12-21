@@ -27,6 +27,7 @@ import (
 type ExoscaleMachineProviderSpecSpec struct {
 	Zone              string `json:"zone"`
 	Template          string `json:"template"`
+	User              string `json:"user"`
 	Type              string `json:"type"`
 	Disk              int    `json:"disk"`
 	SSHKey            string `json:"sshkey"`
@@ -42,6 +43,7 @@ type ExoscaleMachineProviderSpecSpec struct {
 type ExoscaleMachineProviderSpecStatus struct {
 	Zone              string `json:"zone"`
 	Template          string `json:"template"`
+	User              string `json:"user"`
 	Type              string `json:"type"`
 	Disk              int    `json:"disk"`
 	SSHKey            string `json:"sshkey"`

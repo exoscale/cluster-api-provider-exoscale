@@ -8,6 +8,7 @@ spec:
   # Exoscale field spec
   zone: de-fra-1
   template: "Linux Ubuntu 18.04 LTS 64-bit"
+  user: ubuntu
   type: medium
   disk: 50
   sshkey: id_rsa_cluster_api

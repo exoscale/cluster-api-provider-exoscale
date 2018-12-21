@@ -8,6 +8,7 @@ data:
   user: ubuntu
   private: $MACHINE_CONTROLLER_SSH_PRIVATE
   public: $MACHINE_CONTROLLER_SSH_PUBLIC
+  sskkey: id_rsa_cluster_api
 ---
 apiVersion: v1
 kind: Secret

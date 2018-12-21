@@ -16,7 +16,7 @@ metadata:
   name: cloud-config
   namespace: exoscale-provider-system
 data:
-  clouds.yaml: $exoscale_CLOUD_CONFIG
+  clouds.yaml: $EXOSCALE_CLOUD_CONFIG
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -94,7 +94,7 @@ data:
         Environment="KUBELET_DNS_ARGS=--cluster-dns=${CLUSTER_DNS_SERVER} --cluster-domain=${CLUSTER_DNS_DOMAIN}"
         EOF
 
-        echo $exoscale_CLOUD_PROVIDER_CONF | base64 -d > /etc/kubernetes/cloud.conf
+        echo $EXOSCALE_CLOUD_PROVIDER_CONF | base64 -d > /etc/kubernetes/cloud.conf
 
         systemctl daemon-reload
         systemctl restart kubelet.service

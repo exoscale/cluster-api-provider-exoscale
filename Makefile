@@ -8,7 +8,6 @@ all: test manager clusterctl
 test: generate fmt vet manifests
 	go test ./pkg/... ./cmd/... -coverprofile cover.out
 
-
 # Build clusterctl binary
 clusterctl: generate fmt vet
 	go build -o bin/clusterctl sigs.k8s.io/cluster-api-provider-exoscale/cmd/clusterctl
@@ -31,10 +30,8 @@ deploy: manifests
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests:
-	go run vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go crd
+	#go run vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go crd
 	kustomize build config/default/ > provider-components.yaml
-	echo "---" >> provider-components.yaml
-	kustomize build vendor/sigs.k8s.io/cluster-api/config/default/ >> provider-components.yaml
 
 # Run go fmt against code
 fmt:
@@ -46,7 +43,12 @@ vet:
 
 # Generate code
 generate:
+	go install sigs.k8s.io/cluster-api-provider-exoscale/vendor/k8s.io/code-generator/cmd/deepcopy-gen
 	go generate ./pkg/... ./cmd/...
+	deepcopy-gen \
+		-i ./pkg/cloud/exoscale/providerconfig,./pkg/cloud/exoscale/providerconfig/v1alpha1 \
+		-O zz_generated.deepcopy \
+		-h hack/boilerplate.go.txt
 
 # Build the docker image
 docker-build: test

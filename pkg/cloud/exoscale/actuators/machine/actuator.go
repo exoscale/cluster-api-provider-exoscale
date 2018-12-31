@@ -64,31 +64,50 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return fmt.Errorf("Cannot unmarshal providerSpec field: %v", err)
 	}
 
-	exoClient := exoclient.Client
+	exoClient, err := exoclient.Client()
+	if err != nil {
+		return err
+	}
 
 	//Prerequisite
 	// create or upload an sshkey in exoscale
 	// put sshkey name in machine spec provider yml
 
-	z, err := exoClient.Get(&egoscale.Zone{Name: providerSpec.Zone})
+	z, err := exoClient.GetWithContext(ctx, &egoscale.Zone{Name: providerSpec.Zone})
 	if err != nil {
 		return fmt.Errorf("Invalid exoscale zone %q. providerSpec field: %v", providerSpec.Zone, err)
 	}
 	zone := z.(*egoscale.Zone)
 
-	t, err := exoClient.Get(&egoscale.Template{Name: providerSpec.Template, ZoneID: zone.ID})
+	t, err := exoClient.GetWithContext(
+		ctx,
+		&egoscale.Template{
+			Name:   providerSpec.Template,
+			ZoneID: zone.ID,
+		},
+	)
 	if err != nil {
 		return fmt.Errorf("Invalid exoscale template %q. providerSpec field: %v", providerSpec.Zone, err)
 	}
 	template := t.(*egoscale.Template)
 
-	sg, err := exoClient.Get(&egoscale.SecurityGroup{Name: providerSpec.SecurityGroup})
+	sg, err := exoClient.GetWithContext(
+		ctx,
+		&egoscale.SecurityGroup{
+			Name: providerSpec.SecurityGroup,
+		},
+	)
 	if err != nil {
 		return fmt.Errorf("Invalid exoscale security-group %q. providerSpec field: %v", providerSpec.Zone, err)
 	}
 	securityGroup := sg.(*egoscale.SecurityGroup)
 
-	so, err := exoClient.Get(&egoscale.ServiceOffering{Name: providerSpec.Type})
+	so, err := exoClient.GetWithContext(
+		ctx,
+		&egoscale.ServiceOffering{
+			Name: providerSpec.Type,
+		},
+	)
 	if err != nil {
 		return fmt.Errorf("Invalid exoscale service-Offering %q. providerSpec field: %v", providerSpec.Zone, err)
 	}
@@ -108,7 +127,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		//AffinityGroupIDs:  affinitygroups,
 	}
 
-	resp, err := exoclient.Client.Request(req)
+	resp, err := exoClient.RequestWithContext(ctx, req)
 	if err != nil {
 		return fmt.Errorf("exoscale failed to DeployVirtualMachine %v", err)
 	}

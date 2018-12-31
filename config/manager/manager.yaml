@@ -50,19 +50,33 @@ spec:
       containers:
       - name: exoscale-machine-controller
         image: exoscale/exoscale-cluster-api-controller:latest
-        volumeMounts:
-        - name: config
-          mountPath: /etc/kubernetes
-        - name: certs
-          mountPath: /etc/ssl/certs
-        - name: sshkeys
-          mountPath: /etc/sshkeys
-        - name: machine-setup
-          mountPath: /etc/machinesetup
-        - name: cloud-config
-          mountPath: /etc/exoscale
-        - name: kubeadm
-          mountPath: /usr/bin/kubeadm
+        imagePullPolicy: Always
+      - command:
+        - /root/manager
+        env:
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+          - name: EXOSCALE_API_KEY
+            valueFrom:
+              secretKeyRef:
+                name: exoscale-controller-secrets
+                key: api-key
+          - name: EXOSCALE_SECRET_KEY
+            valueFrom:
+              secretKeyRef:
+                name: exoscale-controller-secrets
+                key: secret-key
+          - name: EXOSCALE_COMPUTE_ENDPOINT
+            valueFrom:
+              secretKeyRef:
+                name: exoscale-controller-secrets
+                key: compute-endpoint
         resources:
           requests:
             cpu: 100m

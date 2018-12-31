@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM golang:1.10.3 as builder
+FROM golang:1.10.7 as builder
 
 # Copy in the go src
 WORKDIR /go/src/sigs.k8s.io/cluster-api-provider-exoscale
@@ -8,10 +8,16 @@ COPY cmd/    cmd/
 COPY vendor/ vendor/
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o manager sigs.k8s.io/cluster-api-provider-exoscale/cmd/manager
+ARG CGO_ENABLED=0
+ARG GOOS=linux
+ARG GOARCH=amd64
+
+RUN go build -a -o /usr/local/bin/manager sigs.k8s.io/cluster-api-provider-exoscale/cmd/manager
 
 # Copy the controller-manager into a thin image
-FROM ubuntu:latest
+FROM linuxkit/ca-certificates:v0.6
+
 WORKDIR /root/
-COPY --from=builder /go/src/sigs.k8s.io/cluster-api-provider-exoscale/manager .
+COPY --from=builder /usr/local/bin/manager .
+
 ENTRYPOINT ["./manager"]

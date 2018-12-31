@@ -25,9 +25,10 @@ resources:
 patches:
 - manager_image_patch.yaml
 
-vars:
-- name: WEBHOOK_SECRET_NAME
-  objref:
-    kind: Secret
-    name: webhook-server-secret
-    apiVersion: v1
+secretGenerator:
+- name: exoscale-controller-secrets
+  type: Opaque
+  commands:
+    api-key: "printf $EXOSCALE_API_KEY"
+    secret-key: "printf $EXOSCALE_SECRET_KEY"
+    compute-endpoint: "printf $EXOSCALE_COMPUTE_ENDPOINT"

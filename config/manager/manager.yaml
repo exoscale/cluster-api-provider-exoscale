@@ -3,80 +3,95 @@ kind: Namespace
 metadata:
   labels:
     controller-tools.k8s.io: "1.0"
-  name: system
+  name: exoscale-provider-system
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: controller-manager-service
-  namespace: system
   labels:
     control-plane: controller-manager
     controller-tools.k8s.io: "1.0"
+  name: exoscale-provider-controller-manager-service
+  namespace: exoscale-provider-system
 spec:
-  selector:
-    control-plane: controller-manager
-    controller-tools.k8s.io: "1.0"
   ports:
   - port: 443
+  selector:
+    control-plane: controller-manager
+    controller-tools.k8s.io: "1.0"
 ---
-apiVersion: apps/v1
-kind: StatefulSet
+apiVersion: apps/v1beta1
+kind: Deployment
 metadata:
-  name: controller-manager
-  namespace: system
+  name: clusterapi-controllers
+  namespace: exoscale-provider-system
   labels:
     control-plane: controller-manager
     controller-tools.k8s.io: "1.0"
 spec:
-  selector:
-    matchLabels:
-      control-plane: controller-manager
-      controller-tools.k8s.io: "1.0"
-  serviceName: controller-manager-service
+  replicas: 1
   template:
     metadata:
       labels:
         control-plane: controller-manager
         controller-tools.k8s.io: "1.0"
     spec:
+      tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoExecute
+        key: node.alpha.kubernetes.io/notReady
+        operator: Exists
+      - effect: NoExecute
+        key: node.alpha.kubernetes.io/unreachable
+        operator: Exists
       containers:
-      - command:
-        - /root/manager
-        image: controller:latest
-        imagePullPolicy: Always
-        name: manager
-        env:
-          - name: POD_NAMESPACE
-            valueFrom:
-              fieldRef:
-                fieldPath: metadata.namespace
-          - name: SECRET_NAME
-            value: $(WEBHOOK_SECRET_NAME)
+      - name: exoscale-machine-controller
+        image: exoscale/exoscale-cluster-api-controller:latest
+        volumeMounts:
+        - name: config
+          mountPath: /etc/kubernetes
+        - name: certs
+          mountPath: /etc/ssl/certs
+        - name: sshkeys
+          mountPath: /etc/sshkeys
+        - name: machine-setup
+          mountPath: /etc/machinesetup
+        - name: cloud-config
+          mountPath: /etc/exoscale
+        - name: kubeadm
+          mountPath: /usr/bin/kubeadm
         resources:
-          limits:
-            cpu: 100m
-            memory: 30Mi
           requests:
             cpu: 100m
             memory: 20Mi
-        ports:
-        - containerPort: 9876
-          name: webhook-server
-          protocol: TCP
-        volumeMounts:
-        - mountPath: /tmp/cert
-          name: cert
-          readOnly: true
-      terminationGracePeriodSeconds: 10
+          limits:
+            cpu: 100m
+            memory: 30Mi
+        env:
+          - name: USER
+            value: ubuntu
+          - name: OS_CLOUD
+            value: {OS_CLOUD}
       volumes:
-      - name: cert
+      - name: config
+        hostPath:
+          path: /etc/kubernetes
+      - name: certs
+        hostPath:
+          path: /etc/ssl/certs
+      - name: sshkeys
         secret:
-          defaultMode: 420
-          secretName: webhook-server-secret
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: webhook-server-secret
-  namespace: system
+          secretName: machine-controller-sshkeys
+          defaultMode: 256
+      - name: cloud-config
+        secret:
+          secretName: cloud-config
+      - name: machine-setup
+        configMap:
+          name: machine-setup
+      - name: kubeadm
+        hostPath:
+          path: /usr/bin/kubeadm

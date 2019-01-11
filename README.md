@@ -4,7 +4,6 @@
 
 ```console
 % minikube start --kubernetes-version v1.12.4 --vm-driver kvm2
-```
 
 % eval $(minikube docker-env)
 

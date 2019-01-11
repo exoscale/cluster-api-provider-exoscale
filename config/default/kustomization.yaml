@@ -1,34 +1,18 @@
-# Adds namespace to all resources.
-namespace: cluster-api-provider-exoscale-system
+apiVersion: v1beta1
+kind: Kustomization
 
-# Value of this field is prepended to the
-# names of all resources, e.g. a deployment named
-# "wordpress" becomes "alices-wordpress".
-# Note that it should also match with the prefix (text before '-') of the namespace
-# field above.
-namePrefix: cluster-api-provider-exoscale-
-
-# Labels to add to all resources and selectors.
-#commonLabels:
-#  someName: someValue
-
-# Each entry in this list must resolve to an existing
-# resource definition in YAML.  These are the resource
-# files that kustomize reads, modifies and emits as a
-# YAML string, with resources separated by document
-# markers ("---").
 resources:
 - ../rbac/rbac_role.yaml
 - ../rbac/rbac_role_binding.yaml
 - ../manager/manager.yaml
 
-patches:
-- manager_image_patch.yaml
-
 secretGenerator:
-- name: exoscale-controller-secrets
+- commands:
+    api-key: printf $EXOSCALE_API_KEY
+    compute-endpoint: printf $EXOSCALE_COMPUTE_ENDPOINT
+    secret-key: printf $EXOSCALE_SECRET_KEY
+  name: exoscale-controller-secrets
+  namespace: cluster-api-provider-exoscale-system
   type: Opaque
-  commands:
-    api-key: "printf $EXOSCALE_API_KEY"
-    secret-key: "printf $EXOSCALE_SECRET_KEY"
-    compute-endpoint: "printf $EXOSCALE_COMPUTE_ENDPOINT"
+patchesStrategicMerge:
+- manager_image_patch.yaml

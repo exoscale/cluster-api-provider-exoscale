@@ -2,6 +2,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: exoscale-provider-manager-role
+  namespace: cluster-api-provider-exoscale-system
 rules:
 - apiGroups:
   - exoscaleproviderconfig.k8s.io

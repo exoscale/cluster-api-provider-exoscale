@@ -3,7 +3,7 @@ kind: Namespace
 metadata:
   labels:
     controller-tools.k8s.io: "1.0"
-  name: exoscale-provider-system
+  name: cluster-api-provider-exoscale-system
 ---
 apiVersion: v1
 kind: Service
@@ -11,29 +11,29 @@ metadata:
   labels:
     control-plane: controller-manager
     controller-tools.k8s.io: "1.0"
-  name: exoscale-provider-controller-manager-service
-  namespace: exoscale-provider-system
+  name: exoscale-controller-manager-service
+  namespace: cluster-api-provider-exoscale-system
 spec:
   ports:
   - port: 443
   selector:
-    control-plane: controller-manager
+    control-plane: exoscale-controller-manager
     controller-tools.k8s.io: "1.0"
 ---
 apiVersion: apps/v1beta1
 kind: Deployment
 metadata:
-  name: clusterapi-controllers
-  namespace: exoscale-provider-system
+  name: exoscale-clusterapi-controllers
+  namespace: cluster-api-provider-exoscale-system
   labels:
-    control-plane: controller-manager
+    control-plane: exoscale-controller-manager
     controller-tools.k8s.io: "1.0"
 spec:
   replicas: 1
   template:
     metadata:
       labels:
-        control-plane: controller-manager
+        control-plane: exoscale-controller-manager
         controller-tools.k8s.io: "1.0"
     spec:
       tolerations:
@@ -48,7 +48,7 @@ spec:
         key: node.alpha.kubernetes.io/unreachable
         operator: Exists
       containers:
-      - name: exoscale-machine-controller
+      - name: exoscale-controller
         image: exoscale/cluster-api-provider-exoscale-controller:latest
         imagePullPolicy: Always
         volumeMounts:
@@ -56,12 +56,6 @@ spec:
           mountPath: /etc/kubernetes
         - name: certs
           mountPath: /etc/ssl/certs
-        - name: sshkeys
-          mountPath: /etc/sshkeys
-        - name: machine-setup
-          mountPath: /etc/machinesetup
-        - name: cloud-config
-          mountPath: /etc/exoscale
         - name: kubeadm
           mountPath: /usr/bin/kubeadm
         resources:
@@ -102,16 +96,6 @@ spec:
       - name: certs
         hostPath:
           path: /etc/ssl/certs
-      - name: sshkeys
-        secret:
-          secretName: machine-controller-sshkeys
-          defaultMode: 256
-      - name: cloud-config
-        secret:
-          secretName: cloud-config
-      - name: machine-setup
-        configMap:
-          name: machine-setup
       - name: kubeadm
         hostPath:
           path: /usr/bin/kubeadm

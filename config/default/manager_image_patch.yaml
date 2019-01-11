@@ -1,8 +1,7 @@
 apiVersion: apps/v1beta1
 kind: Deployment
 metadata:
-  name: clusterapi-controllers
-  namespace: exoscale-provider-system
+  name: exoscale-clusterapi-controllers
 spec:
   template:
     spec:

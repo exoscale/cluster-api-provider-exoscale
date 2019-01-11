@@ -58,6 +58,8 @@ spec:
           mountPath: /etc/ssl/certs
         - name: kubeadm
           mountPath: /usr/bin/kubeadm
+        - name: tmp
+          mountPath: /tmp
         resources:
           requests:
             cpu: 100m
@@ -99,3 +101,6 @@ spec:
       - name: kubeadm
         hostPath:
           path: /usr/bin/kubeadm
+      - name: tmp
+        hostPath:
+          path: /tmp

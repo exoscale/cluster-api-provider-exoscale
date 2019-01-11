@@ -51,8 +51,26 @@ spec:
       - name: exoscale-machine-controller
         image: exoscale/exoscale-cluster-api-controller:latest
         imagePullPolicy: Always
-      - command:
-        - /root/manager
+        volumeMounts:
+        - name: config
+          mountPath: /etc/kubernetes
+        - name: certs
+          mountPath: /etc/ssl/certs
+        - name: sshkeys
+          mountPath: /etc/sshkeys
+        - name: machine-setup
+          mountPath: /etc/machinesetup
+        - name: cloud-config
+          mountPath: /etc/exoscale
+        - name: kubeadm
+          mountPath: /usr/bin/kubeadm
+        resources:
+          requests:
+            cpu: 100m
+            memory: 20Mi
+          limits:
+            cpu: 100m
+            memory: 30Mi
         env:
           - name: POD_NAMESPACE
             valueFrom:
@@ -77,18 +95,6 @@ spec:
               secretKeyRef:
                 name: exoscale-controller-secrets
                 key: compute-endpoint
-        resources:
-          requests:
-            cpu: 100m
-            memory: 20Mi
-          limits:
-            cpu: 100m
-            memory: 30Mi
-        env:
-          - name: USER
-            value: ubuntu
-          - name: OS_CLOUD
-            value: {OS_CLOUD}
       volumes:
       - name: config
         hostPath:

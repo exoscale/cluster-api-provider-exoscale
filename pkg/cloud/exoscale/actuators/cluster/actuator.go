@@ -17,11 +17,16 @@ limitations under the License.
 package cluster
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
 
+	"github.com/exoscale/egoscale"
+	yaml "gopkg.in/yaml.v2"
 	"k8s.io/klog"
+	exoscaleconfigv1 "sigs.k8s.io/cluster-api-provider-exoscale/pkg/apis/exoscale/v1alpha1"
+	exoclient "sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/client"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	client "sigs.k8s.io/cluster-api/pkg/client/clientset_generated/clientset/typed/cluster/v1alpha1"
 )
@@ -50,7 +55,27 @@ func NewActuator(params ActuatorParams) (*Actuator, error) {
 // Reconcile reconciles a cluster and is invoked by the Cluster Controller
 func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 	log.Printf("Reconciling cluster %v.", cluster.Name)
-	return fmt.Errorf("TODO: Not yet implemented")
+
+	clusterConfig, err := clusterProviderFromProviderConfig(cluster.Spec.ProviderSpec)
+	if err != nil {
+		return fmt.Errorf("error loading cluster provider config: %v", err)
+	}
+
+	exoClient, err := exoclient.Client()
+	if err != nil {
+		return err
+	}
+
+	req := egoscale.CreateSecurityGroup{
+		Name: clusterConfig.Spec.SecurityGroup,
+	}
+
+	_, err = exoClient.RequestWithContext(context.TODO(), req)
+	if err != nil {
+		return fmt.Errorf("error creating or updating network security group: %v", err)
+	}
+
+	return nil
 }
 
 // Delete deletes a cluster and is invoked by the Cluster Controller
@@ -80,4 +105,12 @@ func (*Actuator) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (
 func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Machine) (string, error) {
 	log.Printf("Getting IP of machine %v for cluster %v.", master.Name, cluster.Name)
 	return "", fmt.Errorf("Provisionner exoscale GetKubeConfig() not yet implemented")
+}
+
+func clusterProviderFromProviderConfig(providerConfig clusterv1.ProviderSpec) (*exoscaleconfigv1.ExoscaleClusterProviderSpec, error) {
+	var config exoscaleconfigv1.ExoscaleClusterProviderSpec
+	if err := yaml.Unmarshal(providerConfig.Value.Raw, &config); err != nil {
+		return nil, err
+	}
+	return &config, nil
 }

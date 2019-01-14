@@ -14,6 +14,7 @@ spec:
   providerSpec:
     value:
       apiVersion: "exoscale.cluster.k8s.io/v1alpha1"
-      kind: "ExoscaleClusterProviderSpec"
+      kind: "ExoscaleClusterProviderSpecSpec"
       zone: de-fra-1
       sshKey: id_rsa_cluster_api
+      security-group: kubernetes

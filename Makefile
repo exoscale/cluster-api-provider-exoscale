@@ -36,7 +36,7 @@ deploy: manifests
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests:
-	#go run vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go crd
+	go run vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go crd
 	kustomize build config/default/ > provider-components.yaml
 	echo "---" >> provider-components.yaml
 	kustomize build vendor/sigs.k8s.io/cluster-api/config/default/ >> provider-components.yaml

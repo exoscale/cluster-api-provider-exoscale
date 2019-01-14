@@ -25,12 +25,16 @@ import (
 
 // ExoscaleClusterProviderSpecSpec defines the desired state of ExoscaleClusterProviderSpec
 type ExoscaleClusterProviderSpecSpec struct {
+	Zone          string `json:"zone"`
+	SecurityGroup string `json:"security-group"`
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 }
 
 // ExoscaleClusterProviderSpecStatus defines the observed state of ExoscaleClusterProviderSpec
 type ExoscaleClusterProviderSpecStatus struct {
+	Zone          string `json:"zone"`
+	SecurityGroup string `json:"security-group"`
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 }

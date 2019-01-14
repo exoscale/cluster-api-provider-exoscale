@@ -27,8 +27,18 @@ spec:
         metadata:
           type: object
         spec:
+          properties:
+            zone:
+              type: string
+          required:
+          - zone
           type: object
         status:
+          properties:
+            zone:
+              type: string
+          required:
+          - zone
           type: object
   version: v1alpha1
 status:

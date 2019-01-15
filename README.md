@@ -17,7 +17,7 @@ export EXOSCALE_COMPUTE_ENDPOINT=https://api.exoscale.com/compute
 ```
 
 ```console
-% make manifests
+% make install
 ```
 
 ```console

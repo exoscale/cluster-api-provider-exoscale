@@ -1,13 +1,14 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: exoscale-provider-manager-role
-  namespace: cluster-api-provider-exoscale-system
+  creationTimestamp: null
+  name: manager-role
 rules:
 - apiGroups:
-  - exoscaleproviderconfig.k8s.io
+  - exoscale.k8s.io
   resources:
-  - exoscalemachineproviderconfigs
+  - exoscaleclusterproviderspecs
+  - exoscaleclusterproviderstatuses
   verbs:
   - get
   - list
@@ -17,12 +18,10 @@ rules:
   - patch
   - delete
 - apiGroups:
-  - cluster.k8s.io
+  - exoscale.k8s.io
   resources:
-  - clusters
-  - machines
-  - machinedeployments
-  - machinesets
+  - exoscalemachineproviderspecs
+  - exoscalemachineproviderstatuses
   verbs:
   - get
   - list
@@ -32,9 +31,10 @@ rules:
   - patch
   - delete
 - apiGroups:
-  - ""
+  - admissionregistration.k8s.io
   resources:
-  - nodes
+  - mutatingwebhookconfigurations
+  - validatingwebhookconfigurations
   verbs:
   - get
   - list
@@ -51,3 +51,19 @@ rules:
   - get
   - list
   - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete

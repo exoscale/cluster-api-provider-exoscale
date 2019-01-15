@@ -32,11 +32,12 @@ install: manifests
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: manifests
 	kubectl apply -f config/crds
-	cat provider-components.yaml | kubectl apply -f -
+	kubectl apply -f provider-components.yaml
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests:
 	go run vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go crd
+	go run vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go rbac
 	kustomize build config/default/ > provider-components.yaml
 	echo "---" >> provider-components.yaml
 	kustomize build vendor/sigs.k8s.io/cluster-api/config/default/ >> provider-components.yaml

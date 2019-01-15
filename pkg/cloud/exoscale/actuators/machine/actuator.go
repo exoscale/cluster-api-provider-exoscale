@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Kubernetes authors.
+Copyright 2019 The Kubernetes authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ func NewActuator(params ActuatorParams) (*Actuator, error) {
 func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
 	log.Printf("Creating machine %v for cluster %v.", machine.Name, cluster.Name)
 
-	providerSpec, err := machineSpecFromProviderSpec(machine.Spec.ProviderSpec)
+	providerConfig, err := machineConfigFromProviderConfig(machine.Spec.ProviderSpec)
 	if err != nil {
 		return fmt.Errorf("Cannot unmarshal providerSpec field: %v", err)
 	}
@@ -73,43 +73,43 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	// create or upload an sshkey in exoscale
 	// put sshkey name in machine spec provider yml
 
-	z, err := exoClient.GetWithContext(ctx, &egoscale.Zone{Name: providerSpec.Zone})
+	z, err := exoClient.GetWithContext(ctx, &egoscale.Zone{Name: providerConfig.Spec.Zone})
 	if err != nil {
-		return fmt.Errorf("Invalid exoscale zone %q. providerSpec field: %v", providerSpec.Zone, err)
+		return fmt.Errorf("Invalid exoscale zone %q. providerSpec field: %v", providerConfig.Spec.Zone, err)
 	}
 	zone := z.(*egoscale.Zone)
 
 	t, err := exoClient.GetWithContext(
 		ctx,
 		&egoscale.Template{
-			Name:   providerSpec.Template,
+			Name:   providerConfig.Spec.Template,
 			ZoneID: zone.ID,
 		},
 	)
 	if err != nil {
-		return fmt.Errorf("Invalid exoscale template %q. providerSpec field: %v", providerSpec.Zone, err)
+		return fmt.Errorf("Invalid exoscale template %q. providerSpec field: %v", providerConfig.Spec.Zone, err)
 	}
 	template := t.(*egoscale.Template)
 
 	sg, err := exoClient.GetWithContext(
 		ctx,
 		&egoscale.SecurityGroup{
-			Name: providerSpec.SecurityGroup,
+			Name: providerConfig.Spec.SecurityGroup,
 		},
 	)
 	if err != nil {
-		return fmt.Errorf("Invalid exoscale security-group %q. providerSpec field: %v", providerSpec.Zone, err)
+		return fmt.Errorf("Invalid exoscale security-group %q. providerSpec field: %v", providerConfig.Spec.Zone, err)
 	}
 	securityGroup := sg.(*egoscale.SecurityGroup)
 
 	so, err := exoClient.GetWithContext(
 		ctx,
 		&egoscale.ServiceOffering{
-			Name: providerSpec.Type,
+			Name: providerConfig.Spec.Type,
 		},
 	)
 	if err != nil {
-		return fmt.Errorf("Invalid exoscale service-Offering %q. providerSpec field: %v", providerSpec.Zone, err)
+		return fmt.Errorf("Invalid exoscale service-Offering %q. providerSpec field: %v", providerConfig.Spec.Zone, err)
 	}
 	serviceOffering := so.(*egoscale.ServiceOffering)
 
@@ -118,10 +118,10 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		//UserData:          userData,
 		ZoneID:           zone.ID,
 		TemplateID:       template.ID,
-		RootDiskSize:     int64(providerSpec.Disk),
-		KeyPair:          providerSpec.SSHKey,
+		RootDiskSize:     int64(providerConfig.Spec.Disk),
+		KeyPair:          providerConfig.Spec.SSHKey,
 		SecurityGroupIDs: []egoscale.UUID{*securityGroup.ID},
-		IP6:              &providerSpec.Ipv6,
+		IP6:              &providerConfig.Spec.IPv6,
 		//NetworkIDs:        pvs,
 		ServiceOfferingID: serviceOffering.ID,
 		//AffinityGroupIDs:  affinitygroups,
@@ -183,12 +183,12 @@ func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Mac
 	return "", fmt.Errorf("Provisionner exoscale GetKubeConfig() not yet implemented")
 }
 
-func machineSpecFromProviderSpec(providerSpec clusterv1.ProviderSpec) (*exoscalev1.ExoscaleMachineProviderSpecSpec, error) {
+func machineConfigFromProviderConfig(providerSpec clusterv1.ProviderSpec) (*exoscalev1.ExoscaleMachineProviderConfig, error) {
 	if providerSpec.Value == nil {
-		return nil, errors.New("no such providerSpec found in manifest")
+		return nil, errors.New("no such providerConfig found in manifest")
 	}
 
-	var config exoscalev1.ExoscaleMachineProviderSpecSpec
+	var config exoscalev1.ExoscaleMachineProviderConfig
 	if err := yaml.Unmarshal(providerSpec.Value.Raw, &config); err != nil {
 		return nil, err
 	}

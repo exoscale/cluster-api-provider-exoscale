@@ -1,9 +1,9 @@
-apiVersion: exoscale.cluster.k8s.io/v1alpha1
-kind: ExoscaleClusterProviderSpec
+apiVersion: cluster.k8s.io/v1alpha1
+kind: Cluster
 metadata:
   labels:
     controller-tools.k8s.io: "1.0"
-  name: exoscaleclusterproviderspec
+  name: my-exoscale-cluster
 spec:
   clusterNetwork:
     services:
@@ -14,7 +14,8 @@ spec:
   providerSpec:
     value:
       apiVersion: "exoscale.cluster.k8s.io/v1alpha1"
-      kind: "ExoscaleClusterProviderSpecSpec"
-      zone: de-fra-1
-      sshKey: id_rsa_cluster_api
-      security-group: kubernetes
+      kind: "ExoscaleClusterProviderConfig"
+      spec:
+        zone: de-fra-1
+        sshKey: id_rsa_cluster_api
+        securityGroup: kubernetes

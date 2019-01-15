@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Kubernetes authors.
+Copyright 2019 The Kubernetes authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -107,8 +107,8 @@ func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Mac
 	return "", fmt.Errorf("Provisionner exoscale GetKubeConfig() not yet implemented")
 }
 
-func clusterProviderFromProviderConfig(providerConfig clusterv1.ProviderSpec) (*exoscaleconfigv1.ExoscaleClusterProviderSpec, error) {
-	var config exoscaleconfigv1.ExoscaleClusterProviderSpec
+func clusterProviderFromProviderConfig(providerConfig clusterv1.ProviderSpec) (*exoscaleconfigv1.ExoscaleClusterProviderConfig, error) {
+	var config exoscaleconfigv1.ExoscaleClusterProviderConfig
 	if err := yaml.Unmarshal(providerConfig.Value.Raw, &config); err != nil {
 		return nil, err
 	}

@@ -4,12 +4,12 @@ metadata:
   creationTimestamp: null
   labels:
     controller-tools.k8s.io: "1.0"
-  name: exoscaleclusterproviderstatuses.exoscale.cluster.k8s.io
+  name: exoscalemachineproviderconfigs.exoscale.cluster.k8s.io
 spec:
   group: exoscale.cluster.k8s.io
   names:
-    kind: ExoscaleClusterProviderStatus
-    plural: exoscaleclusterproviderstatuses
+    kind: ExoscaleMachineProviderConfig
+    plural: exoscalemachineproviderconfigs
   scope: Namespaced
   validation:
     openAPIV3Schema:
@@ -28,23 +28,67 @@ spec:
           type: object
         spec:
           properties:
+            antiAffinityGroup:
+              type: string
+            cloudInit:
+              type: string
+            disk:
+              format: int64
+              type: integer
+            securityGroup:
+              type: string
             sshkey:
+              type: string
+            template:
+              type: string
+            type:
+              type: string
+            user:
               type: string
             zone:
               type: string
           required:
           - zone
+          - template
+          - user
+          - type
+          - disk
           - sshkey
+          - securityGroup
+          - antiAffinityGroup
+          - cloudInit
           type: object
         status:
           properties:
+            antiAffinityGroup:
+              type: string
+            cloudInit:
+              type: string
+            disk:
+              format: int64
+              type: integer
+            securityGroup:
+              type: string
             sshkey:
+              type: string
+            template:
+              type: string
+            type:
+              type: string
+            user:
               type: string
             zone:
               type: string
           required:
           - zone
+          - template
+          - user
+          - type
+          - disk
           - sshkey
+          - securityGroup
+          - antiAffinityGroup
+          - cloudInit
           type: object
   version: v1alpha1
 status:

@@ -30,9 +30,3 @@ required = [
 [[override]]
   name = "k8s.io/code-generator"
   branch = "release-1.12"
-
-# For dependency below: Refer to issue https://github.com/golang/dep/issues/1799
-[[override]]
-  name = "gopkg.in/fsnotify.v1"
-  source = "https://github.com/fsnotify/fsnotify.git"
-  version="1.4.7"

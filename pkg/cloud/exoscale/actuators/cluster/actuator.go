@@ -17,7 +17,6 @@ limitations under the License.
 package cluster
 
 import (
-	"context"
 	"errors"
 	"fmt"
 
@@ -78,7 +77,7 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 		Name: clusterConfig.Spec.SecurityGroup,
 	}
 
-	_, err = exoClient.RequestWithContext(context.TODO(), req)
+	_, err = exoClient.Request(req)
 	if err != nil {
 		return fmt.Errorf("error creating or updating network security group: %v", err)
 	}

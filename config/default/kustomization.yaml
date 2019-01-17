@@ -9,6 +9,7 @@ resources:
 - ../crds/exoscale_v1alpha1_exoscalemachineproviderspec.yaml
 - ../rbac/rbac_role.yaml
 - ../rbac/rbac_role_binding.yaml
+- ../manager/namespace.yaml
 - ../manager/manager.yaml
 
 secretGenerator:

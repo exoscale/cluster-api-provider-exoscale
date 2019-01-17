@@ -8,7 +8,20 @@ rules:
   - exoscale.k8s.io
   resources:
   - exoscaleclusterproviderspecs
+  - exoscaleclusterproviderstatuses
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - exoscale.k8s.io
+  resources:
   - exoscalemachineproviderspecs
+  - exoscalemachineproviderstatuses
   verbs:
   - get
   - list
@@ -34,6 +47,17 @@ rules:
   - ""
   resources:
   - secrets
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
   - services
   verbs:
   - get

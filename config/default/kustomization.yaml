@@ -1,8 +1,8 @@
 apiVersion: v1beta1
 kind: Kustomization
 
-namespace: cluster-api-provider-exoscale-system
-namePrefix: exoscale-cluster-api-
+namespace: exoscale-provider-system
+namePrefix: exoscale-provider-
 
 resources:
 - ../crds/exoscale_v1alpha1_exoscaleclusterproviderspec.yaml

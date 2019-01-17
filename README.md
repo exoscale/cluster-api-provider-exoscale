@@ -22,7 +22,7 @@ export EXOSCALE_API_KEY=EXO...
 export EXOSCALE_SECRET_KEY=...
 export EXOSCALE_COMPUTE_ENDPOINT=https://api.exoscale.com/compute
 
-% make install
+% make deploy
 ```
 
 Run the `clusterctl` command.

@@ -3,7 +3,7 @@ kind: Namespace
 metadata:
   labels:
     controller-tools.k8s.io: "1.0"
-  name: cluster-api-provider-exoscale-system
+  name: system
 ---
 apiVersion: v1
 kind: Service
@@ -11,8 +11,7 @@ metadata:
   labels:
     control-plane: controller-manager
     controller-tools.k8s.io: "1.0"
-  name: exoscale-controller-manager-service
-  namespace: cluster-api-provider-exoscale-system
+  name: controller-manager-service
 spec:
   ports:
   - port: 443
@@ -23,8 +22,7 @@ spec:
 apiVersion: apps/v1beta1
 kind: Deployment
 metadata:
-  name: exoscale-clusterapi-controllers
-  namespace: cluster-api-provider-exoscale-system
+  name: controllers
   labels:
     control-plane: exoscale-controller-manager
     controller-tools.k8s.io: "1.0"
@@ -33,7 +31,7 @@ spec:
   template:
     metadata:
       labels:
-        control-plane: exoscale-controller-manager
+        control-plane: exoscale-cluster-api-controller-manager
         controller-tools.k8s.io: "1.0"
     spec:
       tolerations:

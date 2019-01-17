@@ -1,7 +1,7 @@
 apiVersion: apps/v1beta1
 kind: Deployment
 metadata:
-  name: exoscale-clusterapi-controllers
+  name: controllers
 spec:
   template:
     spec:

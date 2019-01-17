@@ -65,6 +65,15 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 		return err
 	}
 
+	sgs, err := exoClient.List(&egoscale.SecurityGroup{Name: clusterConfig.Spec.SecurityGroup})
+	if err != nil {
+		return fmt.Errorf("error getting network security group: %v", err)
+	}
+
+	if len(sgs) > 0 {
+		return nil
+	}
+
 	req := egoscale.CreateSecurityGroup{
 		Name: clusterConfig.Spec.SecurityGroup,
 	}

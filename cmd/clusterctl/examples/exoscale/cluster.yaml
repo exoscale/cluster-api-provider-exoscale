@@ -17,5 +17,4 @@ spec:
       kind: "ExoscaleClusterProviderSpec"
       spec:
         zone: de-fra-1
-        sshKey: id_rsa_cluster_api
         securityGroup: kubernetes

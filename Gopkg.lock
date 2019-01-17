@@ -965,6 +965,7 @@
   input-imports = [
     "github.com/emicklei/go-restful",
     "github.com/exoscale/egoscale",
+    "github.com/ghodss/yaml",
     "github.com/golang/glog",
     "github.com/onsi/ginkgo",
     "github.com/onsi/gomega",

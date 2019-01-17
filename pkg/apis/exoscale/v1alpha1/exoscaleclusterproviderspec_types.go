@@ -27,7 +27,10 @@ type ExoscaleClusterProviderSpecSpec struct {
 }
 
 // ExoscaleClusterProviderSpecStatus defines the observed state of ExoscaleClusterProviderSpec
-type ExoscaleClusterProviderSpecStatus ExoscaleClusterProviderSpecSpec
+type ExoscaleClusterProviderSpecStatus struct {
+	Zone          string `json:"zone"`
+	SecurityGroup string `json:"securityGroup"`
+}
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

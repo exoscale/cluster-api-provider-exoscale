@@ -24,7 +24,7 @@ import (
 	"github.com/exoscale/egoscale"
 	"k8s.io/klog"
 
-	yaml "gopkg.in/yaml.v2"
+	"github.com/ghodss/yaml"
 	exoscalev1 "sigs.k8s.io/cluster-api-provider-exoscale/pkg/apis/exoscale/v1alpha1"
 	exoclient "sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/client"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"

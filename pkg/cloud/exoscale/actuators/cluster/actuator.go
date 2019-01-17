@@ -22,7 +22,7 @@ import (
 	"fmt"
 
 	"github.com/exoscale/egoscale"
-	yaml "gopkg.in/yaml.v2"
+	"github.com/ghodss/yaml"
 	"k8s.io/klog"
 	exoscaleconfigv1 "sigs.k8s.io/cluster-api-provider-exoscale/pkg/apis/exoscale/v1alpha1"
 	exoclient "sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/client"

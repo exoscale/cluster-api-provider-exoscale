@@ -6,6 +6,8 @@ Spawn a fresh kubernetes cluster, feel free to delete any old one if something l
 % minikube start --kubernetes-version v1.12.4 --vm-driver kvm2
 ```
 
+## hacking the clusterctl side
+
 Building the `manager` image.
 
 ```
@@ -34,4 +36,28 @@ Run the `clusterctl` command.
         -c cmd/clusterctl/examples/exoscale/cluster.yaml \
         -p provider-components.yaml \
         -e ~/.kube/config
+```
+
+## hacking the manager side
+
+By default, the manager is run as a container. Let's run it manually instead.
+
+```diff
+ resources:
+-- ../manager/manager.yaml
++#- ../manager/manager.yaml
+
+ patchesStrategicMerge:
+-- manager_image_patch.yaml
++#- manager_image_patch.yaml
+```
+
+Same as above.
+
+```console
+% make deploy
+```
+
+```console
+% go run cmd/manager/main.go
 ```

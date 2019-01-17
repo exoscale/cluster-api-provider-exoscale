@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 
 	"github.com/exoscale/egoscale"
 	yaml "gopkg.in/yaml.v2"
@@ -54,7 +53,7 @@ func NewActuator(params ActuatorParams) (*Actuator, error) {
 
 // Reconcile reconciles a cluster and is invoked by the Cluster Controller
 func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
-	log.Printf("Reconciling cluster %v.", cluster.Name)
+	klog.Infof("Reconciling cluster %v.", cluster.Name)
 
 	clusterConfig, err := clusterSpecFromProviderSpec(cluster.Spec.ProviderSpec)
 	if err != nil {
@@ -80,8 +79,10 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 
 // Delete deletes a cluster and is invoked by the Cluster Controller
 func (a *Actuator) Delete(cluster *clusterv1.Cluster) error {
-	log.Printf("Deleting cluster %v.", cluster.Name)
-	return fmt.Errorf("TODO: Not yet implemented")
+	klog.Infof("Deleting cluster %v.", cluster.Name)
+
+	klog.Error("deleting a cluster is not yet implemented")
+	return nil
 }
 
 // The Machine Actuator interface must implement GetIP and GetKubeConfig functions as a workaround for issues
@@ -90,7 +91,8 @@ func (a *Actuator) Delete(cluster *clusterv1.Cluster) error {
 
 // GetIP returns IP address of the machine in the cluster.
 func (*Actuator) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (string, error) {
-	log.Printf("Getting IP of machine %v for cluster %v.", machine.Name, cluster.Name)
+	klog.Infof("Getting IP of machine %v for cluster %v.", machine.Name, cluster.Name)
+
 	if machine.ObjectMeta.Annotations != nil {
 		if ip, ok := machine.ObjectMeta.Annotations[ExoscaleIPAnnotationKey]; ok {
 			klog.Infof("Returning IP from machine annotation %s", ip)
@@ -103,7 +105,8 @@ func (*Actuator) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (
 
 // GetKubeConfig gets a kubeconfig from the master.
 func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Machine) (string, error) {
-	log.Printf("Getting IP of machine %v for cluster %v.", master.Name, cluster.Name)
+	klog.Infof("Getting IP of machine %v for cluster %v.", master.Name, cluster.Name)
+
 	return "", fmt.Errorf("Provisionner exoscale GetKubeConfig() not yet implemented")
 }
 

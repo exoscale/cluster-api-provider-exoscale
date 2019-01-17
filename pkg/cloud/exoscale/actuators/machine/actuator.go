@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 
 	"github.com/exoscale/egoscale"
 	"k8s.io/klog"
@@ -57,7 +56,7 @@ func NewActuator(params ActuatorParams) (*Actuator, error) {
 
 // Create creates a machine and is invoked by the Machine Controller
 func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
-	log.Printf("Creating machine %v for cluster %v.", machine.Name, cluster.Name)
+	klog.Infof("Creating machine %v for cluster %v.", machine.Name, cluster.Name)
 
 	providerConfig, err := machineSpecFromProviderSpec(machine.Spec.ProviderSpec)
 	if err != nil {
@@ -134,7 +133,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 
 	vm := resp.(*egoscale.VirtualMachine)
 
-	log.Println("Deployed instance:", vm.Name, "IP:", vm.IP().String())
+	klog.Infof("Deployed instance:", vm.Name, "IP:", vm.IP().String())
 
 	machine.Annotations["exoscale-ip"] = vm.IP().String()
 
@@ -143,20 +142,24 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 
 // Delete deletes a machine and is invoked by the Machine Controller
 func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
-	log.Printf("Deleting machine %v for cluster %v.", machine.Name, cluster.Name)
+	klog.Infof("Deleting machine %v for cluster %v.", machine.Name, cluster.Name)
 
-	return fmt.Errorf("TODO: Not yet implemented")
+	klog.Error("Deleting a machine is not yet implemented")
+	return nil
 }
 
 // Update updates a machine and is invoked by the Machine Controller
 func (a *Actuator) Update(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
-	log.Printf("Updating machine %v for cluster %v.", machine.Name, cluster.Name)
-	return fmt.Errorf("TODO: Not yet implemented")
+	klog.Infof("Updating machine %v for cluster %v.", machine.Name, cluster.Name)
+
+	klog.Error("Updating a machine is not yet implemented")
+	return nil
 }
 
 // Exists test for the existance of a machine and is invoked by the Machine Controller
 func (a *Actuator) Exists(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) (bool, error) {
-	log.Printf("Checking if machine %v for cluster %v exists.", machine.Name, cluster.Name)
+	klog.Infof("Checking if machine %v for cluster %v exists.", machine.Name, cluster.Name)
+
 	return false, fmt.Errorf("TODO: Not yet implemented")
 }
 
@@ -166,7 +169,8 @@ func (a *Actuator) Exists(ctx context.Context, cluster *clusterv1.Cluster, machi
 
 // GetIP returns IP address of the machine in the cluster.
 func (*Actuator) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (string, error) {
-	log.Printf("Getting IP of machine %v for cluster %v.", machine.Name, cluster.Name)
+	klog.Infof("Getting IP of machine %v for cluster %v.", machine.Name, cluster.Name)
+
 	if machine.ObjectMeta.Annotations != nil {
 		if ip, ok := machine.ObjectMeta.Annotations[ExoscaleIPAnnotationKey]; ok {
 			klog.Infof("Returning IP from machine annotation %s", ip)
@@ -179,7 +183,8 @@ func (*Actuator) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (
 
 // GetKubeConfig gets a kubeconfig from the master.
 func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Machine) (string, error) {
-	log.Printf("Getting IP of machine %v for cluster %v.", master.Name, cluster.Name)
+	klog.Infof("Getting IP of machine %v for cluster %v.", master.Name, cluster.Name)
+
 	return "", fmt.Errorf("Provisionner exoscale GetKubeConfig() not yet implemented")
 }
 

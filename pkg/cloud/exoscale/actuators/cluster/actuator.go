@@ -56,7 +56,7 @@ func NewActuator(params ActuatorParams) (*Actuator, error) {
 func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 	log.Printf("Reconciling cluster %v.", cluster.Name)
 
-	clusterConfig, err := clusterProviderFromProviderConfig(cluster.Spec.ProviderSpec)
+	clusterConfig, err := clusterSpecFromProviderSpec(cluster.Spec.ProviderSpec)
 	if err != nil {
 		return fmt.Errorf("error loading cluster provider config: %v", err)
 	}
@@ -107,8 +107,8 @@ func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Mac
 	return "", fmt.Errorf("Provisionner exoscale GetKubeConfig() not yet implemented")
 }
 
-func clusterProviderFromProviderConfig(providerConfig clusterv1.ProviderSpec) (*exoscaleconfigv1.ExoscaleClusterProviderConfig, error) {
-	var config exoscaleconfigv1.ExoscaleClusterProviderConfig
+func clusterSpecFromProviderSpec(providerConfig clusterv1.ProviderSpec) (*exoscaleconfigv1.ExoscaleClusterProviderSpec, error) {
+	var config exoscaleconfigv1.ExoscaleClusterProviderSpec
 	if err := yaml.Unmarshal(providerConfig.Value.Raw, &config); err != nil {
 		return nil, err
 	}

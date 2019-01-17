@@ -59,7 +59,7 @@ func NewActuator(params ActuatorParams) (*Actuator, error) {
 func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
 	log.Printf("Creating machine %v for cluster %v.", machine.Name, cluster.Name)
 
-	providerConfig, err := machineConfigFromProviderConfig(machine.Spec.ProviderSpec)
+	providerConfig, err := machineSpecFromProviderSpec(machine.Spec.ProviderSpec)
 	if err != nil {
 		return fmt.Errorf("Cannot unmarshal providerSpec field: %v", err)
 	}
@@ -183,12 +183,12 @@ func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Mac
 	return "", fmt.Errorf("Provisionner exoscale GetKubeConfig() not yet implemented")
 }
 
-func machineConfigFromProviderConfig(providerSpec clusterv1.ProviderSpec) (*exoscalev1.ExoscaleMachineProviderConfig, error) {
+func machineSpecFromProviderSpec(providerSpec clusterv1.ProviderSpec) (*exoscalev1.ExoscaleMachineProviderSpec, error) {
 	if providerSpec.Value == nil {
 		return nil, errors.New("no such providerConfig found in manifest")
 	}
 
-	var config exoscalev1.ExoscaleMachineProviderConfig
+	var config exoscalev1.ExoscaleMachineProviderSpec
 	if err := yaml.Unmarshal(providerSpec.Value.Raw, &config); err != nil {
 		return nil, err
 	}

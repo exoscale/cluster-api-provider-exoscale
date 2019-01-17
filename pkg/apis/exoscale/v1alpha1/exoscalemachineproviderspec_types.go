@@ -20,8 +20,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// ExoscaleMachineProviderConfigStatus defines the observed state of ExoscaleMachineProviderConfig
-type ExoscaleMachineProviderConfigStatus struct {
+// ExoscaleMachineProviderSpecStatus defines the observed state of ExoscaleMachineProviderSpec
+type ExoscaleMachineProviderSpecStatus struct {
 	Zone              string `json:"zone"`
 	Template          string `json:"template"`
 	User              string `json:"user"`
@@ -34,31 +34,31 @@ type ExoscaleMachineProviderConfigStatus struct {
 	CloudInit         string `json:"cloudInit"`
 }
 
-// ExoscaleMachineProviderConfigSpec defines the desired state of ExoscaleMachineProviderConfig
-type ExoscaleMachineProviderConfigSpec ExoscaleMachineProviderConfigStatus
+// ExoscaleMachineProviderSpecSpec defines the desired state of ExoscaleMachineProviderSpec
+type ExoscaleMachineProviderSpecSpec ExoscaleMachineProviderSpecStatus
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ExoscaleMachineProviderConfig is the Schema for the exoscalemachineproviderconfigs API
+// ExoscaleMachineProviderSpec is the Schema for the exoscalemachineproviderconfigs API
 // +k8s:openapi-gen=true
-type ExoscaleMachineProviderConfig struct {
+type ExoscaleMachineProviderSpec struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   ExoscaleMachineProviderConfigSpec   `json:"spec,omitempty"`
-	Status ExoscaleMachineProviderConfigStatus `json:"status,omitempty"`
+	Spec   ExoscaleMachineProviderSpecSpec   `json:"spec,omitempty"`
+	Status ExoscaleMachineProviderSpecStatus `json:"status,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ExoscaleMachineProviderConfigList contains a list of ExoscaleMachineProviderConfig
-type ExoscaleMachineProviderConfigList struct {
+// ExoscaleMachineProviderSpecList contains a list of ExoscaleMachineProviderSpec
+type ExoscaleMachineProviderSpecList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []ExoscaleMachineProviderConfig `json:"items"`
+	Items           []ExoscaleMachineProviderSpec `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&ExoscaleMachineProviderConfig{}, &ExoscaleMachineProviderConfigList{})
+	SchemeBuilder.Register(&ExoscaleMachineProviderSpec{}, &ExoscaleMachineProviderSpecList{})
 }

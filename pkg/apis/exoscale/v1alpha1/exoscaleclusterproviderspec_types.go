@@ -20,38 +20,38 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// ExoscaleClusterProviderConfigSpec defines the desired state of ExoscaleClusterProviderConfig
-type ExoscaleClusterProviderConfigSpec struct {
+// ExoscaleClusterProviderSpecSpec defines the desired state of ExoscaleClusterProviderSpec
+type ExoscaleClusterProviderSpecSpec struct {
 	Zone          string `json:"zone"`
 	SecurityGroup string `json:"securityGroup"`
 }
 
-// ExoscaleClusterProviderConfigStatus defines the observed state of ExoscaleClusterProviderConfig
-type ExoscaleClusterProviderConfigStatus ExoscaleClusterProviderConfigSpec
+// ExoscaleClusterProviderSpecStatus defines the observed state of ExoscaleClusterProviderSpec
+type ExoscaleClusterProviderSpecStatus ExoscaleClusterProviderSpecSpec
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ExoscaleClusterProviderConfig is the Schema for the exoscaleclusterproviderconfigs API
+// ExoscaleClusterProviderSpec is the Schema for the exoscaleclusterproviderconfigs API
 // +k8s:openapi-gen=true
-type ExoscaleClusterProviderConfig struct {
+type ExoscaleClusterProviderSpec struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   ExoscaleClusterProviderConfigSpec   `json:"spec,omitempty"`
-	Status ExoscaleClusterProviderConfigStatus `json:"status,omitempty"`
+	Spec   ExoscaleClusterProviderSpecSpec   `json:"spec,omitempty"`
+	Status ExoscaleClusterProviderSpecStatus `json:"status,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ExoscaleClusterProviderConfigList contains a list of ExoscaleClusterProviderConfig
-type ExoscaleClusterProviderConfigList struct {
+// ExoscaleClusterProviderSpecList contains a list of ExoscaleClusterProviderSpec
+type ExoscaleClusterProviderSpecList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 
-	Items []ExoscaleClusterProviderConfig `json:"items"`
+	Items []ExoscaleClusterProviderSpec `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&ExoscaleClusterProviderConfig{}, &ExoscaleClusterProviderConfigList{})
+	SchemeBuilder.Register(&ExoscaleClusterProviderSpec{}, &ExoscaleClusterProviderSpecList{})
 }

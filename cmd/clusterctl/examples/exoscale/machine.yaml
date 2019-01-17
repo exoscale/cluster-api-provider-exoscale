@@ -9,7 +9,7 @@ items:
     providerSpec:
       value:
         apiVersion: exoscale.cluster.k8s.io/v1alpha1
-        kind: ExoscaleMachineProviderConfig
+        kind: ExoscaleMachineProviderSpec
         spec:
           zone: de-fra-1
           template: "Linux Ubuntu 18.04 LTS 64-bit"
@@ -33,7 +33,7 @@ items:
     providerSpec:
       value:
         apiVersion: exoscale.cluster.k8s.io/v1alpha1
-        kind: ExoscaleMachineProviderConfig
+        kind: ExoscaleMachineProviderSpec
         spec:
           zone: de-fra-1
           template: "Linux Ubuntu 18.04 LTS 64-bit"

@@ -160,7 +160,25 @@ func (a *Actuator) Update(ctx context.Context, cluster *clusterv1.Cluster, machi
 func (a *Actuator) Exists(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) (bool, error) {
 	klog.Infof("Checking if machine %v for cluster %v exists.", machine.Name, cluster.Name)
 
-	return false, fmt.Errorf("TODO: Not yet implemented")
+	exoClient, err := exoclient.Client()
+	if err != nil {
+		return false, err
+	}
+
+	vms, err := exoClient.ListWithContext(ctx, &egoscale.VirtualMachine{Name: machine.Name})
+	if err != nil {
+		return false, err
+	}
+
+	if len(vms) == 1 {
+		return true, nil
+	}
+
+	if len(vms) > 1 {
+		return false, fmt.Errorf("Machine.Exist more than one machine found with this name %s", machine.Name)
+	}
+
+	return false, nil
 }
 
 // The Machine Actuator interface must implement GetIP and GetKubeConfig functions as a workaround for issues

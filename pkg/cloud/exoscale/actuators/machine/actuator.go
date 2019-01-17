@@ -72,6 +72,8 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	// create or upload an sshkey in exoscale
 	// put sshkey name in machine spec provider yml
 
+	fmt.Printf("XXXXXXX=%#v=XXXX\n", providerConfig.Spec)
+
 	z, err := exoClient.GetWithContext(ctx, &egoscale.Zone{Name: providerConfig.Spec.Zone})
 	if err != nil {
 		return fmt.Errorf("Invalid exoscale zone %q. providerSpec field: %v", providerConfig.Spec.Zone, err)
@@ -81,8 +83,9 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	t, err := exoClient.GetWithContext(
 		ctx,
 		&egoscale.Template{
-			Name:   providerConfig.Spec.Template,
-			ZoneID: zone.ID,
+			Name:       providerConfig.Spec.Template,
+			ZoneID:     zone.ID,
+			IsFeatured: true,
 		},
 	)
 	if err != nil {
@@ -135,6 +138,9 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 
 	klog.Infof("Deployed instance:", vm.Name, "IP:", vm.IP().String())
 
+	if machine.Annotations == nil {
+		machine.Annotations = map[string]string{}
+	}
 	machine.Annotations["exoscale-ip"] = vm.IP().String()
 
 	return nil
@@ -151,6 +157,13 @@ func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machi
 // Update updates a machine and is invoked by the Machine Controller
 func (a *Actuator) Update(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
 	klog.Infof("Updating machine %v for cluster %v.", machine.Name, cluster.Name)
+
+	// providerConfig, err := machineSpecFromProviderSpec(machine.Spec.ProviderSpec)
+	// if err != nil {
+	// 	return fmt.Errorf("Cannot unmarshal providerSpec field: %v", err)
+	// }
+
+	fmt.Printf("VVVVVVVV=%#v=VVVVVVVVVVV\n", machine.Status)
 
 	klog.Error("Updating a machine is not yet implemented")
 	return nil

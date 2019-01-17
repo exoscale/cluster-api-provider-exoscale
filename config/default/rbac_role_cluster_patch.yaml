@@ -1,0 +1,18 @@
+- op: add
+  path: /rules/-
+  value:
+    apiGroups:
+    - cluster.k8s.io
+    resources:
+    - clusters
+    - machines
+    - machinedeployments
+    - machinesets
+    verbs:
+    - get
+    - list
+    - watch
+    - create
+    - update
+    - patch
+    - delete

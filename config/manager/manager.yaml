@@ -77,17 +77,17 @@ spec:
           - name: EXOSCALE_API_KEY
             valueFrom:
               secretKeyRef:
-                name: exoscale-controller-secrets
+                name: controller-secrets
                 key: api-key
           - name: EXOSCALE_SECRET_KEY
             valueFrom:
               secretKeyRef:
-                name: exoscale-controller-secrets
+                name: controller-secrets
                 key: secret-key
           - name: EXOSCALE_COMPUTE_ENDPOINT
             valueFrom:
               secretKeyRef:
-                name: exoscale-controller-secrets
+                name: controller-secrets
                 key: compute-endpoint
       volumes:
       - name: config

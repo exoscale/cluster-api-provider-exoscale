@@ -78,35 +78,35 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	// put sshkey name in machine spec provider yml
 
 	klog.Warningf("clusterStatus: %#v", clusterStatus)
-	klog.Warningf("machineConfig: %#v", machineConfig.Spec)
+	klog.Warningf("machineConfig: %#v", machineConfig)
 
-	z, err := exoClient.GetWithContext(ctx, &egoscale.Zone{Name: machineConfig.Spec.Zone})
+	z, err := exoClient.GetWithContext(ctx, &egoscale.Zone{Name: machineConfig.Zone})
 	if err != nil {
-		return fmt.Errorf("problem fetching the zone %q. %s", machineConfig.Spec.Zone, err)
+		return fmt.Errorf("problem fetching the zone %q. %s", machineConfig.Zone, err)
 	}
 	zone := z.(*egoscale.Zone)
 
 	t, err := exoClient.GetWithContext(
 		ctx,
 		&egoscale.Template{
-			Name:       machineConfig.Spec.Template,
+			Name:       machineConfig.Template,
 			ZoneID:     zone.ID,
 			IsFeatured: true,
 		},
 	)
 	if err != nil {
-		return fmt.Errorf("problem fetching the template %q. %s", machineConfig.Spec.Template, err)
+		return fmt.Errorf("problem fetching the template %q. %s", machineConfig.Template, err)
 	}
 	template := t.(*egoscale.Template)
 
 	so, err := exoClient.GetWithContext(
 		ctx,
 		&egoscale.ServiceOffering{
-			Name: machineConfig.Spec.Type,
+			Name: machineConfig.Type,
 		},
 	)
 	if err != nil {
-		return fmt.Errorf("problem fetching service-offering %q. %s", machineConfig.Spec.Type, err)
+		return fmt.Errorf("problem fetching service-offering %q. %s", machineConfig.Type, err)
 	}
 	serviceOffering := so.(*egoscale.ServiceOffering)
 
@@ -130,7 +130,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		Name:              machine.Name,
 		ZoneID:            zone.ID,
 		TemplateID:        template.ID,
-		RootDiskSize:      machineConfig.Spec.Disk,
+		RootDiskSize:      machineConfig.Disk,
 		KeyPair:           sshKeyName,
 		SecurityGroupIDs:  []egoscale.UUID{*securityGroupID},
 		ServiceOfferingID: serviceOffering.ID,
@@ -143,7 +143,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 
 	vm := resp.(*egoscale.VirtualMachine)
 
-	klog.Infof("Deployed instance:", vm.Name, "IP:", vm.IP().String())
+	klog.Infof("Deployed instance: %q IP: %q", vm.Name, vm.IP().String())
 
 	klog.Infof("Bootstrapping Kubernetes cluster (can take up to several minutes):")
 
@@ -168,10 +168,23 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 
 	klog.Infof("Machine %q provisioning success!", machine.Name)
 
-	if machine.Annotations == nil {
-		machine.Annotations = map[string]string{}
-	}
-	machine.Annotations["exoscale-ip"] = vm.IP().String()
+	// // Put the data into the "Status"
+	// clusterStatus.SecurityGroupID = sg.ID.String()
+
+	// rawStatus, err := json.Marshal(clusterStatus)
+	// if err != nil {
+	// 	return err
+	// }
+
+	// cluster.Status.ProviderStatus = &runtime.RawExtension{
+	// 	Raw: rawStatus,
+	// }
+
+	// clusterClient := a.clustersGetter.Clusters(cluster.Namespace)
+
+	// if _, err := clusterClient.UpdateStatus(cluster); err != nil {
+	// 	return err
+	// }
 
 	return nil
 }

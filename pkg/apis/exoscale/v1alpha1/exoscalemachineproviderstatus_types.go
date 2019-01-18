@@ -23,13 +23,12 @@ import (
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ExoscaleMachineProviderSpec is the Schema for the exoscalemachineproviderconfigs API
+// ExoscaleMachineProviderStatus is the Schema for the exoscalemachineproviderstatuses API
 // +k8s:openapi-gen=true
-type ExoscaleMachineProviderSpec struct {
+type ExoscaleMachineProviderStatus struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	//Exoscale provider fields
 	Zone              string `json:"zone"`
 	Template          string `json:"template"`
 	User              string `json:"user"`
@@ -45,5 +44,5 @@ type ExoscaleMachineProviderSpec struct {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 func init() {
-	SchemeBuilder.Register(&ExoscaleMachineProviderSpec{})
+	SchemeBuilder.Register(&ExoscaleMachineProviderStatus{})
 }

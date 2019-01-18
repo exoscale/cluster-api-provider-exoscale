@@ -4,12 +4,12 @@ metadata:
   creationTimestamp: null
   labels:
     controller-tools.k8s.io: "1.0"
-  name: exoscalemachineproviderspecs.exoscale.cluster.k8s.io
+  name: exoscalemachineproviderstatuses.exoscale.cluster.k8s.io
 spec:
   group: exoscale.cluster.k8s.io
   names:
-    kind: ExoscaleMachineProviderSpec
-    plural: exoscalemachineproviderspecs
+    kind: ExoscaleMachineProviderStatus
+    plural: exoscalemachineproviderstatuses
   scope: Namespaced
   validation:
     openAPIV3Schema:
@@ -44,7 +44,6 @@ spec:
         user:
           type: string
         zone:
-          description: Exoscale provider fields
           type: string
       required:
       - zone

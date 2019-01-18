@@ -172,6 +172,8 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return fmt.Errorf("cluster bootstrap failed: %s", err)
 	}
 
+	klog.Infof("Machine %q provisioning success!", machine.Name)
+
 	if machine.Annotations == nil {
 		machine.Annotations = map[string]string{}
 	}

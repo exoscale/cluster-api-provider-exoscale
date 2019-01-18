@@ -3,9 +3,9 @@ package machine
 import (
 	"bytes"
 	"fmt"
-	"html/template"
 	"io"
 	"os"
+	"text/template"
 )
 
 const (

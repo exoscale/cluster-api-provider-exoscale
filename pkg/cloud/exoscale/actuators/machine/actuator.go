@@ -126,6 +126,8 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return fmt.Errorf("an SSH key with that name %q already exists, please choose a different name", sshKeyName)
 	}
 
+	println(keyPairs.PrivateKey)
+
 	req := egoscale.DeployVirtualMachine{
 		Name: machine.Name,
 		//UserData:          userData,

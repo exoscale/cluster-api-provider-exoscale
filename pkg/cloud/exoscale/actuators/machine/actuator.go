@@ -115,13 +115,24 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	}
 	serviceOffering := so.(*egoscale.ServiceOffering)
 
+	sshKeyName := machine.Name + "id_rsa"
+
+	keyPairs, err := createSSHKey(ctx, exoClient, sshKeyName)
+	if err != nil {
+		r := err.(*egoscale.ErrorResponse)
+		if r.ErrorCode != egoscale.ParamError && r.CSErrorCode != egoscale.InvalidParameterValueException {
+			return err
+		}
+		return fmt.Errorf("an SSH key with that name %q already exists, please choose a different name", sshKeyName)
+	}
+
 	req := egoscale.DeployVirtualMachine{
 		Name: machine.Name,
 		//UserData:          userData,
 		ZoneID:           zone.ID,
 		TemplateID:       template.ID,
 		RootDiskSize:     int64(providerConfig.Spec.Disk),
-		KeyPair:          providerConfig.Spec.SSHKey,
+		KeyPair:          sshKeyName,
 		SecurityGroupIDs: []egoscale.UUID{*securityGroup.ID},
 		IP6:              &providerConfig.Spec.IPv6,
 		//NetworkIDs:        pvs,
@@ -137,6 +148,27 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	vm := resp.(*egoscale.VirtualMachine)
 
 	klog.Infof("Deployed instance:", vm.Name, "IP:", vm.IP().String())
+
+	klog.Infof("Bootstrapping Kubernetes cluster (can take up to several minutes):")
+
+	sshClient, err := newSSHClient(
+		vm.IP().String(),
+		"ubuntu",
+		keyPairs.PrivateKey,
+	)
+	if err != nil {
+		return fmt.Errorf("unable to initialize SSH client: %s", err)
+	}
+
+	if err := bootstrapExokubeCluster(sshClient, kubeCluster{
+		Name:              cluster.Name,
+		KubernetesVersion: "1.12.5",
+		CalicoVersion:     kubeCalicoVersion,
+		DockerVersion:     kubeDockerVersion,
+		Address:           vm.IP().String(),
+	}, false); err != nil {
+		return fmt.Errorf("cluster bootstrap failed: %s", err)
+	}
 
 	if machine.Annotations == nil {
 		machine.Annotations = map[string]string{}

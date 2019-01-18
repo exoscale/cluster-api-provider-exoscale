@@ -276,13 +276,17 @@ func clusterStatusFromClusterStatus(clusterStatus clusterv1.ClusterStatus) (*exo
 }
 
 func machineSpecFromProviderSpec(providerSpec clusterv1.ProviderSpec) (*exoscalev1.ExoscaleMachineProviderSpec, error) {
-	if providerSpec.Value == nil {
-		return nil, errors.New("no such providerConfig found in manifest")
-	}
-
-	var config exoscalev1.ExoscaleMachineProviderSpec
-	if err := yaml.Unmarshal(providerSpec.Value.Raw, &config); err != nil {
+	config := new(exoscalev1.ExoscaleMachineProviderSpec)
+	if err := yaml.Unmarshal(providerSpec.Value.Raw, config); err != nil {
 		return nil, err
 	}
-	return &config, nil
+	return config, nil
+}
+
+func machineSpecFromProviderStatus(clusterStatus clusterv1.ClusterStatus) (*exoscalev1.ExoscaleMachineProviderStatus, error) {
+	config := new(exoscalev1.ExoscaleMachineProviderStatus)
+	if err := yaml.Unmarshal(clusterStatus.ProviderStatus.Raw, config); err != nil {
+		return nil, err
+	}
+	return config, nil
 }

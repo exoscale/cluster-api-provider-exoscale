@@ -18,10 +18,12 @@ package machine
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
 	"github.com/exoscale/egoscale"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog"
 
 	"github.com/ghodss/yaml"
@@ -64,6 +66,11 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	}
 
 	machineConfig, err := machineSpecFromProviderSpec(machine.Spec.ProviderSpec)
+	if err != nil {
+		return fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
+	}
+
+	machineStatus, err := machineSpecFromMachineStatus(machine.Status)
 	if err != nil {
 		return fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
 	}
@@ -168,23 +175,27 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 
 	klog.Infof("Machine %q provisioning success!", machine.Name)
 
-	// // Put the data into the "Status"
-	// clusterStatus.SecurityGroupID = sg.ID.String()
+	machineStatus.Disk = machineConfig.Disk
+	machineStatus.SSHKey = keyPairs.PrivateKey
+	machineStatus.SecurityGroup = vm.SecurityGroup[0].ID.String()
+	machineStatus.Name = vm.Name
+	machineStatus.Zone = vm.ZoneName
+	machineStatus.Template = vm.TemplateID.String()
 
-	// rawStatus, err := json.Marshal(clusterStatus)
-	// if err != nil {
-	// 	return err
-	// }
+	rawStatus, err := json.Marshal(machineStatus)
+	if err != nil {
+		return err
+	}
 
-	// cluster.Status.ProviderStatus = &runtime.RawExtension{
-	// 	Raw: rawStatus,
-	// }
+	machine.Status.ProviderStatus = &runtime.RawExtension{
+		Raw: rawStatus,
+	}
 
-	// clusterClient := a.clustersGetter.Clusters(cluster.Namespace)
+	machineClient := a.machinesGetter.Machines(machine.Namespace)
 
-	// if _, err := clusterClient.UpdateStatus(cluster); err != nil {
-	// 	return err
-	// }
+	if _, err := machineClient.UpdateStatus(machine); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -283,9 +294,9 @@ func machineSpecFromProviderSpec(providerSpec clusterv1.ProviderSpec) (*exoscale
 	return config, nil
 }
 
-func machineSpecFromProviderStatus(clusterStatus clusterv1.ClusterStatus) (*exoscalev1.ExoscaleMachineProviderStatus, error) {
+func machineSpecFromMachineStatus(machineStatus clusterv1.MachineStatus) (*exoscalev1.ExoscaleMachineProviderStatus, error) {
 	config := new(exoscalev1.ExoscaleMachineProviderStatus)
-	if err := yaml.Unmarshal(clusterStatus.ProviderStatus.Raw, config); err != nil {
+	if err := yaml.Unmarshal(machineStatus.ProviderStatus.Raw, config); err != nil {
 		return nil, err
 	}
 	return config, nil

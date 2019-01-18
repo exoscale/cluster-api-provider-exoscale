@@ -4,12 +4,12 @@ metadata:
   creationTimestamp: null
   labels:
     controller-tools.k8s.io: "1.0"
-  name: exoscaleclusterproviderspecs.exoscale.cluster.k8s.io
+  name: exoscaleclusterproviderstatuses.exoscale.cluster.k8s.io
 spec:
   group: exoscale.cluster.k8s.io
   names:
-    kind: ExoscaleClusterProviderSpec
-    plural: exoscaleclusterproviderspecs
+    kind: ExoscaleClusterProviderStatus
+    plural: exoscaleclusterproviderstatuses
   scope: Namespaced
   validation:
     openAPIV3Schema:
@@ -26,11 +26,8 @@ spec:
           type: string
         metadata:
           type: object
-        securityGroup:
-          description: SecurityGroup is the name of firewalling security group.
+        securityGroupID:
           type: string
-      required:
-      - securityGroup
   version: v1alpha1
 status:
   acceptedNames:

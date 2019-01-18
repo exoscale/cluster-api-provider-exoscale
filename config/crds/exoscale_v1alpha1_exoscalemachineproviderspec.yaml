@@ -37,7 +37,7 @@ spec:
               type: integer
             securityGroup:
               type: string
-            sshkey:
+            sshKey:
               type: string
             template:
               type: string
@@ -53,10 +53,8 @@ spec:
           - user
           - type
           - disk
-          - sshkey
+          - sshKey
           - securityGroup
-          - antiAffinityGroup
-          - cloudInit
           type: object
         status:
           properties:
@@ -69,7 +67,7 @@ spec:
               type: integer
             securityGroup:
               type: string
-            sshkey:
+            sshKey:
               type: string
             template:
               type: string
@@ -85,10 +83,8 @@ spec:
           - user
           - type
           - disk
-          - sshkey
+          - sshKey
           - securityGroup
-          - antiAffinityGroup
-          - cloudInit
           type: object
   version: v1alpha1
 status:

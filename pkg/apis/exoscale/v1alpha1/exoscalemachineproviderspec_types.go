@@ -20,22 +20,22 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// ExoscaleMachineProviderSpecStatus defines the observed state of ExoscaleMachineProviderSpec
-type ExoscaleMachineProviderSpecStatus struct {
+// ExoscaleMachineProviderSpecSpec defines the desired state of ExoscaleMachineProviderSp
+type ExoscaleMachineProviderSpecSpec struct {
 	Zone              string `json:"zone"`
 	Template          string `json:"template"`
 	User              string `json:"user"`
 	Type              string `json:"type"`
-	Disk              int    `json:"disk"`
-	SSHKey            string `json:"sshkey"`
-	IPv6              bool   `json:"ipv6"`
+	Disk              int64  `json:"disk"`
+	SSHKey            string `json:"sshKey"`
+	IPv6              bool   `json:"ipv6,omitempty"`
 	SecurityGroup     string `json:"securityGroup"`
-	AntiAffinityGroup string `json:"antiAffinityGroup"`
-	CloudInit         string `json:"cloudInit"`
+	AntiAffinityGroup string `json:"antiAffinityGroup,omitempty"`
+	CloudInit         string `json:"cloudInit,omitempty"`
 }
 
-// ExoscaleMachineProviderSpecSpec defines the desired state of ExoscaleMachineProviderSpec
-type ExoscaleMachineProviderSpecSpec ExoscaleMachineProviderSpecStatus
+// ExoscaleMachineProviderSpecStatus defines the observed state of ExoscaleMachineProviderSpec
+type ExoscaleMachineProviderSpecStatus ExoscaleMachineProviderSpecSpec
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

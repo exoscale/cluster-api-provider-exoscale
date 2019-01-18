@@ -22,8 +22,10 @@ import (
 
 	"github.com/exoscale/egoscale"
 	"github.com/ghodss/yaml"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/klog"
-	exoscaleconfigv1 "sigs.k8s.io/cluster-api-provider-exoscale/pkg/apis/exoscale/v1alpha1"
+	exoscalev1 "sigs.k8s.io/cluster-api-provider-exoscale/pkg/apis/exoscale/v1alpha1"
 	exoclient "sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/client"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	client "sigs.k8s.io/cluster-api/pkg/client/clientset_generated/clientset/typed/cluster/v1alpha1"
@@ -54,9 +56,19 @@ func NewActuator(params ActuatorParams) (*Actuator, error) {
 func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 	klog.Infof("Reconciling cluster %v.", cluster.Name)
 
-	clusterConfig, err := clusterSpecFromProviderSpec(cluster.Spec.ProviderSpec)
+	clusterSpec, err := clusterSpecFromProviderSpec(cluster.Spec.ProviderSpec)
 	if err != nil {
 		return fmt.Errorf("error loading cluster provider config: %v", err)
+	}
+
+	clusterStatus, err := clusterStatusFromProviderStatus(cluster.Status.ProviderStatus)
+	if err != nil {
+		return fmt.Errorf("error loading cluster provider config: %v", err)
+	}
+
+	if clusterStatus.SecurityGroupID != "" {
+		klog.Infof("using existing security group id %s", clusterStatus.SecurityGroupID)
+		return nil
 	}
 
 	exoClient, err := exoclient.Client()
@@ -64,22 +76,43 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 		return err
 	}
 
-	sgs, err := exoClient.List(&egoscale.SecurityGroup{Name: clusterConfig.Spec.SecurityGroup})
+	sgs, err := exoClient.List(&egoscale.SecurityGroup{Name: clusterSpec.SecurityGroup})
 	if err != nil {
 		return fmt.Errorf("error getting network security group: %v", err)
 	}
 
-	if len(sgs) > 0 {
-		return nil
+	var sg *egoscale.SecurityGroup
+	if len(sgs) == 0 {
+		req := egoscale.CreateSecurityGroup{
+			Name: clusterSpec.SecurityGroup,
+		}
+
+		resp, err := exoClient.Request(req)
+		if err != nil {
+			return fmt.Errorf("error creating or updating network security group: %v", err)
+		}
+
+		sg = resp.(*egoscale.SecurityGroup)
+	} else {
+		sg = sgs[0].(*egoscale.SecurityGroup)
 	}
 
-	req := egoscale.CreateSecurityGroup{
-		Name: clusterConfig.Spec.SecurityGroup,
-	}
+	// Put the data into the "Status"
+	clusterStatus.SecurityGroupID = sg.ID.String()
 
-	_, err = exoClient.Request(req)
+	rawStatus, err := json.Marshal(clusterStatus)
 	if err != nil {
-		return fmt.Errorf("error creating or updating network security group: %v", err)
+		return err
+	}
+
+	cluster.Status.ProviderStatus = &runtime.RawExtension{
+		Raw: rawStatus,
+	}
+
+	clusterClient := a.clustersGetter.Clusters(cluster.Namespace)
+
+	if _, err := clusterClient.UpdateStatus(cluster); err != nil {
+		return err
 	}
 
 	return nil
@@ -118,10 +151,20 @@ func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Mac
 	return "", fmt.Errorf("Provisionner exoscale GetKubeConfig() not yet implemented")
 }
 
-func clusterSpecFromProviderSpec(providerConfig clusterv1.ProviderSpec) (*exoscaleconfigv1.ExoscaleClusterProviderSpec, error) {
-	var config exoscaleconfigv1.ExoscaleClusterProviderSpec
-	if err := yaml.Unmarshal(providerConfig.Value.Raw, &config); err != nil {
+func clusterSpecFromProviderSpec(providerConfig clusterv1.ProviderSpec) (*exoscalev1.ExoscaleClusterProviderSpec, error) {
+	config := new(exoscalev1.ExoscaleClusterProviderSpec)
+	if err := yaml.Unmarshal(providerConfig.Value.Raw, config); err != nil {
 		return nil, err
 	}
-	return &config, nil
+	return config, nil
+}
+
+func clusterStatusFromProviderStatus(providerStatus *runtime.RawExtension) (*exoscalev1.ExoscaleClusterProviderStatus, error) {
+	config := new(exoscalev1.ExoscaleClusterProviderStatus)
+	if providerStatus != nil {
+		if err := yaml.Unmarshal(providerStatus.Raw, config); err != nil {
+			return nil, err
+		}
+	}
+	return config, nil
 }

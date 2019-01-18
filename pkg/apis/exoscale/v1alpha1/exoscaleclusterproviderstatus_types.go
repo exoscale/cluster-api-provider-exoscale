@@ -23,18 +23,17 @@ import (
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ExoscaleClusterProviderSpec is the Schema for the exoscaleclusterproviderspecs API
+// ExoscaleClusterProviderStatus is the Schema for the exoscaleclusterproviderstatuses API
 // +k8s:openapi-gen=true
-type ExoscaleClusterProviderSpec struct {
+type ExoscaleClusterProviderStatus struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// SecurityGroup is the name of firewalling security group.
-	SecurityGroup string `json:"securityGroup"`
+	SecurityGroupID string `json:"securityGroupID,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 func init() {
-	SchemeBuilder.Register(&ExoscaleClusterProviderSpec{})
+	SchemeBuilder.Register(&ExoscaleClusterProviderStatus{})
 }

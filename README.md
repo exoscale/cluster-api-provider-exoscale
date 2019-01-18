@@ -38,6 +38,16 @@ Run the `clusterctl` command.
         -e ~/.kube/config
 ```
 
+Clean up by deleting the data from the CRDs before removing the other resources.
+
+```console
+% kubectl delete machines.cluster.k8s.io ...
+% kubectl delete clusters.cluster.k8s.io ...
+% kubectl delete -f provider-components.yaml
+```
+
+
+
 ## hacking the manager side
 
 By default, the manager is run as a container. Let's run it manually instead.

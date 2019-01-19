@@ -6,6 +6,25 @@ metadata:
 rules:
 - apiGroups:
   - cluster.k8s.io
+  - clusters.cluster.k8s.io
+  - exoscale.cluster.k8s.io
+  resources:
+  - exoscaleclusterproviderspecs
+  - exoscaleclusterproviderstatuses
+  - exoscalemachineproviderspecs
+  - exoscalemachineproviderstatuses
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - cluster.k8s.io
+  - clusters.cluster.k8s.io
+  - exoscale.cluster.k8s.io
   resources:
   - clusters
   verbs:
@@ -18,6 +37,8 @@ rules:
   - delete
 - apiGroups:
   - cluster.k8s.io
+  - clusters.cluster.k8s.io
+  - exoscale.cluster.k8s.io
   resources:
   - machines
   verbs:
@@ -30,6 +51,8 @@ rules:
   - delete
 - apiGroups:
   - cluster.k8s.io
+  - clusters.cluster.k8s.io
+  - exoscale.cluster.k8s.io
   resources:
   - machinedeployments
   verbs:
@@ -42,6 +65,8 @@ rules:
   - delete
 - apiGroups:
   - cluster.k8s.io
+  - clusters.cluster.k8s.io
+  - exoscale.cluster.k8s.io
   resources:
   - machinesets
   verbs:
@@ -54,6 +79,8 @@ rules:
   - delete
 - apiGroups:
   - cluster.k8s.io
+  - clusters.cluster.k8s.io
+  - exoscale.cluster.k8s.io
   resources:
   - machines
   verbs:
@@ -65,7 +92,9 @@ rules:
   - patch
   - delete
 - apiGroups:
-  - ""
+  - cluster.k8s.io
+  - clusters.cluster.k8s.io
+  - exoscale.cluster.k8s.io
   resources:
   - nodes
   verbs:
@@ -78,6 +107,8 @@ rules:
   - delete
 - apiGroups:
   - cluster.k8s.io
+  - clusters.cluster.k8s.io
+  - exoscale.cluster.k8s.io
   resources:
   - machines
   verbs:

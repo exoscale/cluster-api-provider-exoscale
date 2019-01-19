@@ -56,6 +56,8 @@ func NewActuator(params ActuatorParams) (*Actuator, error) {
 func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 	klog.Infof("Reconciling cluster %v.", cluster.Name)
 
+	println("START: cluster.actuator.create")
+
 	clusterSpec, err := clusterSpecFromProviderSpec(cluster.Spec.ProviderSpec)
 	if err != nil {
 		return fmt.Errorf("error loading cluster provider config: %v", err)
@@ -114,6 +116,8 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 	if _, err := clusterClient.UpdateStatus(cluster); err != nil {
 		return err
 	}
+
+	println("END: cluster.actuator.create")
 
 	return nil
 }

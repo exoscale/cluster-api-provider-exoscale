@@ -67,3 +67,15 @@ rules:
   - update
   - patch
   - delete
+- apiGroups:
+  - exoscale.k8s.io
+  resources:
+  - clusters
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete

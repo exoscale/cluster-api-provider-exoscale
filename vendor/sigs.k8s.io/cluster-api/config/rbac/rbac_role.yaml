@@ -65,7 +65,7 @@ rules:
   - patch
   - delete
 - apiGroups:
-  - cluster.k8s.io
+  - ""
   resources:
   - nodes
   verbs:

@@ -3,7 +3,7 @@
 Spawn a fresh kubernetes cluster, feel free to delete any old one if something looks funny.
 
 ```console
-% minikube start --kubernetes-version v1.12.4 --vm-driver kvm2
+% minikube start --kubernetes-version v1.12.5 --vm-driver kvm2
 ```
 
 ## hacking the clusterctl side

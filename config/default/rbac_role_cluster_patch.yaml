@@ -16,3 +16,18 @@
     - update
     - patch
     - delete
+- op: add
+  path: /rules/-
+  value:
+    apiGroups:
+    - exoscale.k8s.io
+    resources:
+    - clusters
+    verbs:
+    - get
+    - list
+    - watch
+    - create
+    - update
+    - patch
+    - delete

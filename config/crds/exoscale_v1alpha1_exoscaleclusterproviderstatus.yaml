@@ -27,7 +27,9 @@ spec:
         metadata:
           type: object
         securityGroupID:
-          type: string
+          type: object
+      required:
+      - securityGroupID
   version: v1alpha1
 status:
   acceptedNames:

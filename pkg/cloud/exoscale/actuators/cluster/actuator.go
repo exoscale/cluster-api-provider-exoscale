@@ -68,7 +68,7 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 		return fmt.Errorf("error loading cluster provider config: %v", err)
 	}
 
-	if clusterStatus.SecurityGroupID != "" {
+	if clusterStatus.SecurityGroupID != nil {
 		klog.Infof("using existing security group id %s", clusterStatus.SecurityGroupID)
 		return nil
 	}
@@ -83,7 +83,7 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 		return fmt.Errorf("error getting network security group: %v", err)
 	}
 
-	var sg *egoscale.SecurityGroup
+	var sgID *egoscale.UUID
 	if len(sgs) == 0 {
 		req := egoscale.CreateSecurityGroup{
 			Name: clusterSpec.SecurityGroup,
@@ -94,13 +94,13 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 			return fmt.Errorf("error creating or updating network security group: %v", err)
 		}
 
-		sg = resp.(*egoscale.SecurityGroup)
+		sgID = resp.(*egoscale.SecurityGroup).ID
 	} else {
-		sg = sgs[0].(*egoscale.SecurityGroup)
+		sgID = sgs[0].(*egoscale.SecurityGroup).ID
 	}
 
 	// Put the data into the "Status"
-	clusterStatus.SecurityGroupID = sg.ID.String()
+	clusterStatus.SecurityGroupID = sgID
 
 	rawStatus, err := json.Marshal(clusterStatus)
 	if err != nil {

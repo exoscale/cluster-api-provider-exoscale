@@ -129,9 +129,8 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return fmt.Errorf("an SSH key with that name %q already exists, please choose a different name", sshKeyName)
 	}
 
-	securityGroupID, err := egoscale.ParseUUID(clusterStatus.SecurityGroupID)
-	if err != nil {
-		return fmt.Errorf("invalid securityGroupID field %s. %s", clusterStatus.SecurityGroupID, err)
+	if clusterStatus.SecurityGroupID == nil {
+		return fmt.Errorf("empty cluster securityGroupID field. %#v", clusterStatus)
 	}
 
 	req := egoscale.DeployVirtualMachine{
@@ -140,7 +139,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		TemplateID:        template.ID,
 		RootDiskSize:      machineConfig.Disk,
 		KeyPair:           sshKeyName,
-		SecurityGroupIDs:  []egoscale.UUID{*securityGroupID},
+		SecurityGroupIDs:  []egoscale.UUID{*clusterStatus.SecurityGroupID},
 		ServiceOfferingID: serviceOffering.ID,
 	}
 

@@ -55,6 +55,10 @@ func (in *ExoscaleClusterProviderStatus) DeepCopyInto(out *ExoscaleClusterProvid
 	*out = *in
 	out.TypeMeta = in.TypeMeta
 	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
+	if in.SecurityGroupID != nil {
+		in, out := &in.SecurityGroupID, &out.SecurityGroupID
+		*out = (*in).DeepCopy()
+	}
 	return
 }
 

@@ -26,15 +26,15 @@
   version = "v1.1.1"
 
 [[projects]]
-  digest = "1:0ffd93121f3971aea43f6a26b3eaaa64c8af20fb0ff0731087d8dab7164af5a8"
+  digest = "1:77b39b37b35255582ec2c661b9c49c46356bf9fd5156442b400ef0608c358023"
   name = "github.com/emicklei/go-restful"
   packages = [
     ".",
     "log",
   ]
   pruneopts = "T"
-  revision = "3eb9738c1697594ea6e71a7156a9bb32ed216cf0"
-  version = "v2.8.0"
+  revision = "e37671aced663c8d3a395bd301857e26dcf4340c"
+  version = "v2.8.1"
 
 [[projects]]
   digest = "1:9461ffd39d7c9fcdb9052d23e14dfaa438ef924a0e94ed6305ff640fbfcb9357"
@@ -69,12 +69,12 @@
   version = "v0.1.0"
 
 [[projects]]
-  digest = "1:3e34b0a53d651b06655475eb488745c912596e08557a33b83d336aab41cb6fe9"
+  digest = "1:bc874ddfcb70d87525ceadf6aa7019b6a373cae3e4d4c9963cfa935321e85864"
   name = "github.com/gobuffalo/envy"
   packages = ["."]
   pruneopts = "T"
-  revision = "801d7253ade1f895f74596b9a96147ed2d3b087e"
-  version = "v1.6.11"
+  revision = "f3b98d4da2fa434517f47f615e217fa72ff2c51e"
+  version = "v1.6.12"
 
 [[projects]]
   digest = "1:f5ccd717b5f093cbabc51ee2e7a5979b92f17d217f9031d6d64f337101c408e4"
@@ -377,7 +377,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:7a4fed4f3801ef4c2f53054230ee75d1f62df4e2a6fab049ca6213c793e386d8"
+  digest = "1:c98dc89f971cf954d22a78ac61cdaf4be91ec53852fe90cf86f1314a8afd6f46"
   name = "github.com/prometheus/procfs"
   packages = [
     ".",
@@ -386,7 +386,7 @@
     "xfs",
   ]
   pruneopts = "T"
-  revision = "b1a0a9a36d7453ba0f62578b99712f3a6c5f82d1"
+  revision = "bf6a532e95b1f7a62adf0ab5050a5bb2237ad2f4"
 
 [[projects]]
   digest = "1:7ed87796a9e0b0310847cde3303fc3de3f0d04a110ca56f85b8674a1f3ba48f4"
@@ -485,7 +485,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:5be93c879e360e3a5a59fc463938c1761592cbf93664d29ca06970081a564a90"
+  digest = "1:f758c83a22e6df9326129cfc7b8b6c0e6898c29ec64e8b6f99d8ca9208df4f06"
   name = "golang.org/x/net"
   packages = [
     "context",
@@ -499,7 +499,7 @@
     "idna",
   ]
   pruneopts = "T"
-  revision = "915654e7eabcea33ae277abbecf52f0d8b7a9fdc"
+  revision = "ed066c81e75eba56dd9bd2139ade88125b855585"
 
 [[projects]]
   branch = "master"
@@ -568,7 +568,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:ddb7e9f7d968a4ef6c8204badc6b56d5e1b5ab033e7455e3a325309403fd70ea"
+  digest = "1:815eb2c2de054bc14e4c956ab34fe4335e192b32362c78aaf2da7c6df1978513"
   name = "golang.org/x/tools"
   packages = [
     "go/ast/astutil",
@@ -584,7 +584,7 @@
     "internal/semver",
   ]
   pruneopts = "T"
-  revision = "b258f6da23835bf37e95cc50af792447c7c67fe4"
+  revision = "16909d206f00da7d0d5ba28cd9dc7fb223648ecf"
 
 [[projects]]
   digest = "1:1469235a5a8e192cfe6a99c4804b883a02f0ff96a693cd1660515a3a3b94d5ac"
@@ -674,18 +674,18 @@
   ]
   pruneopts = "T"
   revision = "6db15a15d2d3874a6c3ddb2140ac9f3bc7058428"
-  version = "kubernetes-1.12.4"
+  version = "kubernetes-1.12.5"
 
 [[projects]]
-  digest = "1:b169b2a6bd6aaf3280b9edf60fd4445b502290cefda9d2878cfe6fcc0fd280f0"
+  digest = "1:574edba1e04f6f8292e0e994593800930e750604effcd44fa3c608e05964c97f"
   name = "k8s.io/apiextensions-apiserver"
   packages = [
     "pkg/apis/apiextensions",
     "pkg/apis/apiextensions/v1beta1",
   ]
   pruneopts = "T"
-  revision = "853f76028711219c2fc251fd5184f23fd44a7aa0"
-  version = "kubernetes-1.12.4"
+  revision = "a384d17938fe55d54a52d5668bf0ff40044daef0"
+  version = "kubernetes-1.12.5"
 
 [[projects]]
   digest = "1:da452f9978850e3019edaf325ff2843eae6b84ac19d8248f97772eb7b3177448"
@@ -738,10 +738,10 @@
   ]
   pruneopts = "T"
   revision = "49ce2735e5074ffc3f8190c8406cf51a96302dad"
-  version = "kubernetes-1.12.4"
+  version = "kubernetes-1.12.5"
 
 [[projects]]
-  digest = "1:c7f198a6ae760624a344214f862287207f3d985fc05bef4b1c22946db5d127ea"
+  digest = "1:9caccaa5712fc9c9ae256a15fa16d576f51c6c9e33a8be40465fe11c446691e3"
   name = "k8s.io/client-go"
   packages = [
     "discovery",
@@ -810,8 +810,8 @@
     "util/workqueue",
   ]
   pruneopts = "T"
-  revision = "5e6a3d4e34f694e895b13ae728111e726a5b69df"
-  version = "kubernetes-1.12.4"
+  revision = "701b913670036511e3d752318272c97f1a2a2edd"
+  version = "kubernetes-1.12.5"
 
 [[projects]]
   digest = "1:26b81b5e76e3f84ea5140da4f74649576e470f79091d2ef8e0d1b5000bc636ca"
@@ -831,7 +831,7 @@
   ]
   pruneopts = "T"
   revision = "b1289fc74931d4b6b04bd1a259acfc88a2cb0a66"
-  version = "kubernetes-1.12.4"
+  version = "kubernetes-1.12.5"
 
 [[projects]]
   branch = "master"
@@ -867,13 +867,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:6c381219bec0a64a7d5c68acb9e75f99972de9befcb392afa62e827b803ba1cb"
+  digest = "1:bc7ad2011ba9c3cf2d231d4fd3d240cb8af4afa0f0ff738d5795be78483791ab"
   name = "sigs.k8s.io/cluster-api"
   packages = [
     "cmd/clusterctl/clientcmd",
     "cmd/clusterctl/clusterdeployer",
     "cmd/clusterctl/clusterdeployer/bootstrap",
     "cmd/clusterctl/clusterdeployer/bootstrap/existing",
+    "cmd/clusterctl/clusterdeployer/bootstrap/kind",
     "cmd/clusterctl/clusterdeployer/bootstrap/minikube",
     "cmd/clusterctl/clusterdeployer/clusterclient",
     "cmd/clusterctl/cmd",
@@ -893,7 +894,7 @@
     "pkg/util",
   ]
   pruneopts = "T"
-  revision = "361d0e2093c644834ca3faa38360203da04446d8"
+  revision = "2aa88253578695ddb71aee8e6f36b83f31c4bd38"
 
 [[projects]]
   digest = "1:0366859202a26d3ad16ff9d7545c20f2a95ced5183f2f3cdb762522dbaffe6ea"
@@ -992,6 +993,7 @@
     "k8s.io/apimachinery/pkg/apis/meta/v1",
     "k8s.io/apimachinery/pkg/runtime",
     "k8s.io/apimachinery/pkg/runtime/schema",
+    "k8s.io/apimachinery/pkg/util/json",
     "k8s.io/code-generator/cmd/client-gen",
     "k8s.io/code-generator/cmd/deepcopy-gen",
     "k8s.io/klog",

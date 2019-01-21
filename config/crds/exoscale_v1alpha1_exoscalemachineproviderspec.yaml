@@ -44,16 +44,15 @@ spec:
         user:
           type: string
         zone:
-          description: Exoscale provider fields
           type: string
       required:
-      - zone
-      - template
-      - user
-      - type
       - disk
       - sshKey
       - securityGroup
+      - template
+      - type
+      - user
+      - zone
   version: v1alpha1
 status:
   acceptedNames:

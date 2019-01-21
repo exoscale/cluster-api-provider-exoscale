@@ -19,9 +19,11 @@ package cluster
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/exoscale/egoscale"
 	"github.com/ghodss/yaml"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/klog"
@@ -55,8 +57,6 @@ func NewActuator(params ActuatorParams) (*Actuator, error) {
 // Reconcile reconciles a cluster and is invoked by the Cluster Controller
 func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 	klog.Infof("Reconciling cluster %v.", cluster.Name)
-
-	println("START: cluster.actuator.create")
 
 	clusterSpec, err := clusterSpecFromProviderSpec(cluster.Spec.ProviderSpec)
 	if err != nil {
@@ -100,7 +100,16 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 	}
 
 	// Put the data into the "Status"
-	clusterStatus.SecurityGroupID = sgID
+	clusterStatus = &exoscalev1.ExoscaleClusterProviderStatus{
+		metav1.TypeMeta{
+			Kind:       "ExoscaleClusterProviderStatus",
+			APIVersion: "exoscale.cluster.k8s.io/v1alpha1",
+		},
+		metav1.ObjectMeta{
+			CreationTimestamp: metav1.Time{time.Now()},
+		},
+		sgID,
+	}
 
 	rawStatus, err := json.Marshal(clusterStatus)
 	if err != nil {
@@ -116,8 +125,6 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 	if _, err := clusterClient.UpdateStatus(cluster); err != nil {
 		return err
 	}
-
-	println("END: cluster.actuator.create")
 
 	return nil
 }

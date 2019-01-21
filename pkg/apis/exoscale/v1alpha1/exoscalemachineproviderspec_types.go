@@ -29,17 +29,16 @@ type ExoscaleMachineProviderSpec struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	//Exoscale provider fields
-	Zone              string `json:"zone"`
-	Template          string `json:"template"`
-	User              string `json:"user"`
-	Type              string `json:"type"`
-	Disk              int64  `json:"disk"`
-	SSHKey            string `json:"sshKey"`
-	IPv6              bool   `json:"ipv6,omitempty"`
-	SecurityGroup     string `json:"securityGroup"`
 	AntiAffinityGroup string `json:"antiAffinityGroup,omitempty"`
 	CloudInit         string `json:"cloudInit,omitempty"`
+	Disk              int64  `json:"disk"`
+	IPv6              bool   `json:"ipv6,omitempty"`
+	SSHKey            string `json:"sshKey"`
+	SecurityGroup     string `json:"securityGroup"`
+	Template          string `json:"template"`
+	Type              string `json:"type"`
+	User              string `json:"user"`
+	Zone              string `json:"zone"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

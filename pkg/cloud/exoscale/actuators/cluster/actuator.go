@@ -133,8 +133,30 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 func (a *Actuator) Delete(cluster *clusterv1.Cluster) error {
 	klog.Infof("Deleting cluster %v.", cluster.Name)
 
-	klog.Error("deleting a cluster is not yet implemented")
-	return nil
+	clusterStatus, err := clusterStatusFromProviderStatus(cluster.Status.ProviderStatus)
+	if err != nil {
+		return fmt.Errorf("error loading cluster provider config: %v", err)
+	}
+
+	if clusterStatus.SecurityGroupID == nil {
+		klog.Infof("no security group id to be deleted, skip")
+		return nil
+	}
+
+	exoClient, err := exoclient.Client()
+	if err != nil {
+		return err
+	}
+
+	// XXX delete the rules linked itself
+	// fetch SG
+	// for _, r := range SG.IngressRule {
+	//     if r.SecurityGroupName == sg.Name { revoke }
+	// }
+
+	return exoClient.BooleanRequest(egoscale.DeleteSecurityGroup{
+		ID: clusterStatus.SecurityGroupID,
+	})
 }
 
 // The Machine Actuator interface must implement GetIP and GetKubeConfig functions as a workaround for issues

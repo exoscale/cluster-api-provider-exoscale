@@ -59,9 +59,7 @@ func NewActuator(params ActuatorParams) (*Actuator, error) {
 func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
 	klog.Infof("Creating machine %v for cluster %v.", machine.Name, cluster.Name)
 
-	println("START: machine.actuator.create")
-
-	clusterStatus, err := clusterStatusFromClusterStatus(cluster.Status)
+	clusterStatus, err := clusterStatusFromProviderStatus(cluster.Status.ProviderStatus)
 	if err != nil {
 		return fmt.Errorf("Cannot unmarshal cluster.Status field: %v", err)
 	}
@@ -150,7 +148,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 
 	vm := resp.(*egoscale.VirtualMachine)
 
-	klog.Infof("Deployed instance: %q IP: %q", vm.Name, vm.IP().String())
+	klog.Infof("Deployed instance: %q, IP: %s, password: %q", vm.Name, vm.IP().String(), vm.Password)
 
 	klog.Infof("Bootstrapping Kubernetes cluster (can take up to several minutes):")
 
@@ -163,6 +161,8 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return fmt.Errorf("unable to initialize SSH client: %s", err)
 	}
 
+	// XXX KubernetesVersion should be coming from the MachineSpec
+	// https://godoc.org/sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1#MachineVersionInfo
 	if err := bootstrapExokubeCluster(sshClient, kubeCluster{
 		Name:              cluster.Name,
 		KubernetesVersion: "1.12.5",
@@ -196,8 +196,6 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	// if _, err := machineClient.UpdateStatus(machine); err != nil {
 	// 	return err
 	// }
-
-	println("END: machine.actuator.create")
 
 	return nil
 }
@@ -278,10 +276,10 @@ func clusterSpecFromProviderSpec(providerConfig clusterv1.ProviderSpec) (*exosca
 	return config, nil
 }
 
-func clusterStatusFromClusterStatus(clusterStatus clusterv1.ClusterStatus) (*exoscalev1.ExoscaleClusterProviderStatus, error) {
+func clusterStatusFromProviderStatus(providerStatus *runtime.RawExtension) (*exoscalev1.ExoscaleClusterProviderStatus, error) {
 	config := new(exoscalev1.ExoscaleClusterProviderStatus)
-	if clusterStatus.ProviderStatus != nil {
-		if err := yaml.Unmarshal(clusterStatus.ProviderStatus.Raw, config); err != nil {
+	if providerStatus != nil {
+		if err := yaml.Unmarshal(providerStatus.Raw, config); err != nil {
 			return nil, err
 		}
 	}

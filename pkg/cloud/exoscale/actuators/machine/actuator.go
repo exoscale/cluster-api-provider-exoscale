@@ -80,13 +80,6 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return err
 	}
 
-	//Prerequisite
-	// create or upload an sshkey in exoscale
-	// put sshkey name in machine spec provider yml
-
-	klog.Warningf("XXXclusterStatus: %#vXXX\n", clusterStatus)
-	klog.Warningf("AAAmachineConfig: %#vAAA\n", machineConfig)
-
 	z, err := exoClient.GetWithContext(ctx, &egoscale.Zone{Name: machineConfig.Zone})
 	if err != nil {
 		return fmt.Errorf("problem fetching the zone %q. %s", machineConfig.Zone, err)

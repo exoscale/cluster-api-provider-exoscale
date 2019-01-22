@@ -129,6 +129,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	}
 
 	if clusterStatus.SecurityGroupID == nil {
+		cleanSSHKey(exoClient, keyPairs.Name)
 		return fmt.Errorf("empty cluster securityGroupID field. %#v", clusterStatus)
 	}
 

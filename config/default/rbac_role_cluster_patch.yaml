@@ -3,7 +3,6 @@
   value:
     apiGroups:
     - cluster.k8s.io
-    - exoscale.cluster.k8s.io
     - exoscale.k8s.io
     resources:
     - clusters

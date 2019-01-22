@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/exoscale/egoscale"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -179,6 +180,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	machineStatus.Name = vm.Name
 	machineStatus.Zone = vm.ZoneName
 	machineStatus.Template = vm.TemplateID.String()
+	machineStatus.IP = vm.IP().String()
 
 	rawStatus, err := json.Marshal(machineStatus)
 	if err != nil {
@@ -208,9 +210,9 @@ func cleanSSHKey(exoClient *egoscale.Client, sshKeyName string) {
 func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
 	klog.Infof("Deleting machine %v for cluster %v.", machine.Name, cluster.Name)
 
-	clusterStatus, err := clusterStatusFromProviderStatus(cluster.Status.ProviderStatus)
+	machineStatus, err := machineSpecFromMachineStatus(machine.Status.ProviderStatus)
 	if err != nil {
-		return fmt.Errorf("error loading cluster provider config: %v", err)
+		return fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
 	}
 
 	exoClient, err := exoclient.Client()
@@ -218,11 +220,10 @@ func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return err
 	}
 
-	if err := exoClient.Delete(egoscale.VirtualMachine{Name: clusterStatus.Name}); err != nil {
+	if err := exoClient.Delete(egoscale.VirtualMachine{Name: machineStatus.Name}); err != nil {
 		return err
 	}
 
-	klog.Error("Deleting a machine is not yet implemented")
 	return nil
 }
 
@@ -230,7 +231,12 @@ func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machi
 func (a *Actuator) Update(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
 	klog.Infof("Updating machine %v for cluster %v.", machine.Name, cluster.Name)
 
-	fmt.Printf("VVVVVVVV=%#v=VVVVVVVVVVV\n", machine.Status)
+	machineStatus, err := machineSpecFromMachineStatus(machine.Status.ProviderStatus)
+	if err != nil {
+		return fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
+	}
+
+	fmt.Printf("VVVVVVVV=%#v=VVVVVVVVVVV\n", machineStatus)
 
 	klog.Error("Updating a machine is not yet implemented")
 	return nil
@@ -269,21 +275,43 @@ func (a *Actuator) Exists(ctx context.Context, cluster *clusterv1.Cluster, machi
 func (*Actuator) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (string, error) {
 	klog.Infof("Getting IP of machine %v for cluster %v.", machine.Name, cluster.Name)
 
-	if machine.ObjectMeta.Annotations != nil {
-		if ip, ok := machine.ObjectMeta.Annotations[ExoscaleIPAnnotationKey]; ok {
-			klog.Infof("Returning IP from machine annotation %s", ip)
-			return ip, nil
-		}
+	machineStatus, err := machineSpecFromMachineStatus(machine.Status.ProviderStatus)
+	if err != nil {
+		return "", fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
 	}
 
-	return "", errors.New("could not get IP")
+	if machineStatus.IP == "" {
+		return "", errors.New("could not get IP")
+	}
+
+	return machineStatus.IP, nil
 }
 
 // GetKubeConfig gets a kubeconfig from the master.
 func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Machine) (string, error) {
 	klog.Infof("Getting IP of machine %v for cluster %v.", master.Name, cluster.Name)
 
-	return "", fmt.Errorf("Provisionner exoscale GetKubeConfig() not yet implemented")
+	machineStatus, err := machineSpecFromMachineStatus(master.Status.ProviderStatus)
+	if err != nil {
+		return "", fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
+	}
+
+	sshclient, err := newSSHClient(machineStatus.IP, "ubuntu", machineStatus.SSHKey)
+	if err != nil {
+		return "", fmt.Errorf("unable to initialize SSH client: %s", err)
+	}
+
+	var stdout, stderr io.Writer
+
+	if err := sshclient.runCommand("sudo cat /etc/kubernetes/admin.conf", stdout, stderr); err != nil {
+		return "", fmt.Errorf("Provisionner exoscale GetKubeConfig() failed to run ssh cmd: %v", err)
+	}
+
+	kubeconfig := fmt.Sprint(stdout)
+
+	println("KKKKKKK:", kubeconfig, ":KKKKKKK")
+
+	return kubeconfig, fmt.Errorf("Provisionner exoscale GetKubeConfig() not yet implemented")
 }
 
 func clusterSpecFromProviderSpec(providerConfig clusterv1.ProviderSpec) (*exoscalev1.ExoscaleClusterProviderSpec, error) {

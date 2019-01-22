@@ -33,6 +33,7 @@ type ExoscaleMachineProviderStatus struct {
 	CloudInit         string `json:"cloudInit,omitempty"`
 	Disk              int64  `json:"disk"`
 	IPv6              bool   `json:"ipv6,omitempty"`
+	IP                string `json:"ip"`
 	SSHKey            string `json:"sshKey"`
 	SecurityGroup     string `json:"securityGroup"`
 	Template          string `json:"template"`

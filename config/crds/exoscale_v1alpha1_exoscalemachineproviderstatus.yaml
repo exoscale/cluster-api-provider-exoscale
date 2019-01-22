@@ -26,6 +26,8 @@ spec:
         disk:
           format: int64
           type: integer
+        ip:
+          type: string
         kind:
           description: 'Kind is a string value representing the REST resource this
             object represents. Servers may infer this from the endpoint the client
@@ -46,13 +48,14 @@ spec:
         zone:
           type: string
       required:
-      - zone
-      - template
-      - user
-      - type
       - disk
+      - ip
       - sshKey
       - securityGroup
+      - template
+      - type
+      - user
+      - zone
   version: v1alpha1
 status:
   acceptedNames:

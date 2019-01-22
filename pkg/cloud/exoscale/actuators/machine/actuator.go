@@ -18,6 +18,7 @@ package machine
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -69,10 +70,10 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
 	}
 
-	// machineStatus, err := machineSpecFromMachineStatus(machine.Status.ProviderStatus)
-	// if err != nil {
-	// 	return fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
-	// }
+	machineStatus, err := machineSpecFromMachineStatus(machine.Status.ProviderStatus)
+	if err != nil {
+		return fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
+	}
 
 	exoClient, err := exoclient.Client()
 	if err != nil {
@@ -175,27 +176,27 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 
 	klog.Infof("Machine %q provisioning success!", machine.Name)
 
-	// machineStatus.Disk = machineConfig.Disk
-	// machineStatus.SSHKey = keyPairs.PrivateKey
-	// machineStatus.SecurityGroup = vm.SecurityGroup[0].ID.String()
-	// machineStatus.Name = vm.Name
-	// machineStatus.Zone = vm.ZoneName
-	// machineStatus.Template = vm.TemplateID.String()
+	machineStatus.Disk = machineConfig.Disk
+	machineStatus.SSHKey = keyPairs.PrivateKey
+	machineStatus.SecurityGroup = vm.SecurityGroup[0].ID.String()
+	machineStatus.Name = vm.Name
+	machineStatus.Zone = vm.ZoneName
+	machineStatus.Template = vm.TemplateID.String()
 
-	// rawStatus, err := json.Marshal(machineStatus)
-	// if err != nil {
-	// 	return err
-	// }
+	rawStatus, err := json.Marshal(machineStatus)
+	if err != nil {
+		return err
+	}
 
-	// machine.Status.ProviderStatus = &runtime.RawExtension{
-	// 	Raw: rawStatus,
-	// }
+	machine.Status.ProviderStatus = &runtime.RawExtension{
+		Raw: rawStatus,
+	}
 
-	// machineClient := a.machinesGetter.Machines(machine.Namespace)
+	machineClient := a.machinesGetter.Machines(machine.Namespace)
 
-	// if _, err := machineClient.UpdateStatus(machine); err != nil {
-	// 	return err
-	// }
+	if _, err := machineClient.UpdateStatus(machine); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -203,6 +204,20 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 // Delete deletes a machine and is invoked by the Machine Controller
 func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
 	klog.Infof("Deleting machine %v for cluster %v.", machine.Name, cluster.Name)
+
+	clusterStatus, err := clusterStatusFromProviderStatus(cluster.Status.ProviderStatus)
+	if err != nil {
+		return fmt.Errorf("error loading cluster provider config: %v", err)
+	}
+
+	exoClient, err := exoclient.Client()
+	if err != nil {
+		return err
+	}
+
+	if err := exoClient.Delete(egoscale.VirtualMachine{Name: clusterStatus.Name}); err != nil {
+		return err
+	}
 
 	klog.Error("Deleting a machine is not yet implemented")
 	return nil
@@ -296,8 +311,10 @@ func machineSpecFromProviderSpec(providerSpec clusterv1.ProviderSpec) (*exoscale
 
 func machineSpecFromMachineStatus(providerStatus *runtime.RawExtension) (*exoscalev1.ExoscaleMachineProviderStatus, error) {
 	config := new(exoscalev1.ExoscaleMachineProviderStatus)
-	if err := yaml.Unmarshal(providerStatus.Raw, config); err != nil {
-		return nil, err
+	if providerStatus != nil {
+		if err := yaml.Unmarshal(providerStatus.Raw, config); err != nil {
+			return nil, err
+		}
 	}
 	return config, nil
 }

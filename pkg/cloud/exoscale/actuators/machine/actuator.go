@@ -144,6 +144,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 
 	resp, err := exoClient.RequestWithContext(ctx, req)
 	if err != nil {
+		cleanSSHKey(exoClient, keyPairs.Name)
 		return fmt.Errorf("exoscale failed to DeployVirtualMachine %v", err)
 	}
 
@@ -159,6 +160,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		keyPairs.PrivateKey,
 	)
 	if err != nil {
+		cleanSSHKey(exoClient, keyPairs.Name)
 		return fmt.Errorf("unable to initialize SSH client: %s", err)
 	}
 
@@ -171,6 +173,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		DockerVersion:     kubeDockerVersion,
 		Address:           vm.IP().String(),
 	}, false); err != nil {
+		cleanSSHKey(exoClient, keyPairs.Name)
 		return fmt.Errorf("cluster bootstrap failed: %s", err)
 	}
 
@@ -185,6 +188,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 
 	rawStatus, err := json.Marshal(machineStatus)
 	if err != nil {
+		cleanSSHKey(exoClient, keyPairs.Name)
 		return err
 	}
 
@@ -195,10 +199,15 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	machineClient := a.machinesGetter.Machines(machine.Namespace)
 
 	if _, err := machineClient.UpdateStatus(machine); err != nil {
+		cleanSSHKey(exoClient, keyPairs.Name)
 		return err
 	}
 
 	return nil
+}
+
+func cleanSSHKey(exoClient *egoscale.Client, sshKeyName string) {
+	_ = exoClient.Delete(egoscale.SSHKeyPair{Name: sshKeyName})
 }
 
 // Delete deletes a machine and is invoked by the Machine Controller

@@ -89,12 +89,23 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 			Name: clusterSpec.SecurityGroup,
 		}
 
+		klog.Infof("creating security group %q", clusterSpec.SecurityGroup)
+
 		resp, err := exoClient.Request(req)
 		if err != nil {
 			return fmt.Errorf("error creating or updating network security group: %v", err)
 		}
-
 		sgID = resp.(*egoscale.SecurityGroup).ID
+
+		_, err = exoClient.Request(egoscale.AuthorizeSecurityGroupIngress{
+			SecurityGroupID: sgID,
+			CIDRList:        []egoscale.CIDR{*egoscale.MustParseCIDR("0.0.0.0/0")},
+			Protocol:        "ALL",
+		})
+		if err != nil {
+			return fmt.Errorf("error creating or updating security group rule: %v", err)
+		}
+
 	} else {
 		sgID = sgs[0].(*egoscale.SecurityGroup).ID
 	}

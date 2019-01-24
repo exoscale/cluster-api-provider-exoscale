@@ -20,41 +20,21 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// ExoscaleClusterProviderSpecSpec defines the desired state of ExoscaleClusterProviderSpec
-type ExoscaleClusterProviderSpecSpec struct {
-	Zone          string `json:"zone"`
-	SecurityGroup string `json:"securityGroup"`
-}
-
-// ExoscaleClusterProviderSpecStatus defines the observed state of ExoscaleClusterProviderSpec
-type ExoscaleClusterProviderSpecStatus struct {
-	Zone          string `json:"zone"`
-	SecurityGroup string `json:"securityGroup"`
-}
-
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ExoscaleClusterProviderSpec is the Schema for the exoscaleclusterproviderconfigs API
+// ExoscaleClusterProviderSpec is the Schema for the exoscaleclusterproviderspecs API
 // +k8s:openapi-gen=true
 type ExoscaleClusterProviderSpec struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   ExoscaleClusterProviderSpecSpec   `json:"spec,omitempty"`
-	Status ExoscaleClusterProviderSpecStatus `json:"status,omitempty"`
+	// SecurityGroup is the name of firewalling security group.
+	SecurityGroup string `json:"securityGroup"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ExoscaleClusterProviderSpecList contains a list of ExoscaleClusterProviderSpec
-type ExoscaleClusterProviderSpecList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
-
-	Items []ExoscaleClusterProviderSpec `json:"items"`
-}
-
 func init() {
-	SchemeBuilder.Register(&ExoscaleClusterProviderSpec{}, &ExoscaleClusterProviderSpecList{})
+	SchemeBuilder.Register(&ExoscaleClusterProviderSpec{})
 }

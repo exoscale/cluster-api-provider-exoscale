@@ -14,11 +14,18 @@ spec:
   validation:
     openAPIV3Schema:
       properties:
+        antiAffinityGroup:
+          type: string
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation
             of an object. Servers should convert recognized schemas to the latest
             internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources'
           type: string
+        cloudInit:
+          type: string
+        disk:
+          format: int64
+          type: integer
         kind:
           description: 'Kind is a string value representing the REST resource this
             object represents. Servers may infer this from the endpoint the client
@@ -26,70 +33,26 @@ spec:
           type: string
         metadata:
           type: object
-        spec:
-          properties:
-            antiAffinityGroup:
-              type: string
-            cloudInit:
-              type: string
-            disk:
-              format: int64
-              type: integer
-            securityGroup:
-              type: string
-            sshkey:
-              type: string
-            template:
-              type: string
-            type:
-              type: string
-            user:
-              type: string
-            zone:
-              type: string
-          required:
-          - zone
-          - template
-          - user
-          - type
-          - disk
-          - sshkey
-          - securityGroup
-          - antiAffinityGroup
-          - cloudInit
-          type: object
-        status:
-          properties:
-            antiAffinityGroup:
-              type: string
-            cloudInit:
-              type: string
-            disk:
-              format: int64
-              type: integer
-            securityGroup:
-              type: string
-            sshkey:
-              type: string
-            template:
-              type: string
-            type:
-              type: string
-            user:
-              type: string
-            zone:
-              type: string
-          required:
-          - zone
-          - template
-          - user
-          - type
-          - disk
-          - sshkey
-          - securityGroup
-          - antiAffinityGroup
-          - cloudInit
-          type: object
+        securityGroup:
+          type: string
+        sshKey:
+          type: string
+        template:
+          type: string
+        type:
+          type: string
+        user:
+          type: string
+        zone:
+          type: string
+      required:
+      - disk
+      - sshKey
+      - securityGroup
+      - template
+      - type
+      - user
+      - zone
   version: v1alpha1
 status:
   acceptedNames:

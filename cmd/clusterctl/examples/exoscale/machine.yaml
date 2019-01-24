@@ -2,7 +2,7 @@ items:
 - apiVersion: "cluster.k8s.io/v1alpha1"
   kind: Machine
   metadata:
-    generateName: exoscale-master-
+    generateName: my-exoscale-master-
     labels:
       set: master
   spec:
@@ -10,39 +10,12 @@ items:
       value:
         apiVersion: exoscale.cluster.k8s.io/v1alpha1
         kind: ExoscaleMachineProviderSpec
-        spec:
-          zone: de-fra-1
-          template: "Linux Ubuntu 18.04 LTS 64-bit"
-          type: medium
-          disk: 50
-          sshkey: id_rsa_cluster_api
-          ipv6: false
-          securityGroup: cluster-api
-          antiAffinityGroup: ""
-          cloudInit: ""
+        zone: de-fra-1
+        template: "Linux Ubuntu 18.04 LTS 64-bit"
+        type: medium
+        disk: 50
+        sshKey: id_rsa_cluster_api
+        securityGroup: cluster-api
     versions:
-      kubelet: 1.12.4
-      controlPlane: 1.12.4
-- apiVersion: "cluster.k8s.io/v1alpha1"
-  kind: Machine
-  metadata:
-    generateName: exoscale-node-
-    labels:
-      set: node
-  spec:
-    providerSpec:
-      value:
-        apiVersion: exoscale.cluster.k8s.io/v1alpha1
-        kind: ExoscaleMachineProviderSpec
-        spec:
-          zone: de-fra-1
-          template: "Linux Ubuntu 18.04 LTS 64-bit"
-          type: medium
-          disk: 50
-          sshkey: id_rsa_cluster_api
-          ipv6: false
-          securityGroup: cluster-api
-          antiAffinityGroup: ""
-          cloudInit: ""
-    versions:
-      kubelet: 1.12.4
+      kubelet: 1.12.5
+      controlPlane: 1.12.5

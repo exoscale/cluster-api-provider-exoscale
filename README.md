@@ -3,7 +3,7 @@
 Spawn a fresh kubernetes cluster, feel free to delete any old one if something looks funny.
 
 ```console
-% minikube start --kubernetes-version v1.12.4 --vm-driver kvm2
+% minikube start --kubernetes-version v1.12.5 --vm-driver kvm2
 ```
 
 ## hacking the clusterctl side
@@ -37,6 +37,16 @@ Run the `clusterctl` command.
         -p provider-components.yaml \
         -e ~/.kube/config
 ```
+
+Clean up by deleting the data from the CRDs before removing the other resources.
+
+```console
+% kubectl delete machines.cluster.k8s.io my-exoscale-...
+% kubectl delete clusters.cluster.k8s.io my-exoscale-...
+% kubectl delete -f provider-components.yaml
+```
+
+
 
 ## hacking the manager side
 

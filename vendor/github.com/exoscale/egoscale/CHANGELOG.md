@@ -1,6 +1,12 @@
 Changelog
 =========
 
+0.13.3
+------
+
+- fix: runstatus unmarshalling errors
+- feature: `UUID` implements DeepCopy, DeepCopyInto
+
 0.13.2
 ------
 

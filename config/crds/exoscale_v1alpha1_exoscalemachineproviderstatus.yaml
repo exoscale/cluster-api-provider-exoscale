@@ -4,20 +4,29 @@ metadata:
   creationTimestamp: null
   labels:
     controller-tools.k8s.io: "1.0"
-  name: exoscaleclusterproviderspecs.exoscale.cluster.k8s.io
+  name: exoscalemachineproviderstatuses.exoscale.cluster.k8s.io
 spec:
   group: exoscale.cluster.k8s.io
   names:
-    kind: ExoscaleClusterProviderSpec
-    plural: exoscaleclusterproviderspecs
+    kind: ExoscaleMachineProviderStatus
+    plural: exoscalemachineproviderstatuses
   scope: Namespaced
   validation:
     openAPIV3Schema:
       properties:
+        antiAffinityGroup:
+          type: string
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation
             of an object. Servers should convert recognized schemas to the latest
             internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources'
+          type: string
+        cloudInit:
+          type: string
+        disk:
+          format: int64
+          type: integer
+        ip:
           type: string
         kind:
           description: 'Kind is a string value representing the REST resource this
@@ -27,10 +36,26 @@ spec:
         metadata:
           type: object
         securityGroup:
-          description: SecurityGroup is the name of firewalling security group.
+          type: string
+        sshKey:
+          type: string
+        template:
+          type: string
+        type:
+          type: string
+        user:
+          type: string
+        zone:
           type: string
       required:
+      - disk
+      - ip
+      - sshKey
       - securityGroup
+      - template
+      - type
+      - user
+      - zone
   version: v1alpha1
 status:
   acceptedNames:

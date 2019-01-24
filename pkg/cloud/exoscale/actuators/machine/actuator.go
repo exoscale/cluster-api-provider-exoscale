@@ -18,10 +18,13 @@ package machine
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/exoscale/egoscale"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog"
 
 	"github.com/ghodss/yaml"
@@ -58,9 +61,19 @@ func NewActuator(params ActuatorParams) (*Actuator, error) {
 func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
 	klog.Infof("Creating machine %v for cluster %v.", machine.Name, cluster.Name)
 
-	providerConfig, err := machineSpecFromProviderSpec(machine.Spec.ProviderSpec)
+	clusterStatus, err := clusterStatusFromProviderStatus(cluster.Status.ProviderStatus)
 	if err != nil {
-		return fmt.Errorf("Cannot unmarshal providerSpec field: %v", err)
+		return fmt.Errorf("Cannot unmarshal cluster.Status field: %v", err)
+	}
+
+	machineConfig, err := machineSpecFromProviderSpec(machine.Spec.ProviderSpec)
+	if err != nil {
+		return fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
+	}
+
+	machineStatus, err := machineSpecFromMachineStatus(machine.Status.ProviderStatus)
+	if err != nil {
+		return fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
 	}
 
 	exoClient, err := exoclient.Client()
@@ -68,50 +81,33 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return err
 	}
 
-	//Prerequisite
-	// create or upload an sshkey in exoscale
-	// put sshkey name in machine spec provider yml
-
-	fmt.Printf("XXXXXXX=%#v=XXXX\n", providerConfig.Spec)
-
-	z, err := exoClient.GetWithContext(ctx, &egoscale.Zone{Name: providerConfig.Spec.Zone})
+	z, err := exoClient.GetWithContext(ctx, &egoscale.Zone{Name: machineConfig.Zone})
 	if err != nil {
-		return fmt.Errorf("Invalid exoscale zone %q. providerSpec field: %v", providerConfig.Spec.Zone, err)
+		return fmt.Errorf("problem fetching the zone %q. %s", machineConfig.Zone, err)
 	}
 	zone := z.(*egoscale.Zone)
 
 	t, err := exoClient.GetWithContext(
 		ctx,
 		&egoscale.Template{
-			Name:       providerConfig.Spec.Template,
+			Name:       machineConfig.Template,
 			ZoneID:     zone.ID,
 			IsFeatured: true,
 		},
 	)
 	if err != nil {
-		return fmt.Errorf("Invalid exoscale template %q. providerSpec field: %v", providerConfig.Spec.Zone, err)
+		return fmt.Errorf("problem fetching the template %q. %s", machineConfig.Template, err)
 	}
 	template := t.(*egoscale.Template)
-
-	sg, err := exoClient.GetWithContext(
-		ctx,
-		&egoscale.SecurityGroup{
-			Name: providerConfig.Spec.SecurityGroup,
-		},
-	)
-	if err != nil {
-		return fmt.Errorf("Invalid exoscale security-group %q. providerSpec field: %v", providerConfig.Spec.Zone, err)
-	}
-	securityGroup := sg.(*egoscale.SecurityGroup)
 
 	so, err := exoClient.GetWithContext(
 		ctx,
 		&egoscale.ServiceOffering{
-			Name: providerConfig.Spec.Type,
+			Name: machineConfig.Type,
 		},
 	)
 	if err != nil {
-		return fmt.Errorf("Invalid exoscale service-Offering %q. providerSpec field: %v", providerConfig.Spec.Zone, err)
+		return fmt.Errorf("problem fetching service-offering %q. %s", machineConfig.Type, err)
 	}
 	serviceOffering := so.(*egoscale.ServiceOffering)
 
@@ -126,30 +122,30 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return fmt.Errorf("an SSH key with that name %q already exists, please choose a different name", sshKeyName)
 	}
 
-	println(keyPairs.PrivateKey)
+	if clusterStatus.SecurityGroupID == nil {
+		cleanSSHKey(exoClient, keyPairs.Name)
+		return fmt.Errorf("empty cluster securityGroupID field. %#v", clusterStatus)
+	}
 
 	req := egoscale.DeployVirtualMachine{
-		Name: machine.Name,
-		//UserData:          userData,
-		ZoneID:           zone.ID,
-		TemplateID:       template.ID,
-		RootDiskSize:     int64(providerConfig.Spec.Disk),
-		KeyPair:          sshKeyName,
-		SecurityGroupIDs: []egoscale.UUID{*securityGroup.ID},
-		IP6:              &providerConfig.Spec.IPv6,
-		//NetworkIDs:        pvs,
+		Name:              machine.Name,
+		ZoneID:            zone.ID,
+		TemplateID:        template.ID,
+		RootDiskSize:      machineConfig.Disk,
+		KeyPair:           sshKeyName,
+		SecurityGroupIDs:  []egoscale.UUID{*clusterStatus.SecurityGroupID},
 		ServiceOfferingID: serviceOffering.ID,
-		//AffinityGroupIDs:  affinitygroups,
 	}
 
 	resp, err := exoClient.RequestWithContext(ctx, req)
 	if err != nil {
+		cleanSSHKey(exoClient, keyPairs.Name)
 		return fmt.Errorf("exoscale failed to DeployVirtualMachine %v", err)
 	}
 
 	vm := resp.(*egoscale.VirtualMachine)
 
-	klog.Infof("Deployed instance:", vm.Name, "IP:", vm.IP().String())
+	klog.Infof("Deployed instance: %q, IP: %s, password: %q", vm.Name, vm.IP().String(), vm.Password)
 
 	klog.Infof("Bootstrapping Kubernetes cluster (can take up to several minutes):")
 
@@ -159,9 +155,12 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		keyPairs.PrivateKey,
 	)
 	if err != nil {
+		cleanSSHKey(exoClient, keyPairs.Name)
 		return fmt.Errorf("unable to initialize SSH client: %s", err)
 	}
 
+	// XXX KubernetesVersion should be coming from the MachineSpec
+	// https://godoc.org/sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1#MachineVersionInfo
 	if err := bootstrapExokubeCluster(sshClient, kubeCluster{
 		Name:              cluster.Name,
 		KubernetesVersion: "1.12.5",
@@ -169,24 +168,62 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		DockerVersion:     kubeDockerVersion,
 		Address:           vm.IP().String(),
 	}, false); err != nil {
+		cleanSSHKey(exoClient, keyPairs.Name)
 		return fmt.Errorf("cluster bootstrap failed: %s", err)
 	}
 
 	klog.Infof("Machine %q provisioning success!", machine.Name)
 
-	if machine.Annotations == nil {
-		machine.Annotations = map[string]string{}
+	machineStatus.Disk = machineConfig.Disk
+	machineStatus.SSHKey = keyPairs.PrivateKey
+	machineStatus.SecurityGroup = vm.SecurityGroup[0].ID.String()
+	machineStatus.Name = vm.Name
+	machineStatus.Zone = vm.ZoneName
+	machineStatus.Template = vm.TemplateID.String()
+	machineStatus.IP = vm.IP().String()
+
+	rawStatus, err := json.Marshal(machineStatus)
+	if err != nil {
+		cleanSSHKey(exoClient, keyPairs.Name)
+		return err
 	}
-	machine.Annotations["exoscale-ip"] = vm.IP().String()
+
+	machine.Status.ProviderStatus = &runtime.RawExtension{
+		Raw: rawStatus,
+	}
+
+	machineClient := a.machinesGetter.Machines(machine.Namespace)
+
+	if _, err := machineClient.UpdateStatus(machine); err != nil {
+		cleanSSHKey(exoClient, keyPairs.Name)
+		return err
+	}
 
 	return nil
+}
+
+func cleanSSHKey(exoClient *egoscale.Client, sshKeyName string) {
+	_ = exoClient.Delete(egoscale.SSHKeyPair{Name: sshKeyName})
 }
 
 // Delete deletes a machine and is invoked by the Machine Controller
 func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
 	klog.Infof("Deleting machine %v for cluster %v.", machine.Name, cluster.Name)
 
-	klog.Error("Deleting a machine is not yet implemented")
+	machineStatus, err := machineSpecFromMachineStatus(machine.Status.ProviderStatus)
+	if err != nil {
+		return fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
+	}
+
+	exoClient, err := exoclient.Client()
+	if err != nil {
+		return err
+	}
+
+	if err := exoClient.Delete(egoscale.VirtualMachine{Name: machineStatus.Name}); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -194,12 +231,12 @@ func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machi
 func (a *Actuator) Update(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
 	klog.Infof("Updating machine %v for cluster %v.", machine.Name, cluster.Name)
 
-	// providerConfig, err := machineSpecFromProviderSpec(machine.Spec.ProviderSpec)
-	// if err != nil {
-	// 	return fmt.Errorf("Cannot unmarshal providerSpec field: %v", err)
-	// }
+	machineStatus, err := machineSpecFromMachineStatus(machine.Status.ProviderStatus)
+	if err != nil {
+		return fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
+	}
 
-	fmt.Printf("VVVVVVVV=%#v=VVVVVVVVVVV\n", machine.Status)
+	fmt.Printf("VVVVVVVV=%#v=VVVVVVVVVVV\n", machineStatus)
 
 	klog.Error("Updating a machine is not yet implemented")
 	return nil
@@ -238,31 +275,77 @@ func (a *Actuator) Exists(ctx context.Context, cluster *clusterv1.Cluster, machi
 func (*Actuator) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (string, error) {
 	klog.Infof("Getting IP of machine %v for cluster %v.", machine.Name, cluster.Name)
 
-	if machine.ObjectMeta.Annotations != nil {
-		if ip, ok := machine.ObjectMeta.Annotations[ExoscaleIPAnnotationKey]; ok {
-			klog.Infof("Returning IP from machine annotation %s", ip)
-			return ip, nil
-		}
+	machineStatus, err := machineSpecFromMachineStatus(machine.Status.ProviderStatus)
+	if err != nil {
+		return "", fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
 	}
 
-	return "", errors.New("could not get IP")
+	if machineStatus.IP == "" {
+		return "", errors.New("could not get IP")
+	}
+
+	return machineStatus.IP, nil
 }
 
 // GetKubeConfig gets a kubeconfig from the master.
 func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Machine) (string, error) {
 	klog.Infof("Getting IP of machine %v for cluster %v.", master.Name, cluster.Name)
 
-	return "", fmt.Errorf("Provisionner exoscale GetKubeConfig() not yet implemented")
+	machineStatus, err := machineSpecFromMachineStatus(master.Status.ProviderStatus)
+	if err != nil {
+		return "", fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
+	}
+
+	sshclient, err := newSSHClient(machineStatus.IP, "ubuntu", machineStatus.SSHKey)
+	if err != nil {
+		return "", fmt.Errorf("unable to initialize SSH client: %s", err)
+	}
+
+	var stdout, stderr io.Writer
+
+	if err := sshclient.runCommand("sudo cat /etc/kubernetes/admin.conf", stdout, stderr); err != nil {
+		return "", fmt.Errorf("Provisionner exoscale GetKubeConfig() failed to run ssh cmd: %v", err)
+	}
+
+	kubeconfig := fmt.Sprint(stdout)
+
+	println("KKKKKKK:", kubeconfig, ":KKKKKKK")
+
+	return kubeconfig, fmt.Errorf("Provisionner exoscale GetKubeConfig() not yet implemented")
+}
+
+func clusterSpecFromProviderSpec(providerConfig clusterv1.ProviderSpec) (*exoscalev1.ExoscaleClusterProviderSpec, error) {
+	config := new(exoscalev1.ExoscaleClusterProviderSpec)
+	if err := yaml.Unmarshal(providerConfig.Value.Raw, config); err != nil {
+		return nil, err
+	}
+	return config, nil
+}
+
+func clusterStatusFromProviderStatus(providerStatus *runtime.RawExtension) (*exoscalev1.ExoscaleClusterProviderStatus, error) {
+	config := new(exoscalev1.ExoscaleClusterProviderStatus)
+	if providerStatus != nil {
+		if err := yaml.Unmarshal(providerStatus.Raw, config); err != nil {
+			return nil, err
+		}
+	}
+	return config, nil
 }
 
 func machineSpecFromProviderSpec(providerSpec clusterv1.ProviderSpec) (*exoscalev1.ExoscaleMachineProviderSpec, error) {
-	if providerSpec.Value == nil {
-		return nil, errors.New("no such providerConfig found in manifest")
-	}
-
-	var config exoscalev1.ExoscaleMachineProviderSpec
-	if err := yaml.Unmarshal(providerSpec.Value.Raw, &config); err != nil {
+	config := new(exoscalev1.ExoscaleMachineProviderSpec)
+	if err := yaml.Unmarshal(providerSpec.Value.Raw, config); err != nil {
 		return nil, err
 	}
-	return &config, nil
+	return config, nil
+}
+
+func machineSpecFromMachineStatus(providerStatus *runtime.RawExtension) (*exoscalev1.ExoscaleMachineProviderStatus, error) {
+	config := new(exoscalev1.ExoscaleMachineProviderStatus)
+	if providerStatus != nil {
+		if err := yaml.Unmarshal(providerStatus.Raw, config); err != nil {
+			return nil, err
+		}
+	}
+	return config, nil
 }

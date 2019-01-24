@@ -17,32 +17,24 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"github.com/exoscale/egoscale"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ExoscaleMachineProviderSpec is the Schema for the exoscalemachineproviderconfigs API
+// ExoscaleClusterProviderStatus is the Schema for the exoscaleclusterproviderstatuses API
 // +k8s:openapi-gen=true
-type ExoscaleMachineProviderSpec struct {
+type ExoscaleClusterProviderStatus struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	AntiAffinityGroup string `json:"antiAffinityGroup,omitempty"`
-	CloudInit         string `json:"cloudInit,omitempty"`
-	Disk              int64  `json:"disk"`
-	IPv6              bool   `json:"ipv6,omitempty"`
-	SSHKey            string `json:"sshKey"`
-	SecurityGroup     string `json:"securityGroup"`
-	Template          string `json:"template"`
-	Type              string `json:"type"`
-	User              string `json:"user"`
-	Zone              string `json:"zone"`
+	SecurityGroupID *egoscale.UUID `json:"securityGroupID"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 func init() {
-	SchemeBuilder.Register(&ExoscaleMachineProviderSpec{})
+	SchemeBuilder.Register(&ExoscaleClusterProviderStatus{})
 }

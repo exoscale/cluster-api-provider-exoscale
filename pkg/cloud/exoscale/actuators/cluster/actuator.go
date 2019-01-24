@@ -124,6 +124,14 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 		sgID,
 	}
 
+	if err := a.updateResources(clusterStatus, cluster); err != nil {
+		return fmt.Errorf("error updating cluster resources: %v", err)
+	}
+
+	return nil
+}
+
+func (a *Actuator) updateResources(clusterStatus *exoscalev1.ExoscaleClusterProviderStatus, cluster *clusterv1.Cluster) error {
 	rawStatus, err := json.Marshal(clusterStatus)
 	if err != nil {
 		return err

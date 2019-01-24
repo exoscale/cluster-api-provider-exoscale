@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	ssh "sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/actuators/ssh"
 
@@ -29,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	exoscalev1 "sigs.k8s.io/cluster-api-provider-exoscale/pkg/apis/exoscale/v1alpha1"
 	exoclient "sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/client"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
@@ -100,6 +102,10 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return fmt.Errorf("problem fetching the template %q. %s", machineConfig.Template, err)
 	}
 	template := t.(*egoscale.Template)
+	username, ok := template.Details["username"]
+	if !ok {
+		return fmt.Errorf("problem fetching username for template %q", template.Name)
+	}
 
 	so, err := exoClient.GetWithContext(
 		ctx,
@@ -152,7 +158,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 
 	sshClient, err := ssh.NewSSHClient(
 		vm.IP().String(),
-		"ubuntu",
+		username,
 		keyPairs.PrivateKey,
 	)
 	if err != nil {
@@ -175,13 +181,23 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 
 	klog.Infof("Machine %q provisioning success!", machine.Name)
 
-	machineStatus.Disk = machineConfig.Disk
-	machineStatus.SSHKey = keyPairs.PrivateKey
-	machineStatus.SecurityGroup = vm.SecurityGroup[0].ID.String()
+	machineStatus = &exoscalev1.ExoscaleMachineProviderStatus{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ExoscaleMachineProviderStatus",
+			APIVersion: "exoscale.cluster.k8s.io/v1alpha1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			CreationTimestamp: metav1.Time{time.Now()},
+		},
+		User:          username,
+		Disk:          machineConfig.Disk,
+		SSHKey:        keyPairs.PrivateKey,
+		SecurityGroup: vm.SecurityGroup[0].ID.String(),
+		Zone:          vm.ZoneName,
+		TemplateID:    vm.TemplateID.String(),
+		IP:            vm.IP().String(),
+	}
 	machineStatus.Name = vm.Name
-	machineStatus.Zone = vm.ZoneName
-	machineStatus.Template = vm.TemplateID.String()
-	machineStatus.IP = vm.IP().String()
 
 	if err := a.updateResources(machineStatus, machine); err != nil {
 		cleanSSHKey(exoClient, keyPairs.Name)

@@ -38,7 +38,7 @@ type ExoscaleMachineProviderStatus struct {
 	IP                string `json:"ip"`
 	SSHKey            string `json:"sshKey"`
 	SecurityGroup     string `json:"securityGroup"`
-	Template          string `json:"template"`
+	TemplateID        string `json:"templateID"`
 	Type              string `json:"type"`
 	User              string `json:"user"`
 	Zone              string `json:"zone"`

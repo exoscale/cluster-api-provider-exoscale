@@ -39,7 +39,7 @@ spec:
           type: string
         sshKey:
           type: string
-        template:
+        templateID:
           type: string
         type:
           type: string
@@ -52,7 +52,7 @@ spec:
       - ip
       - sshKey
       - securityGroup
-      - template
+      - templateID
       - type
       - user
       - zone

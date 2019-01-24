@@ -202,7 +202,9 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	if machineStatus.Annotations == nil {
 		machineStatus.Annotations = map[string]string{}
 	}
-	machineStatus.Annotations[exoscalev1.ExoscaleIPAnnotationKey] = vm.IP().String()
+	//machineStatus.Annotations[exoscalev1.ExoscaleIPAnnotationKey] = vm.IP().String()
+
+	a.updateMachineAnnotation(machine, exoscalev1.ExoscaleIPAnnotationKey, vm.IP().String())
 
 	if err := a.updateResources(machineStatus, machine); err != nil {
 		cleanSSHKey(exoClient, keyPairs.Name)
@@ -210,6 +212,23 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	}
 
 	return nil
+}
+
+// updateMachineAnnotation updates the `annotation` on the given `machine` with
+// `content`.
+func (a *Actuator) updateMachineAnnotation(machine *clusterv1.Machine, annotation string, content string) {
+	// Get the annotations
+	annotations := machine.GetAnnotations()
+
+	if annotations == nil {
+		annotations = map[string]string{}
+	}
+
+	// Set our annotation to the given content.
+	annotations[annotation] = content
+
+	// Update the machine object with these annotations
+	machine.SetAnnotations(annotations)
 }
 
 func (a *Actuator) updateResources(machineStatus *exoscalev1.ExoscaleMachineProviderStatus, machine *clusterv1.Machine) error {

@@ -19,7 +19,10 @@ package cluster
 import (
 	"errors"
 	"fmt"
+	"io"
 	"time"
+
+	ssh "sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/actuators/ssh"
 
 	"github.com/exoscale/egoscale"
 	"github.com/ghodss/yaml"
@@ -178,21 +181,42 @@ func (a *Actuator) Delete(cluster *clusterv1.Cluster) error {
 func (*Actuator) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (string, error) {
 	klog.Infof("Getting IP of machine %v for cluster %v.", machine.Name, cluster.Name)
 
-	if machine.ObjectMeta.Annotations != nil {
-		if ip, ok := machine.ObjectMeta.Annotations[ExoscaleIPAnnotationKey]; ok {
-			klog.Infof("Returning IP from machine annotation %s", ip)
-			return ip, nil
-		}
+	machineStatus, err := machineSpecFromMachineStatus(machine.Status.ProviderStatus)
+	if err != nil {
+		return "", fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
 	}
 
-	return "", errors.New("could not get IP")
+	if machineStatus.IP == "" {
+		return "", errors.New("could not get IP")
+	}
+
+	return machineStatus.IP, nil
 }
 
 // GetKubeConfig gets a kubeconfig from the master.
 func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Machine) (string, error) {
 	klog.Infof("Getting IP of machine %v for cluster %v.", master.Name, cluster.Name)
 
-	return "", fmt.Errorf("Provisionner exoscale GetKubeConfig() not yet implemented")
+	machineStatus, err := machineSpecFromMachineStatus(master.Status.ProviderStatus)
+	if err != nil {
+		return "", fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
+	}
+
+	sshclient, err := ssh.NewSSHClient(machineStatus.IP, "ubuntu", machineStatus.SSHKey)
+	if err != nil {
+		return "", fmt.Errorf("unable to initialize SSH client: %s", err)
+	}
+
+	var stdout, stderr io.Writer
+
+	if err := sshclient.RunCommand("sudo cat /etc/kubernetes/admin.conf", stdout, stderr); err != nil {
+		return "", fmt.Errorf("Provisionner exoscale GetKubeConfig() failed to run ssh cmd: %v", err)
+	}
+
+	kubeconfig := fmt.Sprint(stdout)
+	println("KKKKKKK:", kubeconfig, ":KKKKKKK")
+
+	return kubeconfig, nil
 }
 
 func clusterSpecFromProviderSpec(providerConfig clusterv1.ProviderSpec) (*exoscalev1.ExoscaleClusterProviderSpec, error) {
@@ -205,6 +229,16 @@ func clusterSpecFromProviderSpec(providerConfig clusterv1.ProviderSpec) (*exosca
 
 func clusterStatusFromProviderStatus(providerStatus *runtime.RawExtension) (*exoscalev1.ExoscaleClusterProviderStatus, error) {
 	config := new(exoscalev1.ExoscaleClusterProviderStatus)
+	if providerStatus != nil {
+		if err := yaml.Unmarshal(providerStatus.Raw, config); err != nil {
+			return nil, err
+		}
+	}
+	return config, nil
+}
+
+func machineSpecFromMachineStatus(providerStatus *runtime.RawExtension) (*exoscalev1.ExoscaleMachineProviderStatus, error) {
+	config := new(exoscalev1.ExoscaleMachineProviderStatus)
 	if providerStatus != nil {
 		if err := yaml.Unmarshal(providerStatus.Raw, config); err != nil {
 			return nil, err

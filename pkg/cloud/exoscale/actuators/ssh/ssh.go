@@ -15,7 +15,8 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func (c *sshClient) runCommand(cmd string, stdout, stderr io.Writer) error {
+//RunCommand Run an ssh command
+func (c *SSHClient) RunCommand(cmd string, stdout, stderr io.Writer) error {
 	var err error
 
 	retryOp := func() error {
@@ -55,10 +56,11 @@ func (c *sshClient) runCommand(cmd string, stdout, stderr io.Writer) error {
 	return nil
 }
 
-func (c *sshClient) scp(src, dst string) error {
+//Scp like scp command
+func (c *SSHClient) Scp(src, dst string) error {
 	var buf bytes.Buffer
 
-	if err := c.runCommand(fmt.Sprintf("sudo cat %s", src), &buf, nil); err != nil {
+	if err := c.RunCommand(fmt.Sprintf("sudo cat %s", src), &buf, nil); err != nil {
 		return err
 	}
 
@@ -71,15 +73,17 @@ func (c *sshClient) scp(src, dst string) error {
 	return ioutil.WriteFile(dst, buf.Bytes(), 0600)
 }
 
-type sshClient struct {
+//SSHClient represent an ssh client
+type SSHClient struct {
 	host    string
 	hostKey ssh.Signer
 	user    string
 	c       *ssh.Client
 }
 
-func newSSHClient(host, hostUser, privateKey string) (*sshClient, error) {
-	var c = sshClient{
+//NewSSHClient create a new ssh client
+func NewSSHClient(host, hostUser, privateKey string) (*SSHClient, error) {
+	var c = SSHClient{
 		host: host + ":22",
 		user: hostUser,
 	}
@@ -92,7 +96,8 @@ func newSSHClient(host, hostUser, privateKey string) (*sshClient, error) {
 	return &c, nil
 }
 
-func createSSHKey(ctx context.Context, client *egoscale.Client, name string) (*egoscale.SSHKeyPair, error) {
+//CreateSSHKey create an ssh key pair
+func CreateSSHKey(ctx context.Context, client *egoscale.Client, name string) (*egoscale.SSHKeyPair, error) {
 	resp, err := client.RequestWithContext(ctx, &egoscale.CreateSSHKeyPair{
 		Name: name,
 	})

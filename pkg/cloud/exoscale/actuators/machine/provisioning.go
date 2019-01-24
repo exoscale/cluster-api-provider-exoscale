@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 	"text/template"
+
+	ssh "sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/actuators/ssh"
 )
 
 const (
@@ -152,7 +154,7 @@ type kubeCluster struct {
 	Address           string
 }
 
-func bootstrapExokubeCluster(sshClient *sshClient, cluster kubeCluster, debug bool) error {
+func bootstrapExokubeCluster(sshClient *ssh.SSHClient, cluster kubeCluster, debug bool) error {
 	for _, step := range kubeBootstrapSteps {
 		var (
 			stdout, stderr io.Writer
@@ -173,7 +175,7 @@ func bootstrapExokubeCluster(sshClient *sshClient, cluster kubeCluster, debug bo
 
 		fmt.Printf("%s... ", step.name)
 
-		if err := sshClient.runCommand(cmd.String(), stdout, stderr); err != nil {
+		if err := sshClient.RunCommand(cmd.String(), stdout, stderr); err != nil {
 			fmt.Printf("\n%s: failed\n", step.name)
 
 			if errBuf.Len() > 0 {

@@ -195,7 +195,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		SecurityGroup: vm.SecurityGroup[0].ID.String(),
 		Zone:          vm.ZoneName,
 		TemplateID:    vm.TemplateID,
-		IP:            vm.IP(),
+		IP:            *vm.IP(),
 	}
 	machineStatus.Name = vm.Name
 

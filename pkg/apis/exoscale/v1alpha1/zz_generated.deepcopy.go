@@ -119,12 +119,8 @@ func (in *ExoscaleMachineProviderStatus) DeepCopyInto(out *ExoscaleMachineProvid
 	}
 	if in.IP != nil {
 		in, out := &in.IP, &out.IP
-		*out = new(net.IP)
-		if **in != nil {
-			in, out := *in, *out
-			*out = make([]byte, len(*in))
-			copy(*out, *in)
-		}
+		*out = make(net.IP, len(*in))
+		copy(*out, *in)
 	}
 	if in.TemplateID != nil {
 		in, out := &in.TemplateID, &out.TemplateID

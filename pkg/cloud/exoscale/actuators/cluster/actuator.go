@@ -25,7 +25,6 @@ import (
 	ssh "sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/actuators/ssh"
 
 	"github.com/exoscale/egoscale"
-	"github.com/ghodss/yaml"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/json"
@@ -61,12 +60,12 @@ func NewActuator(params ActuatorParams) (*Actuator, error) {
 func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 	klog.Infof("Reconciling cluster %v.", cluster.Name)
 
-	clusterSpec, err := clusterSpecFromProviderSpec(cluster.Spec.ProviderSpec)
+	clusterSpec, err := exoscalev1.ClusterSpecFromProviderSpec(cluster.Spec.ProviderSpec)
 	if err != nil {
 		return fmt.Errorf("error loading cluster provider config: %v", err)
 	}
 
-	clusterStatus, err := clusterStatusFromProviderStatus(cluster.Status.ProviderStatus)
+	clusterStatus, err := exoscalev1.ClusterStatusFromProviderStatus(cluster.Status.ProviderStatus)
 	if err != nil {
 		return fmt.Errorf("error loading cluster provider config: %v", err)
 	}
@@ -147,7 +146,7 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 func (a *Actuator) Delete(cluster *clusterv1.Cluster) error {
 	klog.Infof("Deleting cluster %v.", cluster.Name)
 
-	clusterStatus, err := clusterStatusFromProviderStatus(cluster.Status.ProviderStatus)
+	clusterStatus, err := exoscalev1.ClusterStatusFromProviderStatus(cluster.Status.ProviderStatus)
 	if err != nil {
 		return fmt.Errorf("error loading cluster provider config: %v", err)
 	}
@@ -181,7 +180,7 @@ func (a *Actuator) Delete(cluster *clusterv1.Cluster) error {
 func (*Actuator) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (string, error) {
 	klog.Infof("Getting IP of machine %v for cluster %v.", machine.Name, cluster.Name)
 
-	machineStatus, err := machineSpecFromMachineStatus(machine.Status.ProviderStatus)
+	machineStatus, err := exoscalev1.MachineSpecFromMachineStatus(machine.Status.ProviderStatus)
 	if err != nil {
 		return "", fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
 	}
@@ -197,7 +196,7 @@ func (*Actuator) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (
 func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Machine) (string, error) {
 	klog.Infof("Getting IP of machine %v for cluster %v.", master.Name, cluster.Name)
 
-	machineStatus, err := machineSpecFromMachineStatus(master.Status.ProviderStatus)
+	machineStatus, err := exoscalev1.MachineSpecFromMachineStatus(master.Status.ProviderStatus)
 	if err != nil {
 		return "", fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
 	}
@@ -217,32 +216,4 @@ func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Mac
 	println("KKKKKKK:", kubeconfig, ":KKKKKKK")
 
 	return kubeconfig, nil
-}
-
-func clusterSpecFromProviderSpec(providerConfig clusterv1.ProviderSpec) (*exoscalev1.ExoscaleClusterProviderSpec, error) {
-	config := new(exoscalev1.ExoscaleClusterProviderSpec)
-	if err := yaml.Unmarshal(providerConfig.Value.Raw, config); err != nil {
-		return nil, err
-	}
-	return config, nil
-}
-
-func clusterStatusFromProviderStatus(providerStatus *runtime.RawExtension) (*exoscalev1.ExoscaleClusterProviderStatus, error) {
-	config := new(exoscalev1.ExoscaleClusterProviderStatus)
-	if providerStatus != nil {
-		if err := yaml.Unmarshal(providerStatus.Raw, config); err != nil {
-			return nil, err
-		}
-	}
-	return config, nil
-}
-
-func machineSpecFromMachineStatus(providerStatus *runtime.RawExtension) (*exoscalev1.ExoscaleMachineProviderStatus, error) {
-	config := new(exoscalev1.ExoscaleMachineProviderStatus)
-	if providerStatus != nil {
-		if err := yaml.Unmarshal(providerStatus.Raw, config); err != nil {
-			return nil, err
-		}
-	}
-	return config, nil
 }

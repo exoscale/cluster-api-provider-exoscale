@@ -17,7 +17,9 @@ limitations under the License.
 package v1alpha1
 
 import (
+	yaml "gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // +genclient
@@ -46,4 +48,15 @@ type ExoscaleMachineProviderStatus struct {
 
 func init() {
 	SchemeBuilder.Register(&ExoscaleMachineProviderStatus{})
+}
+
+//MachineSpecFromMachineStatus return machine provider specs from machine provider custom resources (/config/crds)
+func MachineSpecFromMachineStatus(providerStatus *runtime.RawExtension) (*ExoscaleMachineProviderStatus, error) {
+	config := new(ExoscaleMachineProviderStatus)
+	if providerStatus != nil {
+		if err := yaml.Unmarshal(providerStatus.Raw, config); err != nil {
+			return nil, err
+		}
+	}
+	return config, nil
 }

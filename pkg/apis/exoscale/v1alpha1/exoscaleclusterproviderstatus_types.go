@@ -18,7 +18,9 @@ package v1alpha1
 
 import (
 	"github.com/exoscale/egoscale"
+	yaml "gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
 // +genclient
@@ -37,4 +39,15 @@ type ExoscaleClusterProviderStatus struct {
 
 func init() {
 	SchemeBuilder.Register(&ExoscaleClusterProviderStatus{})
+}
+
+//ClusterStatusFromProviderStatus return cluster provider specs from cluster provider custom resources (/config/crds)
+func ClusterStatusFromProviderStatus(providerStatus *runtime.RawExtension) (*ExoscaleClusterProviderStatus, error) {
+	config := new(ExoscaleClusterProviderStatus)
+	if providerStatus != nil {
+		if err := yaml.Unmarshal(providerStatus.Raw, config); err != nil {
+			return nil, err
+		}
+	}
+	return config, nil
 }

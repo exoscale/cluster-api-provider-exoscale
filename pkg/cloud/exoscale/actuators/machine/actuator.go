@@ -199,15 +199,15 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	}
 	machineStatus.Name = vm.Name
 
-	if err := a.updateResources(machineStatus, machine); err != nil {
-		cleanSSHKey(exoClient, keyPairs.Name)
-		return fmt.Errorf("failed to update machine resources: %s", err)
-	}
-
 	if machine.Annotations == nil {
 		machine.Annotations = map[string]string{}
 	}
 	machine.Annotations[exoscalev1.ExoscaleIPAnnotationKey] = vm.IP().String()
+
+	if err := a.updateResources(machineStatus, machine); err != nil {
+		cleanSSHKey(exoClient, keyPairs.Name)
+		return fmt.Errorf("failed to update machine resources: %s", err)
+	}
 
 	return nil
 }

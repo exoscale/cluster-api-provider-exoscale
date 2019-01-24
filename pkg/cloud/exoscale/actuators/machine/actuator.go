@@ -79,6 +79,10 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
 	}
 
+	if clusterStatus.SecurityGroupID == nil {
+		return fmt.Errorf("empty cluster securityGroupID field. %#v", clusterStatus)
+	}
+
 	exoClient, err := exoclient.Client()
 	if err != nil {
 		return err
@@ -127,11 +131,6 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 			return err
 		}
 		return fmt.Errorf("an SSH key with that name %q already exists, please choose a different name", sshKeyName)
-	}
-
-	if clusterStatus.SecurityGroupID == nil {
-		cleanSSHKey(exoClient, keyPairs.Name)
-		return fmt.Errorf("empty cluster securityGroupID field. %#v", clusterStatus)
 	}
 
 	req := egoscale.DeployVirtualMachine{
@@ -232,11 +231,16 @@ func cleanSSHKey(exoClient *egoscale.Client, sshKeyName string) {
 
 // Delete deletes a machine and is invoked by the Machine Controller
 func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
-	klog.Infof("Deleting machine %v for cluster %v.", machine.Name, cluster.Name)
+	if cluster == nil {
+		klog.Warningf("cluster %q as been removed already", machine.Name)
+		klog.Infof("deleting machine %q.", machine.Name)
+	} else {
+		klog.Infof("deleting machine %q from %q.", machine.Name, cluster.Name)
+	}
 
 	machineStatus, err := exoscalev1.MachineSpecFromMachineStatus(machine.Status.ProviderStatus)
 	if err != nil {
-		return fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
+		return fmt.Errorf("cannot unmarshal machine.Spec field: %v", err)
 	}
 
 	exoClient, err := exoclient.Client()
@@ -244,11 +248,9 @@ func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return err
 	}
 
-	if err := exoClient.Delete(egoscale.VirtualMachine{Name: machineStatus.Name}); err != nil {
-		return err
-	}
-
-	return nil
+	return exoClient.Delete(egoscale.VirtualMachine{
+		Name: machineStatus.Name,
+	})
 }
 
 // Update updates a machine and is invoked by the Machine Controller
@@ -280,15 +282,11 @@ func (a *Actuator) Exists(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return false, err
 	}
 
-	if len(vms) == 1 {
-		return true, nil
-	}
-
 	if len(vms) > 1 {
 		return false, fmt.Errorf("Machine.Exist more than one machine found with this name %s", machine.Name)
 	}
 
-	return false, nil
+	return len(vms) == 1, nil
 }
 
 // The Machine Actuator interface must implement GetIP and GetKubeConfig functions as a workaround for issues

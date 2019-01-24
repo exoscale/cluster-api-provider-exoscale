@@ -37,12 +37,6 @@ import (
 	client "sigs.k8s.io/cluster-api/pkg/client/clientset_generated/clientset/typed/cluster/v1alpha1"
 )
 
-const (
-	//ProviderName Exoscale provider name
-	ProviderName            = "exoscale"
-	ExoscaleIPAnnotationKey = "exoscale-ip"
-)
-
 // Actuator is responsible for performing machine reconciliation
 type Actuator struct {
 	machinesGetter client.MachinesGetter
@@ -122,7 +116,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	}
 	serviceOffering := so.(*egoscale.ServiceOffering)
 
-	sshKeyName := machine.Name + "id_rsa"
+	sshKeyName := machine.Name + "_id_rsa"
 
 	keyPairs, err := ssh.CreateSSHKey(ctx, exoClient, sshKeyName)
 	if err != nil {

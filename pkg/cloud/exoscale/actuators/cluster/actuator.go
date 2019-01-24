@@ -165,11 +165,17 @@ func (a *Actuator) Delete(cluster *clusterv1.Cluster) error {
 		return err
 	}
 
-	// XXX delete the rules linked itself
-	// fetch SG
-	// for _, r := range SG.IngressRule {
-	//     if r.SecurityGroupName == sg.Name { revoke }
-	// }
+	sg, err := exoClient.Get(egoscale.SecurityGroup{ID: clusterStatus.SecurityGroupID})
+	if err != nil {
+		return fmt.Errorf("failed to get securityGroup: %v", err)
+	}
+	securityGroup := sg.(*egoscale.SecurityGroup)
+
+	for _, r := range securityGroup.IngressRule {
+		if err := exoClient.BooleanRequest(egoscale.RevokeSecurityGroupIngress{ID: r.RuleID}); err != nil {
+			return fmt.Errorf("failed to revoke securityGroup ingress rule: %v", err)
+		}
+	}
 
 	return exoClient.BooleanRequest(egoscale.DeleteSecurityGroup{
 		ID: clusterStatus.SecurityGroupID,

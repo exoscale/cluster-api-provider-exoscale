@@ -255,7 +255,7 @@ func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machi
 	}
 
 	return exoClient.Delete(egoscale.VirtualMachine{
-		Name: machineStatus.Name,
+		ID: machineStatus.ID,
 	})
 }
 

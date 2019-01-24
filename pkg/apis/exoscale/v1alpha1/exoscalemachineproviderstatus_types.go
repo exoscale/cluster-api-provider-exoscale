@@ -45,7 +45,8 @@ type ExoscaleMachineProviderStatus struct {
 	Disk              int64          `json:"disk"`
 	IPv6              bool           `json:"ipv6,omitempty"`
 	IP                net.IP         `json:"ip"`
-	SSHKey            string         `json:"sshKey"`
+	SSHPrivateKey     string         `json:"sshPrivateKey"`
+	SSHKeyName        string         `json:"sshKeyName"`
 	SecurityGroup     string         `json:"securityGroup"`
 	TemplateID        *egoscale.UUID `json:"templateID"`
 	Type              string         `json:"type"`

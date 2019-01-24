@@ -205,7 +205,7 @@ func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Mac
 		return "", fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
 	}
 
-	sshclient, err := ssh.NewSSHClient(machineStatus.IP.String(), machineStatus.User, machineStatus.SSHKey)
+	sshclient, err := ssh.NewSSHClient(machineStatus.IP.String(), machineStatus.User, machineStatus.SSHPrivateKey)
 	if err != nil {
 		return "", fmt.Errorf("unable to initialize SSH client: %s", err)
 	}

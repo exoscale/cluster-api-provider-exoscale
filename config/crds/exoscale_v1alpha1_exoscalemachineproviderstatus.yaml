@@ -40,7 +40,9 @@ spec:
           type: object
         securityGroup:
           type: string
-        sshKey:
+        sshKeyName:
+          type: string
+        sshPrivateKey:
           type: string
         templateID:
           type: object
@@ -54,7 +56,8 @@ spec:
       - id
       - disk
       - ip
-      - sshKey
+      - sshPrivateKey
+      - sshKeyName
       - securityGroup
       - templateID
       - type

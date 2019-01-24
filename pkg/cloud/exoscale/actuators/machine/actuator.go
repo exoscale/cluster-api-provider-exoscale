@@ -191,7 +191,8 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		ID:            vm.ID,
 		User:          username,
 		Disk:          machineConfig.Disk,
-		SSHKey:        keyPairs.PrivateKey,
+		SSHPrivateKey: keyPairs.PrivateKey,
+		SSHKeyName:    keyPairs.Name,
 		SecurityGroup: vm.SecurityGroup[0].ID.String(),
 		Zone:          vm.ZoneName,
 		TemplateID:    vm.TemplateID,
@@ -273,6 +274,10 @@ func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return err
 	}
 
+	if err := exoClient.Delete(egoscale.SSHKeyPair{Name: machineStatus.SSHKeyName}); err != nil {
+		return fmt.Errorf("cannot delete machine SSH KEY: %v", err)
+	}
+
 	return exoClient.Delete(egoscale.VirtualMachine{
 		ID: machineStatus.ID,
 	})
@@ -343,7 +348,7 @@ func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Mac
 		return "", fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
 	}
 
-	sshclient, err := ssh.NewSSHClient(machineStatus.IP.String(), machineStatus.User, machineStatus.SSHKey)
+	sshclient, err := ssh.NewSSHClient(machineStatus.IP.String(), machineStatus.User, machineStatus.SSHPrivateKey)
 	if err != nil {
 		return "", fmt.Errorf("unable to initialize SSH client: %s", err)
 	}

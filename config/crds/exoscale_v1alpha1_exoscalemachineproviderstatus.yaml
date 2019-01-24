@@ -38,7 +38,7 @@ spec:
           type: string
         metadata:
           type: object
-        securityGroup:
+        securityGroupID:
           type: string
         sshKeyName:
           type: string
@@ -58,7 +58,7 @@ spec:
       - ip
       - sshPrivateKey
       - sshKeyName
-      - securityGroup
+      - securityGroupID
       - templateID
       - type
       - user

@@ -188,15 +188,15 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		ObjectMeta: metav1.ObjectMeta{
 			CreationTimestamp: metav1.Time{time.Now()},
 		},
-		ID:            vm.ID,
-		User:          username,
-		Disk:          machineConfig.Disk,
-		SSHPrivateKey: keyPairs.PrivateKey,
-		SSHKeyName:    keyPairs.Name,
-		SecurityGroup: vm.SecurityGroup[0].ID.String(),
-		Zone:          vm.ZoneName,
-		TemplateID:    vm.TemplateID,
-		IP:            *vm.IP(),
+		ID:              vm.ID,
+		User:            username,
+		Disk:            machineConfig.Disk,
+		SSHPrivateKey:   keyPairs.PrivateKey,
+		SSHKeyName:      keyPairs.Name,
+		SecurityGroupID: vm.SecurityGroup[0].ID.String(),
+		Zone:            vm.ZoneName,
+		TemplateID:      vm.TemplateID,
+		IP:              *vm.IP(),
 	}
 	machineStatus.Name = vm.Name
 

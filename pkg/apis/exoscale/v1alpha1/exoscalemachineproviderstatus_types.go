@@ -17,9 +17,17 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"net"
+
+	"github.com/exoscale/egoscale"
 	yaml "github.com/ghodss/yaml"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+)
+
+const (
+	//ExoscaleIPAnnotationKey represent a machine ip
+	ExoscaleIPAnnotationKey = "exoscale-ip-address"
 )
 
 // +genclient
@@ -31,17 +39,18 @@ type ExoscaleMachineProviderStatus struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	AntiAffinityGroup string `json:"antiAffinityGroup,omitempty"`
-	CloudInit         string `json:"cloudInit,omitempty"`
-	Disk              int64  `json:"disk"`
-	IPv6              bool   `json:"ipv6,omitempty"`
-	IP                string `json:"ip"`
-	SSHKey            string `json:"sshKey"`
-	SecurityGroup     string `json:"securityGroup"`
-	TemplateID        string `json:"templateID"`
-	Type              string `json:"type"`
-	User              string `json:"user"`
-	Zone              string `json:"zone"`
+	ID                *egoscale.UUID `json:"id"`
+	AntiAffinityGroup string         `json:"antiAffinityGroup,omitempty"`
+	CloudInit         string         `json:"cloudInit,omitempty"`
+	Disk              int64          `json:"disk"`
+	IPv6              bool           `json:"ipv6,omitempty"`
+	IP                *net.IP        `json:"ip"`
+	SSHKey            string         `json:"sshKey"`
+	SecurityGroup     string         `json:"securityGroup"`
+	TemplateID        *egoscale.UUID `json:"templateID"`
+	Type              string         `json:"type"`
+	User              string         `json:"user"`
+	Zone              string         `json:"zone"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

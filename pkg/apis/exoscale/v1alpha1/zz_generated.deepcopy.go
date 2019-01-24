@@ -21,6 +21,8 @@ limitations under the License.
 package v1alpha1
 
 import (
+	net "net"
+
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -111,6 +113,23 @@ func (in *ExoscaleMachineProviderStatus) DeepCopyInto(out *ExoscaleMachineProvid
 	*out = *in
 	out.TypeMeta = in.TypeMeta
 	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
+	if in.ID != nil {
+		in, out := &in.ID, &out.ID
+		*out = (*in).DeepCopy()
+	}
+	if in.IP != nil {
+		in, out := &in.IP, &out.IP
+		*out = new(net.IP)
+		if **in != nil {
+			in, out := *in, *out
+			*out = make([]byte, len(*in))
+			copy(*out, *in)
+		}
+	}
+	if in.TemplateID != nil {
+		in, out := &in.TemplateID, &out.TemplateID
+		*out = (*in).DeepCopy()
+	}
 	return
 }
 

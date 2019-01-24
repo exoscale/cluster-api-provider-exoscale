@@ -35,10 +35,6 @@ import (
 	client "sigs.k8s.io/cluster-api/pkg/client/clientset_generated/clientset/typed/cluster/v1alpha1"
 )
 
-const (
-	ExoscaleIPAnnotationKey = "exoscale-ip"
-)
-
 // Actuator is responsible for performing cluster reconciliation
 type Actuator struct {
 	clustersGetter client.ClustersGetter
@@ -193,11 +189,11 @@ func (*Actuator) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (
 		return "", fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
 	}
 
-	if machineStatus.IP == "" {
+	if machineStatus.IP == nil {
 		return "", errors.New("could not get IP")
 	}
 
-	return machineStatus.IP, nil
+	return machineStatus.IP.String(), nil
 }
 
 // GetKubeConfig gets a kubeconfig from the master.
@@ -209,7 +205,7 @@ func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Mac
 		return "", fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
 	}
 
-	sshclient, err := ssh.NewSSHClient(machineStatus.IP, "ubuntu", machineStatus.SSHKey)
+	sshclient, err := ssh.NewSSHClient(machineStatus.IP.String(), machineStatus.User, machineStatus.SSHKey)
 	if err != nil {
 		return "", fmt.Errorf("unable to initialize SSH client: %s", err)
 	}

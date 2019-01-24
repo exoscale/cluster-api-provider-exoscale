@@ -26,7 +26,10 @@ spec:
         disk:
           format: int64
           type: integer
+        id:
+          type: object
         ip:
+          format: byte
           type: string
         kind:
           description: 'Kind is a string value representing the REST resource this
@@ -40,7 +43,7 @@ spec:
         sshKey:
           type: string
         templateID:
-          type: string
+          type: object
         type:
           type: string
         user:
@@ -48,6 +51,7 @@ spec:
         zone:
           type: string
       required:
+      - id
       - disk
       - ip
       - sshKey

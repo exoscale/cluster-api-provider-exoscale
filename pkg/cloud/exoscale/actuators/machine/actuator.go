@@ -188,13 +188,14 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		ObjectMeta: metav1.ObjectMeta{
 			CreationTimestamp: metav1.Time{time.Now()},
 		},
+		ID:            vm.ID,
 		User:          username,
 		Disk:          machineConfig.Disk,
 		SSHKey:        keyPairs.PrivateKey,
 		SecurityGroup: vm.SecurityGroup[0].ID.String(),
 		Zone:          vm.ZoneName,
-		TemplateID:    vm.TemplateID.String(),
-		IP:            vm.IP().String(),
+		TemplateID:    vm.TemplateID,
+		IP:            vm.IP(),
 	}
 	machineStatus.Name = vm.Name
 
@@ -202,6 +203,11 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		cleanSSHKey(exoClient, keyPairs.Name)
 		return fmt.Errorf("failed to update machine resources: %s", err)
 	}
+
+	if machine.Annotations == nil {
+		machine.Annotations = map[string]string{}
+	}
+	machine.Annotations[exoscalev1.ExoscaleIPAnnotationKey] = vm.IP().String()
 
 	return nil
 }
@@ -302,11 +308,11 @@ func (*Actuator) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (
 		return "", fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
 	}
 
-	if machineStatus.IP == "" {
+	if machineStatus.IP == nil {
 		return "", errors.New("could not get IP")
 	}
 
-	return machineStatus.IP, nil
+	return machineStatus.IP.String(), nil
 }
 
 // GetKubeConfig gets a kubeconfig from the master.
@@ -318,7 +324,7 @@ func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Mac
 		return "", fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
 	}
 
-	sshclient, err := ssh.NewSSHClient(machineStatus.IP, "ubuntu", machineStatus.SSHKey)
+	sshclient, err := ssh.NewSSHClient(machineStatus.IP.String(), machineStatus.User, machineStatus.SSHKey)
 	if err != nil {
 		return "", fmt.Errorf("unable to initialize SSH client: %s", err)
 	}

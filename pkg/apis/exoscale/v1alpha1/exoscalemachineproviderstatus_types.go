@@ -54,8 +54,8 @@ func init() {
 	SchemeBuilder.Register(&ExoscaleMachineProviderStatus{})
 }
 
-//MachineSpecFromMachineStatus return machine provider specs from machine provider custom resources (/config/crds)
-func MachineSpecFromMachineStatus(providerStatus *runtime.RawExtension) (*ExoscaleMachineProviderStatus, error) {
+//MachineStatusFromProviderStatus return machine provider status from provider status custom resources (/config/crds)
+func MachineStatusFromProviderStatus(providerStatus *runtime.RawExtension) (*ExoscaleMachineProviderStatus, error) {
 	config := new(ExoscaleMachineProviderStatus)
 	if providerStatus != nil {
 		if err := yaml.Unmarshal(providerStatus.Raw, config); err != nil {

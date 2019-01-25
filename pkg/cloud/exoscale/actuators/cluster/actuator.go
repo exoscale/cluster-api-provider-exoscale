@@ -203,7 +203,7 @@ func (*Actuator) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (
 func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Machine) (string, error) {
 	klog.Infof("Getting Kubeconfig of the machine %v for cluster %v.", master.Name, cluster.Name)
 
-	machineStatus, err := exoscalev1.MachineSpecFromMachineStatus(master.Status.ProviderStatus)
+	machineStatus, err := exoscalev1.MachineStatusFromProviderStatus(master.Status.ProviderStatus)
 	if err != nil {
 		return "", fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
 	}

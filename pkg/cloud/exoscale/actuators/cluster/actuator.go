@@ -191,18 +191,12 @@ func (a *Actuator) Delete(cluster *clusterv1.Cluster) error {
 func (*Actuator) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (string, error) {
 	klog.Infof("Getting IP of the machine %v for cluster %v.", machine.Name, cluster.Name)
 
-	machineStatus, err := exoscalev1.MachineSpecFromMachineStatus(machine.Status.ProviderStatus)
-	if err != nil {
-		return "", fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
-	}
-
-	if machineStatus.IP == nil {
+	annotations := machine.GetAnnotations()
+	if annotations == nil {
 		return "", errors.New("could not get IP")
 	}
 
-	println("IPIPIPIPIPIPIP:", machineStatus.IP.String(), ":IPIPIPIPIP")
-
-	return machineStatus.IP.String(), nil
+	return annotations[exoscalev1.ExoscaleIPAnnotationKey], nil
 }
 
 // GetKubeConfig gets a kubeconfig from the master.

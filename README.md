@@ -71,3 +71,50 @@ Same as above.
 ```console
 % go run cmd/manager/main.go -v 9
 ```
+
+## Using [KIND](https://github.com/kubernetes-sigs/kind)
+
+This is highly experimental...
+
+- https://github.com/kubernetes-sigs/cluster-api/pull/710
+
+
+```console
+% go run cmd/clusterctl/main.go create cluster -v 9 \
+        --provider exoscale \
+        -m cmd/clusterctl/examples/exoscale/machine.yaml \
+        -c cmd/clusterctl/examples/exoscale/cluster.yaml \
+        -p provider-components.yaml \
+        --bootstrap-type kind \
+        --bootstrap-flags "image=kindest/node:v1.12.3" \
+        --bootstrap-flags "config=kind-config.yaml" \
+        --bootstrap-flags "loglevel=debug"
+```
+
+...
+
+```yaml
+kind: Config
+apiVersion: kind.sigs.k8s.io/v1alpha2
+nodes:
+- role: control-plane
+  kubeadmConfigPatches:
+  - |
+    apiVersion: kubeadm.k8s.io/v1alpha3
+    kind: ClusterConfiguration
+    networking:
+      serviceSubnet: 10.0.0.0/16
+    kubernetesVersion: v1.12.3
+  kubeadmConfigPatchesJson6902:
+  - group: kubeadm.k8s.io
+    version: v1alpha3
+    kind: ClusterConfiguration
+    patch: |
+      - op: add
+        path: /apiServerCertSANs/-
+        value: localhost
+- role: worker
+  replicas: 1
+```
+
+**NB** kubeadm v1.12 is `v1alpha3` when v1.13 is `v1beta`

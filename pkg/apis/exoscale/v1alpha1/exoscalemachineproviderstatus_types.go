@@ -39,19 +39,13 @@ type ExoscaleMachineProviderStatus struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	ID                *egoscale.UUID `json:"id"`
-	AntiAffinityGroup string         `json:"antiAffinityGroup,omitempty"`
-	CloudInit         string         `json:"cloudInit,omitempty"`
-	Disk              int64          `json:"disk"`
-	IPv6              bool           `json:"ipv6,omitempty"`
-	IP                net.IP         `json:"ip"`
-	SSHPrivateKey     string         `json:"sshPrivateKey"`
-	SSHKeyName        string         `json:"sshKeyName"`
-	SecurityGroupID   string         `json:"securityGroupID"`
-	TemplateID        *egoscale.UUID `json:"templateID"`
-	Type              string         `json:"type"`
-	User              string         `json:"user"`
-	Zone              string         `json:"zone"`
+	ID            *egoscale.UUID `json:"id"`
+	IP            net.IP         `json:"ip"`
+	SSHKeyName    string         `json:"sshKeyName"`
+	SSHPrivateKey string         `json:"sshPrivateKey"`
+	TemplateID    *egoscale.UUID `json:"templateID"`
+	User          string         `json:"user"`
+	ZoneID        *egoscale.UUID `json:"zoneID"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -60,8 +54,8 @@ func init() {
 	SchemeBuilder.Register(&ExoscaleMachineProviderStatus{})
 }
 
-//MachineSpecFromMachineStatus return machine provider specs from machine provider custom resources (/config/crds)
-func MachineSpecFromMachineStatus(providerStatus *runtime.RawExtension) (*ExoscaleMachineProviderStatus, error) {
+// MachineStatusFromProviderStatus return machine provider specs from machine provider custom resources (/config/crds)
+func MachineStatusFromProviderStatus(providerStatus *runtime.RawExtension) (*ExoscaleMachineProviderStatus, error) {
 	config := new(ExoscaleMachineProviderStatus)
 	if providerStatus != nil {
 		if err := yaml.Unmarshal(providerStatus.Raw, config); err != nil {

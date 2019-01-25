@@ -32,7 +32,8 @@ type ExoscaleClusterProviderSpec struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// SecurityGroup is the name of firewalling security group.
-	SecurityGroup string `json:"securityGroup"`
+	MasterSecurityGroup string `json:"masterSecurityGroup"`
+	NodeSecurityGroup   string `json:"nodeSecurityGroup"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

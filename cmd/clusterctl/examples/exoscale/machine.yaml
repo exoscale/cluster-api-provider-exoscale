@@ -14,8 +14,6 @@ items:
         template: "Linux Ubuntu 18.04 LTS 64-bit"
         type: medium
         disk: 50
-        sshKey: id_rsa_cluster_api
-        securityGroup: cluster-api
     versions:
       kubelet: 1.12.5
       controlPlane: 1.12.5

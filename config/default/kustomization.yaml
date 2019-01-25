@@ -12,7 +12,7 @@ resources:
 - ../rbac/rbac_role.yaml
 - ../rbac/rbac_role_binding.yaml
 - ../manager/namespace.yaml
-- ../manager/manager.yaml
+#- ../manager/manager.yaml
 
 secretGenerator:
 - commands:
@@ -23,7 +23,7 @@ secretGenerator:
   type: Opaque
 
 patchesStrategicMerge:
-- manager_image_patch.yaml
+#- manager_image_patch.yaml
 
 patchesJson6902:
 - target:

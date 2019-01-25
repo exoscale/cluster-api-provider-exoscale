@@ -45,7 +45,7 @@ type ExoscaleMachineProviderStatus struct {
 	SSHPrivateKey string         `json:"sshPrivateKey"`
 	TemplateID    *egoscale.UUID `json:"templateID"`
 	User          string         `json:"user"`
-	ZoneID        *egoscale.UUID `json:"zone"`
+	ZoneID        *egoscale.UUID `json:"zoneID"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -54,7 +54,7 @@ func init() {
 	SchemeBuilder.Register(&ExoscaleMachineProviderStatus{})
 }
 
-//MachineStatusFromProviderStatus return machine provider status from provider status custom resources (/config/crds)
+// MachineStatusFromProviderStatus return machine provider specs from machine provider custom resources (/config/crds)
 func MachineStatusFromProviderStatus(providerStatus *runtime.RawExtension) (*ExoscaleMachineProviderStatus, error) {
 	config := new(ExoscaleMachineProviderStatus)
 	if providerStatus != nil {

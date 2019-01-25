@@ -25,11 +25,14 @@ spec:
             submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds'
           type: string
         masterSecurityGroup:
-          description: SecurityGroup is the name of firewalling security group.
+          description: MasterSecurityGroup is the name of master firewalling security
+            group.
           type: string
         metadata:
           type: object
         nodeSecurityGroup:
+          description: NodeSecurityGroup is the name of nodes firewalling security
+            group.
           type: string
       required:
       - masterSecurityGroup

@@ -135,34 +135,24 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		cleanSSHKey(exoClient, keyPairs.Name)
 		return fmt.Errorf("exoscale failed to DeployVirtualMachine %v", err)
 	}
-
 	vm := resp.(*egoscale.VirtualMachine)
 
 	klog.Infof("Deployed instance: %q, IP: %s, password: %q", vm.Name, vm.IP().String(), vm.Password)
 
-	klog.Infof("Bootstrapping Kubernetes cluster (can take up to several minutes):")
+	klog.Infof("Provisioning (can take up to several minutes):")
 
-	sshClient, err := exossh.NewSSHClient(
-		vm.IP().String(),
-		username,
-		keyPairs.PrivateKey,
-	)
+	machineSet := machineConfig.ObjectMeta.Labels["set"]
+	switch machineSet {
+	case "master":
+		err = masterProvisioning(vm, username, keyPairs.PrivateKey)
+	case "node":
+		// register a new worker
+	default:
+		err = fmt.Errorf(`invalide machine set: %q expected "master" or "node" only`, machineSet)
+	}
 	if err != nil {
 		cleanSSHKey(exoClient, keyPairs.Name)
-		return fmt.Errorf("unable to initialize SSH client: %s", err)
-	}
-
-	// XXX KubernetesVersion should be coming from the MachineSpec
-	// https://godoc.org/sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1#MachineVersionInfo
-	if err := bootstrapExokubeCluster(sshClient, kubeCluster{
-		Name:              cluster.Name,
-		KubernetesVersion: "1.12.5",
-		CalicoVersion:     kubeCalicoVersion,
-		DockerVersion:     kubeDockerVersion,
-		Address:           vm.IP().String(),
-	}, false); err != nil {
-		cleanSSHKey(exoClient, keyPairs.Name)
-		return fmt.Errorf("cluster bootstrap failed: %s", err)
+		return err
 	}
 
 	klog.Infof("Machine %q provisioning success!", machine.Name)
@@ -204,6 +194,30 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return fmt.Errorf("failed to update machine resources: %s", err)
 	}
 
+	return nil
+}
+
+func masterProvisioning(vm *egoscale.VirtualMachine, username, privateKey string) error {
+	sshClient, err := exossh.NewSSHClient(
+		vm.IP().String(),
+		username,
+		privateKey,
+	)
+	if err != nil {
+		return fmt.Errorf("unable to initialize SSH client: %s", err)
+	}
+
+	// XXX KubernetesVersion should be coming from the MachineSpec
+	// https://godoc.org/sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1#MachineVersionInfo
+	if err := bootstrapExokubeCluster(sshClient, kubeCluster{
+		Name:              vm.Name,
+		KubernetesVersion: "1.12.5",
+		CalicoVersion:     kubeCalicoVersion,
+		DockerVersion:     kubeDockerVersion,
+		Address:           vm.IP().String(),
+	}, false); err != nil {
+		return fmt.Errorf("cluster bootstrap failed: %s", err)
+	}
 	return nil
 }
 

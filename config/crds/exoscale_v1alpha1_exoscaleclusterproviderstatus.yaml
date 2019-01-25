@@ -24,12 +24,15 @@ spec:
             object represents. Servers may infer this from the endpoint the client
             submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds'
           type: string
+        masterSecurityGroupID:
+          type: object
         metadata:
           type: object
-        securityGroupID:
+        nodeSecurityGroupID:
           type: object
       required:
-      - securityGroupID
+      - masterSecurityGroupID
+      - nodeSecurityGroupID
   version: v1alpha1
 status:
   acceptedNames:

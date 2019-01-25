@@ -15,4 +15,5 @@ spec:
     value:
       apiVersion: "exoscale.cluster.k8s.io/v1alpha1"
       kind: "ExoscaleClusterProviderSpec"
-      securityGroup: kubernetes
+      masterSecurityGroup: master-kubernetes
+      nodeSecurityGroup: node-kubernetes

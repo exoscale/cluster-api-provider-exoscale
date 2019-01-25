@@ -66,8 +66,12 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
 	}
 
-	if clusterStatus.SecurityGroupID == nil {
-		return fmt.Errorf("empty cluster securityGroupID field. %#v", clusterStatus)
+	securityGroup := clusterStatus.MasterSecurityGroupID
+	if !isMasterNode(machineConfig) {
+		securityGroup = clusterStatus.NodeSecurityGroupID
+	}
+	if securityGroup == nil {
+		return fmt.Errorf("empty masterSecurityGroupID or nodeSecurityGroupID field. %#v", clusterStatus)
 	}
 
 	exoClient, err := exoclient.Client()
@@ -126,7 +130,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		TemplateID:        template.ID,
 		RootDiskSize:      machineConfig.Disk,
 		KeyPair:           sshKeyName,
-		SecurityGroupIDs:  []egoscale.UUID{*clusterStatus.SecurityGroupID},
+		SecurityGroupIDs:  []egoscale.UUID{*securityGroup},
 		ServiceOfferingID: serviceOffering.ID,
 	}
 
@@ -195,6 +199,10 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	}
 
 	return nil
+}
+
+func isMasterNode(machineSpec *exoscalev1.ExoscaleMachineProviderSpec) bool {
+	return machineSpec.ObjectMeta.Labels["set"] == "master"
 }
 
 func masterProvisioning(vm *egoscale.VirtualMachine, username, privateKey string) error {

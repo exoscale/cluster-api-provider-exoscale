@@ -24,13 +24,19 @@ spec:
             object represents. Servers may infer this from the endpoint the client
             submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds'
           type: string
+        masterSecurityGroup:
+          description: MasterSecurityGroup is the name of master firewalling security
+            group.
+          type: string
         metadata:
           type: object
-        securityGroup:
-          description: SecurityGroup is the name of firewalling security group.
+        nodeSecurityGroup:
+          description: NodeSecurityGroup is the name of nodes firewalling security
+            group.
           type: string
       required:
-      - securityGroup
+      - masterSecurityGroup
+      - nodeSecurityGroup
   version: v1alpha1
 status:
   acceptedNames:

@@ -172,6 +172,21 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 
 	klog.Infof("Machine %q provisioning success!", machine.Name)
 
+	// XXX annotations should be replaced by the proper NodeRef
+	// https://github.com/kubernetes-sigs/cluster-api/blob/3b5183805f4dbf859d39a2600b268192a8191950/cmd/clusterctl/clusterdeployer/clusterclient/clusterclient.go#L579-L581
+	annotations := machine.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+	annotations[exoscalev1.ExoscaleIPAnnotationKey] = vm.IP().String()
+	machine.SetAnnotations(annotations)
+
+	machineClient := a.machinesGetter.Machines(machine.Namespace)
+	newMachine, err := machineClient.Update(machine)
+	if err != nil {
+		return err
+	}
+
 	machineStatus = &exoscalev1.ExoscaleMachineProviderStatus{
 		metav1.TypeMeta{
 			Kind:       "ExoscaleMachineProviderStatus",
@@ -189,29 +204,15 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		vm.ZoneID,
 	}
 
-	if err := a.updateResources(machineStatus, machine); err != nil {
+	if err := a.updateResources(newMachine, machineStatus); err != nil {
 		cleanSSHKey(exoClient, keyPairs.Name)
 		return fmt.Errorf("failed to update machine resources: %s", err)
-	}
-
-	// XXX annotations should be replaced by the proper NodeRef
-	// https://github.com/kubernetes-sigs/cluster-api/blob/3b5183805f4dbf859d39a2600b268192a8191950/cmd/clusterctl/clusterdeployer/clusterclient/clusterclient.go#L579-L581
-	annotations := machine.GetAnnotations()
-	if annotations == nil {
-		annotations = make(map[string]string)
-	}
-	annotations[exoscalev1.ExoscaleIPAnnotationKey] = vm.IP().String()
-	machine.SetAnnotations(annotations)
-
-	machineClient := a.machinesGetter.Machines(machine.Namespace)
-	if _, err := machineClient.Update(machine); err != nil {
-		return err
 	}
 
 	return nil
 }
 
-func (a *Actuator) updateResources(machineStatus *exoscalev1.ExoscaleMachineProviderStatus, machine *clusterv1.Machine) error {
+func (a *Actuator) updateResources(machine *clusterv1.Machine, machineStatus *exoscalev1.ExoscaleMachineProviderStatus) error {
 	rawStatus, err := json.Marshal(machineStatus)
 	if err != nil {
 		return err

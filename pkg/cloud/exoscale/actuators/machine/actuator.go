@@ -17,11 +17,11 @@ limitations under the License.
 package machine
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"time"
 
 	"github.com/exoscale/egoscale"
@@ -311,12 +311,14 @@ func (*Actuator) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (
 		return "", errors.New("could not get IP")
 	}
 
+	println("IPIPIPIPIPIPIP:", machineStatus.IP.String(), ":IPIPIPIPIP")
+
 	return machineStatus.IP.String(), nil
 }
 
 // GetKubeConfig gets a kubeconfig from the master.
 func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Machine) (string, error) {
-	klog.Infof("Getting IP of machine %v for cluster %v.", master.Name, cluster.Name)
+	klog.Infof("Getting Kubeconfig of the machine %v for cluster %v.", master.Name, cluster.Name)
 
 	machineStatus, err := exoscalev1.MachineSpecFromMachineStatus(master.Status.ProviderStatus)
 	if err != nil {
@@ -328,14 +330,10 @@ func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Mac
 		return "", fmt.Errorf("unable to initialize SSH client: %s", err)
 	}
 
-	var stdout, stderr io.Writer
-
-	if err := sshclient.RunCommand("sudo cat /etc/kubernetes/admin.conf", stdout, stderr); err != nil {
+	var buf bytes.Buffer
+	if err := sshclient.RunCommand("sudo cat /etc/kubernetes/admin.conf", &buf, nil); err != nil {
 		return "", fmt.Errorf("Provisionner exoscale GetKubeConfig() failed to run ssh cmd: %v", err)
 	}
 
-	kubeconfig := fmt.Sprint(stdout)
-	println("KKKKKKK:", kubeconfig, ":KKKKKKK")
-
-	return kubeconfig, nil
+	return buf.String(), nil
 }

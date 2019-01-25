@@ -1,4 +1,5 @@
 items:
+#Master
 - apiVersion: "cluster.k8s.io/v1alpha1"
   kind: Machine
   metadata:
@@ -17,3 +18,20 @@ items:
     versions:
       kubelet: 1.12.5
       controlPlane: 1.12.5
+- apiVersion: "cluster.k8s.io/v1alpha1"
+  kind: Machine
+  metadata:
+    generateName: my-exoscale-node-
+    labels:
+      set: node
+  spec:
+    providerSpec:
+      value:
+        apiVersion: exoscale.cluster.k8s.io/v1alpha1
+        kind: ExoscaleMachineProviderSpec
+        zone: de-fra-1
+        template: "Linux Ubuntu 18.04 LTS 64-bit"
+        type: medium
+        disk: 50
+    versions:
+      kubelet: 1.12.5

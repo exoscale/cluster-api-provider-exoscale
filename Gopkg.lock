@@ -37,12 +37,12 @@
   version = "v2.8.1"
 
 [[projects]]
-  branch = "deep-copy-into"
-  digest = "1:e597954611e33e74d0ce126f36ea55a3fad04372c9b95b01504b2904ca5aca96"
+  digest = "1:8f155c67fd2eecb04b83e7cb51582a1856e8778d10ff129d9e8fb539b92f8c65"
   name = "github.com/exoscale/egoscale"
   packages = ["."]
   pruneopts = "T"
-  revision = "c0d468b181d4583628c459adbbf708b2e0a1eacc"
+  revision = "b46f1ae49796d08cacae537ba1e2599bf7d750f2"
+  version = "v0.13.3"
 
 [[projects]]
   digest = "1:2cd7915ab26ede7d95b8749e6b1f933f1c6d5398030684e6505940a10f31cfda"

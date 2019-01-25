@@ -126,6 +126,10 @@ func (in *ExoscaleMachineProviderStatus) DeepCopyInto(out *ExoscaleMachineProvid
 		in, out := &in.TemplateID, &out.TemplateID
 		*out = (*in).DeepCopy()
 	}
+	if in.ZoneID != nil {
+		in, out := &in.ZoneID, &out.ZoneID
+		*out = (*in).DeepCopy()
+	}
 	return
 }
 

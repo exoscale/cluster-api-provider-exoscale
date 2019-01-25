@@ -30,7 +30,7 @@ export EXOSCALE_COMPUTE_ENDPOINT=https://api.exoscale.com/compute
 Run the `clusterctl` command.
 
 ```console
-% go run cmd/clusterctl/main.go create cluster \
+% go run cmd/clusterctl/main.go create cluster -v 9 \
         --provider exoscale \
         -m cmd/clusterctl/examples/exoscale/machine.yaml \
         -c cmd/clusterctl/examples/exoscale/cluster.yaml \
@@ -69,5 +69,5 @@ Same as above.
 ```
 
 ```console
-% go run cmd/manager/main.go
+% go run cmd/manager/main.go -v 9
 ```

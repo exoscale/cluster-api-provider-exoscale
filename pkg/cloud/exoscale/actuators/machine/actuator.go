@@ -24,14 +24,12 @@ import (
 	"io"
 	"time"
 
-	ssh "sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/actuators/ssh"
-
 	"github.com/exoscale/egoscale"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	exoscalev1 "sigs.k8s.io/cluster-api-provider-exoscale/pkg/apis/exoscale/v1alpha1"
+	exossh "sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/actuators/ssh"
 	exoclient "sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/client"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	client "sigs.k8s.io/cluster-api/pkg/client/clientset_generated/clientset/typed/cluster/v1alpha1"
@@ -118,7 +116,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 
 	sshKeyName := machine.Name + "_id_rsa"
 
-	keyPairs, err := ssh.CreateSSHKey(ctx, exoClient, sshKeyName)
+	keyPairs, err := exossh.CreateSSHKey(ctx, exoClient, sshKeyName)
 	if err != nil {
 		r := err.(*egoscale.ErrorResponse)
 		if r.ErrorCode != egoscale.ParamError && r.CSErrorCode != egoscale.InvalidParameterValueException {
@@ -149,7 +147,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 
 	klog.Infof("Bootstrapping Kubernetes cluster (can take up to several minutes):")
 
-	sshClient, err := ssh.NewSSHClient(
+	sshClient, err := exossh.NewSSHClient(
 		vm.IP().String(),
 		username,
 		keyPairs.PrivateKey,
@@ -175,55 +173,42 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	klog.Infof("Machine %q provisioning success!", machine.Name)
 
 	machineStatus = &exoscalev1.ExoscaleMachineProviderStatus{
-		TypeMeta: metav1.TypeMeta{
+		metav1.TypeMeta{
 			Kind:       "ExoscaleMachineProviderStatus",
 			APIVersion: "exoscale.cluster.k8s.io/v1alpha1",
 		},
-		ObjectMeta: metav1.ObjectMeta{
+		metav1.ObjectMeta{
 			CreationTimestamp: metav1.Time{time.Now()},
 		},
-		ID:              vm.ID,
-		User:            username,
-		Disk:            machineConfig.Disk,
-		SSHPrivateKey:   keyPairs.PrivateKey,
-		SSHKeyName:      keyPairs.Name,
-		SecurityGroupID: vm.SecurityGroup[0].ID.String(),
-		Zone:            vm.ZoneName,
-		TemplateID:      vm.TemplateID,
-		IP:              *vm.IP(),
+		vm.ID,
+		*vm.IP(),
+		keyPairs.Name,
+		keyPairs.PrivateKey,
+		vm.TemplateID,
+		username,
+		vm.ZoneID,
 	}
-	machineStatus.Name = vm.Name
-
-	if machineStatus.Annotations == nil {
-		machineStatus.Annotations = map[string]string{}
-	}
-	//machineStatus.Annotations[exoscalev1.ExoscaleIPAnnotationKey] = vm.IP().String()
-
-	a.updateMachineAnnotation(machine, exoscalev1.ExoscaleIPAnnotationKey, vm.IP().String())
 
 	if err := a.updateResources(machineStatus, machine); err != nil {
 		cleanSSHKey(exoClient, keyPairs.Name)
 		return fmt.Errorf("failed to update machine resources: %s", err)
 	}
 
-	return nil
-}
-
-// updateMachineAnnotation updates the `annotation` on the given `machine` with
-// `content`.
-func (a *Actuator) updateMachineAnnotation(machine *clusterv1.Machine, annotation string, content string) {
-	// Get the annotations
+	// XXX annotations should be replaced by the proper NodeRef
+	// https://github.com/kubernetes-sigs/cluster-api/blob/3b5183805f4dbf859d39a2600b268192a8191950/cmd/clusterctl/clusterdeployer/clusterclient/clusterclient.go#L579-L581
 	annotations := machine.GetAnnotations()
-
 	if annotations == nil {
-		annotations = map[string]string{}
+		annotations = make(map[string]string)
+	}
+	annotations[exoscalev1.ExoscaleIPAnnotationKey] = vm.IP().String()
+	machine.SetAnnotations(annotations)
+
+	machineClient := a.machinesGetter.Machines(machine.Namespace)
+	if _, err := machineClient.Update(machine); err != nil {
+		return err
 	}
 
-	// Set our annotation to the given content.
-	annotations[annotation] = content
-
-	// Update the machine object with these annotations
-	machine.SetAnnotations(annotations)
+	return nil
 }
 
 func (a *Actuator) updateResources(machineStatus *exoscalev1.ExoscaleMachineProviderStatus, machine *clusterv1.Machine) error {
@@ -342,7 +327,7 @@ func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Mac
 		return "", fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
 	}
 
-	sshclient, err := ssh.NewSSHClient(machineStatus.IP.String(), machineStatus.User, machineStatus.SSHPrivateKey)
+	sshclient, err := exossh.NewSSHClient(machineStatus.IP.String(), machineStatus.User, machineStatus.SSHPrivateKey)
 	if err != nil {
 		return "", fmt.Errorf("unable to initialize SSH client: %s", err)
 	}

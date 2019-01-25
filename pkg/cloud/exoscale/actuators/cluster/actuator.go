@@ -97,8 +97,10 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 
 		_, err = exoClient.Request(egoscale.AuthorizeSecurityGroupIngress{
 			SecurityGroupID: sgID,
-			CIDRList:        []egoscale.CIDR{*egoscale.MustParseCIDR("0.0.0.0/0")},
-			Protocol:        "ALL",
+			CIDRList: []egoscale.CIDR{
+				*egoscale.MustParseCIDR("0.0.0.0/0"),
+				*egoscale.MustParseCIDR("::/0"),
+			},
 		})
 		if err != nil {
 			return fmt.Errorf("error creating or updating security group rule: %v", err)

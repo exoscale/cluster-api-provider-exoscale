@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Kubernetes Authors.
+Copyright 2019 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,27 +17,11 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"github.com/exoscale/egoscale"
+	yaml "github.com/ghodss/yaml"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	runtime "k8s.io/apimachinery/pkg/runtime"
 )
-
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
-// ExoscaleClusterProviderStatusSpec defines the desired state of ExoscaleClusterProviderStatus
-type ExoscaleClusterProviderStatusSpec struct {
-	Zone   string `json:"zone"`
-	SSHKey string `json:"sshkey"`
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-}
-
-// ExoscaleClusterProviderStatusStatus defines the observed state of ExoscaleClusterProviderStatus
-type ExoscaleClusterProviderStatusStatus struct {
-	Zone   string `json:"zone"`
-	SSHKey string `json:"sshkey"`
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-}
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -48,19 +32,22 @@ type ExoscaleClusterProviderStatus struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   ExoscaleClusterProviderStatusSpec   `json:"spec,omitempty"`
-	Status ExoscaleClusterProviderStatusStatus `json:"status,omitempty"`
+	SecurityGroupID *egoscale.UUID `json:"securityGroupID"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ExoscaleClusterProviderStatusList contains a list of ExoscaleClusterProviderStatus
-type ExoscaleClusterProviderStatusList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []ExoscaleClusterProviderStatus `json:"items"`
+func init() {
+	SchemeBuilder.Register(&ExoscaleClusterProviderStatus{})
 }
 
-func init() {
-	SchemeBuilder.Register(&ExoscaleClusterProviderStatus{}, &ExoscaleClusterProviderStatusList{})
+// ClusterStatusFromProviderStatus return cluster provider specs from cluster provider custom resources (/config/crds)
+func ClusterStatusFromProviderStatus(providerStatus *runtime.RawExtension) (*ExoscaleClusterProviderStatus, error) {
+	config := new(ExoscaleClusterProviderStatus)
+	if providerStatus != nil {
+		if err := yaml.Unmarshal(providerStatus.Raw, config); err != nil {
+			return nil, err
+		}
+	}
+	return config, nil
 }

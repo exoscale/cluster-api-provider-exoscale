@@ -1,13 +1,17 @@
-
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+PREFIX = exoscale
+NAME = cluster-api-provider-exoscale-controller
+TAG ?= latest
+IMG = ${PREFIX}/${NAME}:${TAG}
+
 
 all: test manager clusterctl
 
 # Run tests
 test: generate fmt vet manifests
-	go test ./pkg/... ./cmd/... -coverprofile cover.out
-
+	go test -v -coverprofile cover.out \
+		./pkg/... \
+		./cmd/...
 
 # Build clusterctl binary
 clusterctl: generate fmt vet
@@ -21,17 +25,12 @@ manager: generate fmt vet
 run: generate fmt vet
 	go run ./cmd/manager/main.go
 
-# Install CRDs into a cluster
-install: manifests
-	kubectl apply -f config/crds
-
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: manifests
-	cat provider-components.yaml | kubectl apply -f -
+	kubectl apply -f provider-components.yaml
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests:
-	go run vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go crd
 	kustomize build config/default/ > provider-components.yaml
 	echo "---" >> provider-components.yaml
 	kustomize build vendor/sigs.k8s.io/cluster-api/config/default/ >> provider-components.yaml
@@ -46,10 +45,12 @@ vet:
 
 # Generate code
 generate:
+	go run vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go crd
+	go run vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go rbac
 	go generate ./pkg/... ./cmd/...
 
 # Build the docker image
-docker-build: test
+docker-build:
 	docker build . -t ${IMG}
 	@echo "updating kustomize image patch file for manager resource"
 	sed -i'' -e 's@image: .*@image: '"${IMG}"'@' ./config/default/manager_image_patch.yaml

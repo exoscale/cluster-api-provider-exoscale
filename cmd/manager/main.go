@@ -19,8 +19,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
 
+	"k8s.io/klog"
 	"sigs.k8s.io/cluster-api-provider-exoscale/pkg/apis"
 	"sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/actuators/cluster"
 	"sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/actuators/machine"
@@ -31,31 +31,36 @@ import (
 	capimachine "sigs.k8s.io/cluster-api/pkg/controller/machine"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
 )
 
+// initLogs is a temporary hack to enable proper logging until upstream dependencies
+// are migrated to fully utilize klog instead of glog.
+func initLogs() {
+	flag.Set("logtostderr", "true") // nolint: errcheck
+	flags := flag.NewFlagSet("klog", flag.ExitOnError)
+	klog.InitFlags(flags)
+	flags.Set("alsologtostderr", "true") // nolint: errcheck
+	flags.Set("v", "3")                  // nolint: errcheck
+	flag.Parse()
+}
+
 func main() {
+	initLogs()
 	cfg := config.GetConfigOrDie()
 	if cfg == nil {
 		panic(fmt.Errorf("GetConfigOrDie didn't die"))
 	}
 
-	flag.Parse()
-	log := logf.Log.WithName("exoscale-controller-manager")
-	logf.SetLogger(logf.ZapLogger(false))
-	entryLog := log.WithName("entrypoint")
-
 	// Setup a Manager
 	mgr, err := manager.New(cfg, manager.Options{})
 	if err != nil {
-		entryLog.Error(err, "unable to set up overall controller manager")
-		os.Exit(1)
+		klog.Fatalf("unable to set up overall controller manager: %v", err)
 	}
 
 	cs, err := clientset.NewForConfig(cfg)
 	if err != nil {
-		panic(err)
+		klog.Fatalf("unable to create client from configuration: %v", err)
 	}
 
 	clusterActuator, err := cluster.NewActuator(cluster.ActuatorParams{
@@ -69,26 +74,29 @@ func main() {
 		MachinesGetter: cs.ClusterV1alpha1(),
 	})
 	if err != nil {
-		panic(err)
+		klog.Fatal(err)
 	}
 
 	// Register our cluster deployer (the interface is in clusterctl and we define the Deployer interface on the actuator)
 	common.RegisterClusterProvisioner("exoscale", clusterActuator)
 
 	if err := apis.AddToScheme(mgr.GetScheme()); err != nil {
-		panic(err)
+		klog.Fatal(err)
 	}
 
 	if err := clusterapis.AddToScheme(mgr.GetScheme()); err != nil {
-		panic(err)
+		klog.Fatal(err)
 	}
 
-	capimachine.AddWithActuator(mgr, machineActuator)
+	if err := capimachine.AddWithActuator(mgr, machineActuator); err != nil {
+		klog.Fatal(err)
+	}
 
-	capicluster.AddWithActuator(mgr, clusterActuator)
+	if err := capicluster.AddWithActuator(mgr, clusterActuator); err != nil {
+		klog.Fatal(err)
+	}
 
 	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
-		entryLog.Error(err, "unable to run manager")
-		os.Exit(1)
+		klog.Fatalf("unable to run manager: %v", err)
 	}
 }

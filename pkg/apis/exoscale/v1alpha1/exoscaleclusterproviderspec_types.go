@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Kubernetes Authors.
+Copyright 2019 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,23 +17,10 @@ limitations under the License.
 package v1alpha1
 
 import (
+	yaml "github.com/ghodss/yaml"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 )
-
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
-// ExoscaleClusterProviderSpecSpec defines the desired state of ExoscaleClusterProviderSpec
-type ExoscaleClusterProviderSpecSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-}
-
-// ExoscaleClusterProviderSpecStatus defines the observed state of ExoscaleClusterProviderSpec
-type ExoscaleClusterProviderSpecStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-}
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -44,19 +31,21 @@ type ExoscaleClusterProviderSpec struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   ExoscaleClusterProviderSpecSpec   `json:"spec,omitempty"`
-	Status ExoscaleClusterProviderSpecStatus `json:"status,omitempty"`
+	// SecurityGroup is the name of firewalling security group.
+	SecurityGroup string `json:"securityGroup"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// ExoscaleClusterProviderSpecList contains a list of ExoscaleClusterProviderSpec
-type ExoscaleClusterProviderSpecList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []ExoscaleClusterProviderSpec `json:"items"`
+func init() {
+	SchemeBuilder.Register(&ExoscaleClusterProviderSpec{})
 }
 
-func init() {
-	SchemeBuilder.Register(&ExoscaleClusterProviderSpec{}, &ExoscaleClusterProviderSpecList{})
+//ClusterSpecFromProviderSpec return cluster provider specs (e.g cluster.yml)
+func ClusterSpecFromProviderSpec(providerConfig clusterv1.ProviderSpec) (*ExoscaleClusterProviderSpec, error) {
+	config := new(ExoscaleClusterProviderSpec)
+	if err := yaml.Unmarshal(providerConfig.Value.Raw, config); err != nil {
+		return nil, err
+	}
+	return config, nil
 }

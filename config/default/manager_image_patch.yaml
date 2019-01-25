@@ -1,12 +1,11 @@
-apiVersion: apps/v1
-kind: StatefulSet
+apiVersion: apps/v1beta1
+kind: Deployment
 metadata:
-  name: controller-manager
-  namespace: system
+  name: controllers
 spec:
   template:
     spec:
       containers:
       # Change the value of image field below to your controller image URL
-      - image: pierro777/cluster-api-provider-exoscale
-        name: manager
+      - name: exoscale-controller
+        imagePullPolicy: Never

@@ -66,11 +66,6 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
 	}
 
-	machineStatus, err := exoscalev1.MachineSpecFromMachineStatus(machine.Status.ProviderStatus)
-	if err != nil {
-		return fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
-	}
-
 	if clusterStatus.SecurityGroupID == nil {
 		return fmt.Errorf("empty cluster securityGroupID field. %#v", clusterStatus)
 	}
@@ -187,21 +182,21 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return err
 	}
 
-	machineStatus = &exoscalev1.ExoscaleMachineProviderStatus{
-		metav1.TypeMeta{
+	machineStatus := &exoscalev1.ExoscaleMachineProviderStatus{
+		TypeMeta: metav1.TypeMeta{
 			Kind:       "ExoscaleMachineProviderStatus",
 			APIVersion: "exoscale.cluster.k8s.io/v1alpha1",
 		},
-		metav1.ObjectMeta{
-			CreationTimestamp: metav1.Time{time.Now()},
+		ObjectMeta: metav1.ObjectMeta{
+			CreationTimestamp: metav1.Time{Time: time.Now()},
 		},
-		vm.ID,
-		*vm.IP(),
-		keyPairs.Name,
-		keyPairs.PrivateKey,
-		vm.TemplateID,
-		username,
-		vm.ZoneID,
+		ID:            vm.ID,
+		IP:            *vm.IP(),
+		SSHKeyName:    keyPairs.Name,
+		SSHPrivateKey: keyPairs.PrivateKey,
+		TemplateID:    vm.TemplateID,
+		User:          username,
+		ZoneID:        vm.ZoneID,
 	}
 
 	if err := a.updateResources(newMachine, machineStatus); err != nil {

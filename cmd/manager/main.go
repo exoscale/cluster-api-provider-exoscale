@@ -37,11 +37,11 @@ import (
 // initLogs is a temporary hack to enable proper logging until upstream dependencies
 // are migrated to fully utilize klog instead of glog.
 func initLogs() {
-	flag.Set("logtostderr", "true")
+	flag.Set("logtostderr", "true") // nolint: errcheck
 	flags := flag.NewFlagSet("klog", flag.ExitOnError)
 	klog.InitFlags(flags)
-	flags.Set("alsologtostderr", "true")
-	flags.Set("v", "3")
+	flags.Set("alsologtostderr", "true") // nolint: errcheck
+	flags.Set("v", "3")                  // nolint: errcheck
 	flag.Parse()
 }
 
@@ -88,9 +88,13 @@ func main() {
 		klog.Fatal(err)
 	}
 
-	capimachine.AddWithActuator(mgr, machineActuator)
+	if err := capimachine.AddWithActuator(mgr, machineActuator); err != nil {
+		klog.Fatal(err)
+	}
 
-	capicluster.AddWithActuator(mgr, clusterActuator)
+	if err := capicluster.AddWithActuator(mgr, clusterActuator); err != nil {
+		klog.Fatal(err)
+	}
 
 	if err := mgr.Start(signals.SetupSignalHandler()); err != nil {
 		klog.Fatalf("unable to run manager: %v", err)

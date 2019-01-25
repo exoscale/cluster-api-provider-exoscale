@@ -112,14 +112,14 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 
 	// Put the data into the "Status"
 	clusterStatus = &exoscalev1.ExoscaleClusterProviderStatus{
-		metav1.TypeMeta{
+		TypeMeta: metav1.TypeMeta{
 			Kind:       "ExoscaleClusterProviderStatus",
 			APIVersion: "exoscale.cluster.k8s.io/v1alpha1",
 		},
-		metav1.ObjectMeta{
-			CreationTimestamp: metav1.Time{time.Now()},
+		ObjectMeta: metav1.ObjectMeta{
+			CreationTimestamp: metav1.Time{Time: time.Now()},
 		},
-		sgID,
+		SecurityGroupID: sgID,
 	}
 
 	if err := a.updateResources(clusterStatus, cluster); err != nil {

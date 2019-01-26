@@ -56,6 +56,16 @@ func (c *SSHClient) RunCommand(cmd string, stdout, stderr io.Writer) error {
 	return nil
 }
 
+//QuickCommand run quick command over ssh and get result as string
+func (c *SSHClient) QuickCommand(command string) (string, error) {
+	var buf bytes.Buffer
+
+	if err := c.RunCommand(command, &buf, nil); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
+}
+
 //Scp like scp command
 func (c *SSHClient) Scp(src, dst string) error {
 	var buf bytes.Buffer

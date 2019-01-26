@@ -24,8 +24,8 @@ type kubeBootstrapStep struct {
 	command string
 }
 
-// kubeBootstrapSteps represents a k8s instance bootstrap steps
-var kubeBootstrapSteps = []kubeBootstrapStep{
+// provisioningSteps represents an instance provisioning steps for k8s
+var provisioningSteps = []kubeBootstrapStep{
 	{
 		name: "Instance system upgrade",
 		command: `\
@@ -143,6 +143,50 @@ sudo kubectl --kubeconfig=/etc/kubernetes/admin.conf apply \
 		-f https://docs.projectcalico.org/v{{ .CalicoVersion }}/getting-started/kubernetes/installation/hosted/etcd.yaml
 sudo kubectl --kubeconfig=/etc/kubernetes/admin.conf apply \
 		-f https://docs.projectcalico.org/v{{ .CalicoVersion }}/getting-started/kubernetes/installation/hosted/calico.yaml`,
+	}, {
+		name: "Kubernetes cluster node join",
+		command: `\
+set -xe
+
+sudo kubeadm init \
+	--pod-network-cidr=192.168.0.0/16 \
+	--kubernetes-version "{{ .KubernetesVersion }}"
+sudo kubectl --kubeconfig=/etc/kubernetes/admin.conf taint nodes --all node-role.kubernetes.io/master-
+sudo kubectl --kubeconfig=/etc/kubernetes/admin.conf apply \
+		-f https://docs.projectcalico.org/v{{ .CalicoVersion }}/getting-started/kubernetes/installation/hosted/etcd.yaml
+sudo kubectl --kubeconfig=/etc/kubernetes/admin.conf apply \
+		-f https://docs.projectcalico.org/v{{ .CalicoVersion }}/getting-started/kubernetes/installation/hosted/calico.yaml`,
+	},
+}
+
+// masterBootstapSteps represents a k8s instance bootstrap steps
+var masterBootstapSteps = []kubeBootstrapStep{
+	{
+		name: "Kubernetes cluster node initialization",
+		command: `\
+set -xe
+
+sudo kubeadm init \
+	--pod-network-cidr=192.168.0.0/16 \
+	--kubernetes-version "{{ .KubernetesVersion }}"
+sudo kubectl --kubeconfig=/etc/kubernetes/admin.conf taint nodes --all node-role.kubernetes.io/master-
+sudo kubectl --kubeconfig=/etc/kubernetes/admin.conf apply \
+		-f https://docs.projectcalico.org/v{{ .CalicoVersion }}/getting-started/kubernetes/installation/hosted/etcd.yaml
+sudo kubectl --kubeconfig=/etc/kubernetes/admin.conf apply \
+		-f https://docs.projectcalico.org/v{{ .CalicoVersion }}/getting-started/kubernetes/installation/hosted/calico.yaml`,
+	},
+}
+
+// nodeJoinSteps represents a k8s node join steps
+var nodeJoinSteps = []kubeBootstrapStep{
+	{
+		name: "Kubernetes cluster node initialization",
+		command: `\
+set -xe
+
+sudo kubeadm join \
+	--token {{ .Token }} {{ .MasterIP }}:{{ .MasterPort }} \
+	--discovery-token-ca-cert-hash sha256:{{ .Sha256Hash }}`,
 	},
 }
 
@@ -152,10 +196,19 @@ type kubeCluster struct {
 	DockerVersion     string
 	CalicoVersion     string
 	Address           string
+	Token             string
+	MasterIP          string
+	MasterPort        string
+	Sha256Hash        string
 }
 
-func bootstrapExokubeCluster(sshClient *ssh.SSHClient, cluster kubeCluster, debug bool) error {
-	for _, step := range kubeBootstrapSteps {
+func bootstrapCluster(sshClient *ssh.SSHClient, cluster kubeCluster, master, debug bool) error {
+	if master {
+		provisioningSteps = append(provisioningSteps, masterBootstapSteps...)
+	} else {
+		provisioningSteps = append(provisioningSteps, nodeJoinSteps...)
+	}
+	for _, step := range provisioningSteps {
 		var (
 			stdout, stderr io.Writer
 			cmd            bytes.Buffer

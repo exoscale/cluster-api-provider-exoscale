@@ -17,7 +17,6 @@ limitations under the License.
 package cluster
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"time"
@@ -311,10 +310,10 @@ func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Mac
 		return "", fmt.Errorf("unable to initialize SSH client: %s", err)
 	}
 
-	var buf bytes.Buffer
-	if err := sshclient.RunCommand("sudo cat /etc/kubernetes/admin.conf", &buf, nil); err != nil {
+	res, err := sshclient.QuickCommand("sudo cat /etc/kubernetes/admin.conf")
+	if err != nil {
 		return "", fmt.Errorf("Provisionner exoscale GetKubeConfig() failed to run ssh cmd: %v", err)
 	}
 
-	return buf.String(), nil
+	return res, nil
 }

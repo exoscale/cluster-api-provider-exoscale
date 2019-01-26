@@ -150,7 +150,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	case "master":
 		err = masterProvisioning(vm, username, keyPairs.PrivateKey)
 	case "node":
-		// register a new worker
+		err = nodeProvisioning(vm, username, keyPairs.PrivateKey)
 	default:
 		err = fmt.Errorf(`invalide machine set: %q expected "master" or "node" only`, machineSet)
 	}
@@ -201,34 +201,6 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	return nil
 }
 
-func isMasterNode(machineSpec *exoscalev1.ExoscaleMachineProviderSpec) bool {
-	return machineSpec.ObjectMeta.Labels["set"] == "master"
-}
-
-func masterProvisioning(vm *egoscale.VirtualMachine, username, privateKey string) error {
-	sshClient, err := exossh.NewSSHClient(
-		vm.IP().String(),
-		username,
-		privateKey,
-	)
-	if err != nil {
-		return fmt.Errorf("unable to initialize SSH client: %s", err)
-	}
-
-	// XXX KubernetesVersion should be coming from the MachineSpec
-	// https://godoc.org/sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1#MachineVersionInfo
-	if err := bootstrapExokubeCluster(sshClient, kubeCluster{
-		Name:              vm.Name,
-		KubernetesVersion: "1.12.5",
-		CalicoVersion:     kubeCalicoVersion,
-		DockerVersion:     kubeDockerVersion,
-		Address:           vm.IP().String(),
-	}, false); err != nil {
-		return fmt.Errorf("cluster bootstrap failed: %s", err)
-	}
-	return nil
-}
-
 func (a *Actuator) updateResources(machine *clusterv1.Machine, machineStatus *exoscalev1.ExoscaleMachineProviderStatus) error {
 	rawStatus, err := json.Marshal(machineStatus)
 	if err != nil {
@@ -246,6 +218,61 @@ func (a *Actuator) updateResources(machine *clusterv1.Machine, machineStatus *ex
 	}
 
 	return nil
+}
+
+func isMasterNode(machineSpec *exoscalev1.ExoscaleMachineProviderSpec) bool {
+	return machineSpec.ObjectMeta.Labels["set"] == "master"
+}
+
+func masterProvisioning(vm *egoscale.VirtualMachine, username, privateKey string) error {
+	sshClient, err := exossh.NewSSHClient(
+		vm.IP().String(),
+		username,
+		privateKey,
+	)
+	if err != nil {
+		return fmt.Errorf("unable to initialize SSH client: %s", err)
+	}
+
+	// XXX KubernetesVersion should be coming from the MachineSpec
+	// https://godoc.org/sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1#MachineVersionInfo
+	if err := bootstrapCluster(sshClient, kubeCluster{
+		Name:              vm.Name,
+		KubernetesVersion: "1.12.5",
+		CalicoVersion:     kubeCalicoVersion,
+		DockerVersion:     kubeDockerVersion,
+		Address:           vm.IP().String(),
+	}, true, false); err != nil {
+		return fmt.Errorf("cluster bootstrap failed: %s", err)
+	}
+	return nil
+}
+
+func nodeProvisioning(vm *egoscale.VirtualMachine, username, privateKey string) error {
+	// sshClient, err := exossh.NewSSHClient(
+	// 	vm.IP().String(),
+	// 	username,
+	// 	privateKey,
+	// )
+	// if err != nil {
+	// 	return fmt.Errorf("unable to initialize SSH client: %s", err)
+	// }
+
+	// // XXX KubernetesVersion should be coming from the MachineSpec
+	// // https://godoc.org/sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1#MachineVersionInfo
+	// if err := bootstrapCluster(sshClient, kubeCluster{
+	// 	Name:              vm.Name,
+	// 	KubernetesVersion: "1.12.5",
+	// 	CalicoVersion:     kubeCalicoVersion,
+	// 	DockerVersion:     kubeDockerVersion,
+	// 	Address:           vm.IP().String(),
+	// }, false, false); err != nil {
+	// 	return fmt.Errorf("cluster bootstrap failed: %s", err)
+	// }
+	// return nil
+
+	return fmt.Errorf("Provisioning node not implemented yet")
+
 }
 
 func cleanSSHKey(exoClient *egoscale.Client, sshKeyName string) {

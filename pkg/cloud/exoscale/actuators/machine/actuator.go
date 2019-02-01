@@ -24,12 +24,20 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
+
 	"github.com/exoscale/egoscale"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/tools/clientcmd"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/klog"
+
 	exoscalev1 "sigs.k8s.io/cluster-api-provider-exoscale/pkg/apis/exoscale/v1alpha1"
 	exossh "sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/actuators/ssh"
+	tokens "sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/actuators/tokens"
 	exoclient "sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/client"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	client "sigs.k8s.io/cluster-api/pkg/client/clientset_generated/clientset/typed/cluster/v1alpha1"
@@ -67,7 +75,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	}
 
 	securityGroup := clusterStatus.MasterSecurityGroupID
-	if !isMasterNode(machineConfig) {
+	if !isMasterNode(machine) {
 		securityGroup = clusterStatus.NodeSecurityGroupID
 	}
 	if securityGroup == nil {
@@ -124,6 +132,8 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return fmt.Errorf("an SSH key with that name %q already exists, please choose a different name", sshKeyName)
 	}
 
+	println("MACHINESET.LABEL:", machineConfig.ObjectMeta.Labels["set"])
+
 	req := egoscale.DeployVirtualMachine{
 		Name:              machine.Name,
 		ZoneID:            zone.ID,
@@ -145,12 +155,12 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 
 	klog.Infof("Provisioning (can take up to several minutes):")
 
-	machineSet := machineConfig.ObjectMeta.Labels["set"]
+	machineSet := machine.ObjectMeta.Labels["set"]
 	switch machineSet {
 	case "master":
-		err = masterProvisioning(vm, username, keyPairs.PrivateKey)
+		err = masterProvisioning(machine, vm, username, keyPairs.PrivateKey)
 	case "node":
-		err = nodeProvisioning(vm, username, keyPairs.PrivateKey)
+		err = a.nodeProvisioning(cluster, machine, vm, username, keyPairs.PrivateKey)
 	default:
 		err = fmt.Errorf(`invalide machine set: %q expected "master" or "node" only`, machineSet)
 	}
@@ -220,11 +230,11 @@ func (a *Actuator) updateResources(machine *clusterv1.Machine, machineStatus *ex
 	return nil
 }
 
-func isMasterNode(machineSpec *exoscalev1.ExoscaleMachineProviderSpec) bool {
-	return machineSpec.ObjectMeta.Labels["set"] == "master"
+func isMasterNode(machine *clusterv1.Machine) bool {
+	return machine.ObjectMeta.Labels["set"] == "master"
 }
 
-func masterProvisioning(vm *egoscale.VirtualMachine, username, privateKey string) error {
+func masterProvisioning(machine *clusterv1.Machine, vm *egoscale.VirtualMachine, username, privateKey string) error {
 	sshClient, err := exossh.NewSSHClient(
 		vm.IP().String(),
 		username,
@@ -234,44 +244,67 @@ func masterProvisioning(vm *egoscale.VirtualMachine, username, privateKey string
 		return fmt.Errorf("unable to initialize SSH client: %s", err)
 	}
 
-	// XXX KubernetesVersion should be coming from the MachineSpec
-	// https://godoc.org/sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1#MachineVersionInfo
-	if err := bootstrapCluster(sshClient, kubeCluster{
+	test := kubeCluster{
 		Name:              vm.Name,
-		KubernetesVersion: "1.12.5",
+		KubernetesVersion: machine.Spec.Versions.ControlPlane,
 		CalicoVersion:     kubeCalicoVersion,
 		DockerVersion:     kubeDockerVersion,
 		Address:           vm.IP().String(),
-	}, true, false); err != nil {
+	}
+
+	spew.Dump(test)
+
+	if err := bootstrapCluster(sshClient, test, true, false); err != nil {
 		return fmt.Errorf("cluster bootstrap failed: %s", err)
 	}
 	return nil
 }
 
-func nodeProvisioning(vm *egoscale.VirtualMachine, username, privateKey string) error {
-	// sshClient, err := exossh.NewSSHClient(
-	// 	vm.IP().String(),
-	// 	username,
-	// 	privateKey,
-	// )
-	// if err != nil {
-	// 	return fmt.Errorf("unable to initialize SSH client: %s", err)
-	// }
+func (a *Actuator) nodeProvisioning(cluster *clusterv1.Cluster, machine *clusterv1.Machine, vm *egoscale.VirtualMachine, username, privateKey string) error {
 
-	// // XXX KubernetesVersion should be coming from the MachineSpec
-	// // https://godoc.org/sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1#MachineVersionInfo
-	// if err := bootstrapCluster(sshClient, kubeCluster{
-	// 	Name:              vm.Name,
-	// 	KubernetesVersion: "1.12.5",
-	// 	CalicoVersion:     kubeCalicoVersion,
-	// 	DockerVersion:     kubeDockerVersion,
-	// 	Address:           vm.IP().String(),
-	// }, false, false); err != nil {
-	// 	return fmt.Errorf("cluster bootstrap failed: %s", err)
-	// }
-	// return nil
+	bootstrapToken, err := a.getNodeJoinToken(cluster, machine)
+	if err != nil {
+		return fmt.Errorf("failed to obtain token for node %q to join cluster %q: %v", machine.Name, cluster.Name, err)
+	}
 
-	return fmt.Errorf("Provisioning node not implemented yet")
+	println("BOOTSTRAPTOKEN!!!!!!!!!:", bootstrapToken)
+
+	sshClient, err := exossh.NewSSHClient(
+		vm.IP().String(),
+		username,
+		privateKey,
+	)
+	if err != nil {
+		return fmt.Errorf("unable to initialize SSH client: %s", err)
+	}
+
+	//-XXX to be removed
+	machineClient := a.machinesGetter.Machines(machine.Namespace)
+	machineList, err := machineClient.List(v1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed get machine list: %v", err)
+	}
+	controlPlaneList := a.getControlPlaneMachines(machineList)
+	//XXX work only with 1 macter at the moment
+	controlPlaneMachine := controlPlaneList[0]
+	controlPlaneIP, err := a.GetIP(cluster, controlPlaneMachine)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve controlplane (GetIP): %v", err)
+	}
+	//-XXX
+
+	if err := bootstrapCluster(sshClient, kubeCluster{
+		Name:              vm.Name,
+		KubernetesVersion: machine.Spec.Versions.Kubelet,
+		DockerVersion:     kubeDockerVersion,
+		Address:           vm.IP().String(),
+		MasterIP:          controlPlaneIP,
+		Token:             bootstrapToken,
+		MasterPort:        "6433",
+	}, false, false); err != nil {
+		return fmt.Errorf("node bootstrap failed: %s", err)
+	}
+	return nil
 
 }
 
@@ -379,4 +412,60 @@ func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Mac
 	}
 
 	return buf.String(), nil
+}
+
+func (a *Actuator) getControlPlaneMachines(machineList *clusterv1.MachineList) []*clusterv1.Machine {
+	var cpm []*clusterv1.Machine
+	for _, m := range machineList.Items {
+		if m.Spec.Versions.ControlPlane != "" {
+			cpm = append(cpm, m.DeepCopy())
+		}
+	}
+	return cpm
+}
+
+func (a *Actuator) getNodeJoinToken(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (string, error) {
+
+	machineClient := a.machinesGetter.Machines(machine.Namespace)
+
+	machineList, err := machineClient.List(v1.ListOptions{})
+	if err != nil {
+		return "", fmt.Errorf("failed get machine list: %v", err)
+	}
+
+	controlPlaneList := a.getControlPlaneMachines(machineList)
+
+	//XXX work only with 1 macter at the moment
+	controlPlaneMachine := controlPlaneList[0]
+	controlPlaneIP, err := a.GetIP(cluster, controlPlaneMachine)
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve controlplane (GetIP): %v", err)
+	}
+
+	controlPlaneURL := fmt.Sprintf("https://%s:6443", controlPlaneIP)
+
+	kubeConfig, err := a.GetKubeConfig(cluster, controlPlaneMachine)
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve kubeconfig for cluster %q: %v", cluster.Name, err)
+	}
+
+	clientConfig, err := clientcmd.BuildConfigFromKubeconfigGetter(controlPlaneURL, func() (*clientcmdapi.Config, error) {
+		return clientcmd.Load([]byte(kubeConfig))
+	})
+
+	if err != nil {
+		return "", fmt.Errorf("failed to get client config for cluster at %q: %v", controlPlaneURL, err)
+	}
+
+	coreClient, err := corev1.NewForConfig(clientConfig)
+	if err != nil {
+		return "", fmt.Errorf("failed to initialize new corev1 client: %v", err)
+	}
+
+	bootstrapToken, err := tokens.NewBootstrap(coreClient, 10*time.Minute)
+	if err != nil {
+		return "", fmt.Errorf("failed to create new bootstrap token: %v", err)
+	}
+
+	return bootstrapToken, nil
 }

@@ -814,6 +814,17 @@
   version = "kubernetes-1.12.5"
 
 [[projects]]
+  branch = "master"
+  digest = "1:9a198d1201ea1fb571e696b2e3ad4bbdf37c45ca1f3acf70955cf64e4b06056f"
+  name = "k8s.io/cluster-bootstrap"
+  packages = [
+    "token/api",
+    "token/util",
+  ]
+  pruneopts = "T"
+  revision = "c71be3de9a2f32e792bdcaf95d5a705c4188dcec"
+
+[[projects]]
   digest = "1:26b81b5e76e3f84ea5140da4f74649576e470f79091d2ef8e0d1b5000bc636ca"
   name = "k8s.io/code-generator"
   packages = [
@@ -988,12 +999,20 @@
     "github.com/golang/glog",
     "github.com/onsi/ginkgo",
     "github.com/onsi/gomega",
+    "github.com/pkg/errors",
     "golang.org/x/crypto/ssh",
+    "k8s.io/api/core/v1",
     "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1",
     "k8s.io/apimachinery/pkg/apis/meta/v1",
     "k8s.io/apimachinery/pkg/runtime",
     "k8s.io/apimachinery/pkg/runtime/schema",
     "k8s.io/apimachinery/pkg/util/json",
+    "k8s.io/apimachinery/pkg/util/wait",
+    "k8s.io/client-go/kubernetes/typed/core/v1",
+    "k8s.io/client-go/tools/clientcmd",
+    "k8s.io/client-go/tools/clientcmd/api",
+    "k8s.io/cluster-bootstrap/token/api",
+    "k8s.io/cluster-bootstrap/token/util",
     "k8s.io/code-generator/cmd/client-gen",
     "k8s.io/code-generator/cmd/deepcopy-gen",
     "k8s.io/klog",

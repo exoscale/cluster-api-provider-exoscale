@@ -130,40 +130,14 @@ sudo -E DEBIAN_FRONTEND=noninteractive apt-get install -y kubelet=${PKG_VERSION}
 	kubeadm=${PKG_VERSION} \
 	kubectl=${PKG_VERSION}
 sudo apt-mark hold kubelet kubeadm kubectl`,
-	}, {
-		name: "Kubernetes cluster node initialization",
-		command: `\
-set -xe
-
-sudo kubeadm init \
-	--pod-network-cidr=192.168.0.0/16 \
-	--kubernetes-version "{{ .KubernetesVersion }}"
-sudo kubectl --kubeconfig=/etc/kubernetes/admin.conf taint nodes --all node-role.kubernetes.io/master-
-sudo kubectl --kubeconfig=/etc/kubernetes/admin.conf apply \
-		-f https://docs.projectcalico.org/v{{ .CalicoVersion }}/getting-started/kubernetes/installation/hosted/etcd.yaml
-sudo kubectl --kubeconfig=/etc/kubernetes/admin.conf apply \
-		-f https://docs.projectcalico.org/v{{ .CalicoVersion }}/getting-started/kubernetes/installation/hosted/calico.yaml`,
-	}, {
-		name: "Kubernetes cluster node join",
-		command: `\
-set -xe
-
-sudo kubeadm init \
-	--pod-network-cidr=192.168.0.0/16 \
-	--kubernetes-version "{{ .KubernetesVersion }}"
-sudo kubectl --kubeconfig=/etc/kubernetes/admin.conf taint nodes --all node-role.kubernetes.io/master-
-sudo kubectl --kubeconfig=/etc/kubernetes/admin.conf apply \
-		-f https://docs.projectcalico.org/v{{ .CalicoVersion }}/getting-started/kubernetes/installation/hosted/etcd.yaml
-sudo kubectl --kubeconfig=/etc/kubernetes/admin.conf apply \
-		-f https://docs.projectcalico.org/v{{ .CalicoVersion }}/getting-started/kubernetes/installation/hosted/calico.yaml`,
 	},
 }
 
 // masterBootstapSteps represents a k8s instance bootstrap steps
-var masterBootstapSteps = []kubeBootstrapStep{
-	{
-		name: "Kubernetes cluster node initialization",
-		command: `\
+var masterBootstapSteps = kubeBootstrapStep{
+
+	name: "Kubernetes cluster node initialization",
+	command: `\
 set -xe
 
 sudo kubeadm init \
@@ -174,20 +148,17 @@ sudo kubectl --kubeconfig=/etc/kubernetes/admin.conf apply \
 		-f https://docs.projectcalico.org/v{{ .CalicoVersion }}/getting-started/kubernetes/installation/hosted/etcd.yaml
 sudo kubectl --kubeconfig=/etc/kubernetes/admin.conf apply \
 		-f https://docs.projectcalico.org/v{{ .CalicoVersion }}/getting-started/kubernetes/installation/hosted/calico.yaml`,
-	},
 }
 
 // nodeJoinSteps represents a k8s node join steps
-var nodeJoinSteps = []kubeBootstrapStep{
-	{
-		name: "Kubernetes cluster node initialization",
-		command: `\
+var nodeJoinSteps = kubeBootstrapStep{
+	name: "Kubernetes cluster node initialization",
+	command: `\
 set -xe
 
 sudo kubeadm join \
 	--token {{ .Token }} {{ .MasterIP }}:{{ .MasterPort }} \
-	--discovery-token-ca-cert-hash sha256:{{ .Sha256Hash }}`,
-	},
+	--discovery-token-unsafe-skip-ca-verification`,
 }
 
 type kubeCluster struct {
@@ -204,9 +175,9 @@ type kubeCluster struct {
 
 func bootstrapCluster(sshClient *ssh.SSHClient, cluster kubeCluster, master, debug bool) error {
 	if master {
-		provisioningSteps = append(provisioningSteps, masterBootstapSteps...)
+		provisioningSteps = append(provisioningSteps, masterBootstapSteps)
 	} else {
-		provisioningSteps = append(provisioningSteps, nodeJoinSteps...)
+		provisioningSteps = append(provisioningSteps, nodeJoinSteps)
 	}
 	for _, step := range provisioningSteps {
 		var (

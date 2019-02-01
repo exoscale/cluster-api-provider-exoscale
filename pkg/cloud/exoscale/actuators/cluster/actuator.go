@@ -152,6 +152,16 @@ func createMasterFirewallRules(self string) []egoscale.AuthorizeSecurityGroupIng
 	return []egoscale.AuthorizeSecurityGroupIngress{
 		egoscale.AuthorizeSecurityGroupIngress{
 			Protocol:  "TCP",
+			StartPort: 22,
+			EndPort:   22,
+			CIDRList: []egoscale.CIDR{
+				*egoscale.MustParseCIDR("0.0.0.0/0"),
+				*egoscale.MustParseCIDR("::/0"),
+			},
+			Description: "SSH",
+		},
+		egoscale.AuthorizeSecurityGroupIngress{
+			Protocol:  "TCP",
 			StartPort: 6443,
 			EndPort:   6443,
 			CIDRList: []egoscale.CIDR{
@@ -187,6 +197,16 @@ func createMasterFirewallRules(self string) []egoscale.AuthorizeSecurityGroupIng
 
 func createNodeFirewallRules(self, ingressSG string) []egoscale.AuthorizeSecurityGroupIngress {
 	return []egoscale.AuthorizeSecurityGroupIngress{
+		egoscale.AuthorizeSecurityGroupIngress{
+			Protocol:  "TCP",
+			StartPort: 22,
+			EndPort:   22,
+			CIDRList: []egoscale.CIDR{
+				*egoscale.MustParseCIDR("0.0.0.0/0"),
+				*egoscale.MustParseCIDR("::/0"),
+			},
+			Description: "SSH",
+		},
 		//XXX if you move Control plane from master sg in an other security group please update this rule
 		egoscale.AuthorizeSecurityGroupIngress{
 			Protocol:  "TCP",
@@ -297,7 +317,7 @@ func (*Actuator) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (
 }
 
 // GetKubeConfig gets a kubeconfig from the master.
-func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Machine) (string, error) {
+func (a *Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Machine) (string, error) {
 	klog.Infof("Getting Kubeconfig of the machine %v for cluster %v.", master.Name, cluster.Name)
 
 	machineStatus, err := exoscalev1.MachineStatusFromProviderStatus(master.Status.ProviderStatus)

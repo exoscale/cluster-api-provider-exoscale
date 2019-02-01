@@ -34,6 +34,7 @@ type ExoscaleClusterProviderStatus struct {
 
 	MasterSecurityGroupID *egoscale.UUID `json:"masterSecurityGroupID"`
 	NodeSecurityGroupID   *egoscale.UUID `json:"nodeSecurityGroupID"`
+	JoinToken             string         `json:"joinToken"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

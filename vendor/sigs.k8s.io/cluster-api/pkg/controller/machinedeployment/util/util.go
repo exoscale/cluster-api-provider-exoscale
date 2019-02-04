@@ -33,6 +33,7 @@ import (
 	intstrutil "k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/util/integer"
 	"k8s.io/klog"
+
 	"sigs.k8s.io/cluster-api/pkg/apis/cluster/common"
 	"sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 )
@@ -428,7 +429,7 @@ func FindNewMachineSet(deployment *v1alpha1.MachineDeployment, msList []*v1alpha
 //  - the second contains all old machine sets
 func FindOldMachineSets(deployment *v1alpha1.MachineDeployment, msList []*v1alpha1.MachineSet) ([]*v1alpha1.MachineSet, []*v1alpha1.MachineSet) {
 	var requiredMSs []*v1alpha1.MachineSet
-	allMSs := make([]*v1alpha1.MachineSet, 0, len(msList))
+	var allMSs []*v1alpha1.MachineSet
 	newMS := FindNewMachineSet(deployment, msList)
 	for _, ms := range msList {
 		// Filter out new machine set
@@ -523,7 +524,7 @@ func NewMSNewReplicas(deployment *v1alpha1.MachineDeployment, allMSs []*v1alpha1
 		// Scale up.
 		scaleUpCount := maxTotalMachines - currentMachineCount
 		// Do not exceed the number of desired replicas.
-		scaleUpCount = integer.Int32Min(scaleUpCount, *(deployment.Spec.Replicas)-*(newMS.Spec.Replicas))
+		scaleUpCount = int32(integer.Int32Min(scaleUpCount, *(deployment.Spec.Replicas)-*(newMS.Spec.Replicas)))
 		return *(newMS.Spec.Replicas) + scaleUpCount, nil
 	default:
 		// Check if we can scale up.
@@ -541,7 +542,7 @@ func NewMSNewReplicas(deployment *v1alpha1.MachineDeployment, allMSs []*v1alpha1
 		// Scale up.
 		scaleUpCount := maxTotalMachines - currentMachineCount
 		// Do not exceed the number of desired replicas.
-		scaleUpCount = integer.Int32Min(scaleUpCount, *(deployment.Spec.Replicas)-*(newMS.Spec.Replicas))
+		scaleUpCount = int32(integer.Int32Min(scaleUpCount, *(deployment.Spec.Replicas)-*(newMS.Spec.Replicas)))
 		return *(newMS.Spec.Replicas) + scaleUpCount, nil
 		// -- return 0, errors.Errorf("deployment type %v isn't supported", deployment.Spec.Strategy.Type)
 	}

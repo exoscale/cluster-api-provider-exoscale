@@ -21,7 +21,7 @@ import (
 	"sigs.k8s.io/cluster-api/cmd/clusterctl/clientcmd"
 )
 
-// Factory can create cluster clients.
+// Factory can create cluster clients
 type Factory interface {
 	NewClientFromKubeconfig(string) (Client, error)
 	NewCoreClientsetFromKubeconfigFile(string) (*kubernetes.Clientset, error)
@@ -30,17 +30,14 @@ type Factory interface {
 type clientFactory struct {
 }
 
-// NewFactory returns a new cluster client factory.
-func NewFactory() *clientFactory { // nolint
+func NewFactory() *clientFactory {
 	return &clientFactory{}
 }
 
-// NewClientFromKubeConfig returns a new Client from the Kubeconfig passed as argument.
 func (f *clientFactory) NewClientFromKubeconfig(kubeconfig string) (Client, error) {
 	return New(kubeconfig)
 }
 
-// NewCoreClientsetFromKubeconfigFile returns a new ClientSet from the Kubeconfig path passed as argument.
 func (f *clientFactory) NewCoreClientsetFromKubeconfigFile(kubeconfigPath string) (*kubernetes.Clientset, error) {
 	return clientcmd.NewCoreClientSetForDefaultSearchPath(kubeconfigPath, clientcmd.NewConfigOverrides())
 }

@@ -18,7 +18,6 @@ package machineset
 
 import (
 	"context"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/klog"

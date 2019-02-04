@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/integer"
 	"k8s.io/klog"
+
 	"sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	dutil "sigs.k8s.io/cluster-api/pkg/controller/machinedeployment/util"
 )
@@ -246,7 +247,7 @@ func (r *ReconcileMachineDeployment) scaleDownOldMachineSetsForRollingUpdate(all
 			continue
 		}
 		// Scale down.
-		scaleDownCount := integer.Int32Min(*(targetMS.Spec.Replicas), totalScaleDownCount-totalScaledDown)
+		scaleDownCount := int32(integer.Int32Min(*(targetMS.Spec.Replicas), totalScaleDownCount-totalScaledDown))
 		newReplicasCount := *(targetMS.Spec.Replicas) - scaleDownCount
 		if newReplicasCount > *(targetMS.Spec.Replicas) {
 			return totalScaledDown, errors.Errorf("when scaling down old MS, got invalid request to scale down %s/%s %d -> %d", targetMS.Namespace, targetMS.Name, *(targetMS.Spec.Replicas), newReplicasCount)

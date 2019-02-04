@@ -27,12 +27,8 @@ import (
 )
 
 const (
-	kindClusterName = "clusterapi"
-)
-
-var (
-	// ignoredOptions lists the options not supported by delete and kubeconfig-path.
-	ignoredOptions = []string{"config", "image", "retain"}
+	kubeconfigEnvVar = "KUBECONFIG"
+	kindClusterName  = "clusterapi"
 )
 
 type Kind struct {
@@ -66,8 +62,9 @@ var execFunc = func(args ...string) (string, error) {
 
 func (k *Kind) Create() error {
 	args := []string{"create", "cluster"}
-
-	args = k.appendOptions(args)
+	for _, opt := range k.options {
+		args = append(args, fmt.Sprintf("--%v", opt))
+	}
 
 	_, err := k.exec(args...)
 	return err
@@ -75,8 +72,9 @@ func (k *Kind) Create() error {
 
 func (k *Kind) Delete() error {
 	args := []string{"delete", "cluster"}
-
-	args = k.appendOptions(args, ignoredOptions...)
+	for _, opt := range k.options {
+		args = append(args, fmt.Sprintf("--%v", opt))
+	}
 
 	_, err := k.exec(args...)
 	return err
@@ -98,8 +96,9 @@ func (k *Kind) GetKubeconfig() (string, error) {
 
 func (k *Kind) getKubeConfigPath() (string, error) {
 	args := []string{"get", "kubeconfig-path"}
-
-	args = k.appendOptions(args, ignoredOptions...)
+	for _, opt := range k.options {
+		args = append(args, fmt.Sprintf("--%v", opt))
+	}
 
 	out, err := k.exec(args...)
 	if err != nil {
@@ -111,19 +110,4 @@ func (k *Kind) getKubeConfigPath() (string, error) {
 
 func (k *Kind) exec(args ...string) (string, error) {
 	return k.execFunc(args...)
-}
-
-// appendOptions enriches the args with all options but the ignored ones
-func (k *Kind) appendOptions(args []string, ignoredOptions ...string) []string {
-outer:
-	for _, opt := range k.options {
-		for _, ignoredOption := range ignoredOptions {
-			if strings.HasPrefix(opt, ignoredOption) {
-				continue outer
-			}
-		}
-		args = append(args, fmt.Sprintf("--%v", opt))
-	}
-
-	return args
 }

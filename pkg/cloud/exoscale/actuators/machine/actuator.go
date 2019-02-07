@@ -351,7 +351,12 @@ func (a *Actuator) Update(ctx context.Context, cluster *clusterv1.Cluster, machi
 
 	fmt.Printf("VVVVVVVV=%#v=VVVVVVVVVVV\n", machineStatus)
 
-	klog.Error("Updating a machine is not yet implemented")
+	klog.Infof("Updating a machine is not yet implemented")
+
+	if err := a.updateResources(machine, machineStatus); err != nil {
+		return fmt.Errorf("failed to update machine resources: %s", err)
+	}
+
 	return nil
 }
 

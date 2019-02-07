@@ -64,28 +64,29 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 		return fmt.Errorf("error loading cluster provider config: %v", err)
 	}
 
-	if clusterStatus.MasterSecurityGroupID != nil {
-		klog.Infof("using existing security group id %s", clusterStatus.MasterSecurityGroupID)
-		return nil
-	}
-	if clusterStatus.NodeSecurityGroupID != nil {
-		klog.Infof("using existing security group id %s", clusterStatus.NodeSecurityGroupID)
-		return nil
-	}
-
 	//XXX can be possible to authorize sg in each other
 	masterRules := createMasterFirewallRules(clusterSpec.MasterSecurityGroup)
 	nodeRules := createNodeFirewallRules(clusterSpec.NodeSecurityGroup, clusterSpec.MasterSecurityGroup)
 
-	masterSGID, err := checkSecurityGroup(clusterSpec.MasterSecurityGroup, masterRules)
-	if err != nil {
-		//XXX if fail clean sg and delete it
-		return err
+	masterSGID := clusterStatus.MasterSecurityGroupID
+	if clusterStatus.MasterSecurityGroupID == nil {
+		masterSGID, err = checkSecurityGroup(clusterSpec.MasterSecurityGroup, masterRules)
+		if err != nil {
+			//XXX if fail clean sg and delete it
+			return err
+		}
+	} else {
+		klog.Infof("using existing security group id %s", clusterStatus.MasterSecurityGroupID)
 	}
-	nodeSGID, err := checkSecurityGroup(clusterSpec.NodeSecurityGroup, nodeRules)
-	if err != nil {
-		//XXX if fail clean sg and delete it
-		return err
+	nodeSGID := clusterStatus.NodeSecurityGroupID
+	if clusterStatus.NodeSecurityGroupID == nil {
+		nodeSGID, err = checkSecurityGroup(clusterSpec.NodeSecurityGroup, nodeRules)
+		if err != nil {
+			//XXX if fail clean sg and delete it
+			return err
+		}
+	} else {
+		klog.Infof("using existing security group id %s", clusterStatus.NodeSecurityGroupID)
 	}
 
 	// Put the data into the "Status"
@@ -104,6 +105,7 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 	if err := a.updateResources(clusterStatus, cluster); err != nil {
 		return fmt.Errorf("error updating cluster resources: %v", err)
 	}
+	klog.Infof("reconcile cluster %q success", cluster.Name)
 
 	return nil
 }

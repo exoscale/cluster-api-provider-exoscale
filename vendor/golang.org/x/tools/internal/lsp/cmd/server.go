@@ -38,7 +38,10 @@ func (s *Server) DetailedHelp(f *flag.FlagSet) {
 	fmt.Fprint(f.Output(), `
 The server communicates using JSONRPC2 on stdin and stdout, and is intended to be run directly as
 a child of an editor process.
+
+gopls server flags are:
 `)
+	f.PrintDefaults()
 }
 
 // Run configures a server based on the flags, and then runs it.
@@ -98,7 +101,10 @@ func (s *Server) Run(ctx context.Context, args ...string) error {
 			msec := int(elapsed.Round(time.Millisecond) / time.Millisecond)
 			fmt.Fprintf(outx, " in %dms", msec)
 		}
-		params := string(*payload)
+		params := "null"
+		if payload != nil {
+			params = string(*payload)
+		}
 		if params == "null" {
 			params = "{}"
 		}

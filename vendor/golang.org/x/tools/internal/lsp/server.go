@@ -75,10 +75,19 @@ func (s *server) Initialize(ctx context.Context, params *protocol.InitializePara
 	s.snippetsSupported = params.Capabilities.TextDocument.Completion.CompletionItem.SnippetSupport
 	s.signatureHelpEnabled = true
 
-	rootPath, err := fromProtocolURI(*params.RootURI).Filename()
+	var rootURI protocol.DocumentURI
+	if params.RootURI != nil {
+		rootURI = *params.RootURI
+	}
+	sourceURI, err := fromProtocolURI(rootURI)
 	if err != nil {
 		return nil, err
 	}
+	rootPath, err := sourceURI.Filename()
+	if err != nil {
+		return nil, err
+	}
+
 	s.view = cache.NewView(&packages.Config{
 		Dir:     rootPath,
 		Mode:    packages.LoadSyntax,
@@ -180,12 +189,20 @@ func (s *server) DidSave(context.Context, *protocol.DidSaveTextDocumentParams) e
 }
 
 func (s *server) DidClose(ctx context.Context, params *protocol.DidCloseTextDocumentParams) error {
-	s.setContent(ctx, fromProtocolURI(params.TextDocument.URI), nil)
+	sourceURI, err := fromProtocolURI(params.TextDocument.URI)
+	if err != nil {
+		return err
+	}
+	s.setContent(ctx, sourceURI, nil)
 	return nil
 }
 
 func (s *server) Completion(ctx context.Context, params *protocol.CompletionParams) (*protocol.CompletionList, error) {
-	f, err := s.view.GetFile(ctx, fromProtocolURI(params.TextDocument.URI))
+	sourceURI, err := fromProtocolURI(params.TextDocument.URI)
+	if err != nil {
+		return nil, err
+	}
+	f, err := s.view.GetFile(ctx, sourceURI)
 	if err != nil {
 		return nil, err
 	}
@@ -209,7 +226,11 @@ func (s *server) CompletionResolve(context.Context, *protocol.CompletionItem) (*
 }
 
 func (s *server) Hover(ctx context.Context, params *protocol.TextDocumentPositionParams) (*protocol.Hover, error) {
-	f, err := s.view.GetFile(ctx, fromProtocolURI(params.TextDocument.URI))
+	sourceURI, err := fromProtocolURI(params.TextDocument.URI)
+	if err != nil {
+		return nil, err
+	}
+	f, err := s.view.GetFile(ctx, sourceURI)
 	if err != nil {
 		return nil, err
 	}
@@ -218,21 +239,30 @@ func (s *server) Hover(ctx context.Context, params *protocol.TextDocumentPositio
 		return nil, err
 	}
 	pos := fromProtocolPosition(tok, params.Position)
-	contents, rng, err := source.Hover(ctx, f, pos)
+	ident, err := source.Identifier(ctx, s.view, f, pos)
 	if err != nil {
 		return nil, err
 	}
+	content, err := ident.Hover(nil)
+	if err != nil {
+		return nil, err
+	}
+	markdown := "```go\n" + content + "\n```"
 	return &protocol.Hover{
 		Contents: protocol.MarkupContent{
 			Kind:  protocol.Markdown,
-			Value: contents,
+			Value: markdown,
 		},
-		Range: toProtocolRange(tok, rng),
+		Range: toProtocolRange(tok, ident.Range),
 	}, nil
 }
 
 func (s *server) SignatureHelp(ctx context.Context, params *protocol.TextDocumentPositionParams) (*protocol.SignatureHelp, error) {
-	f, err := s.view.GetFile(ctx, fromProtocolURI(params.TextDocument.URI))
+	sourceURI, err := fromProtocolURI(params.TextDocument.URI)
+	if err != nil {
+		return nil, err
+	}
+	f, err := s.view.GetFile(ctx, sourceURI)
 	if err != nil {
 		return nil, err
 	}
@@ -249,7 +279,11 @@ func (s *server) SignatureHelp(ctx context.Context, params *protocol.TextDocumen
 }
 
 func (s *server) Definition(ctx context.Context, params *protocol.TextDocumentPositionParams) ([]protocol.Location, error) {
-	f, err := s.view.GetFile(ctx, fromProtocolURI(params.TextDocument.URI))
+	sourceURI, err := fromProtocolURI(params.TextDocument.URI)
+	if err != nil {
+		return nil, err
+	}
+	f, err := s.view.GetFile(ctx, sourceURI)
 	if err != nil {
 		return nil, err
 	}
@@ -258,15 +292,19 @@ func (s *server) Definition(ctx context.Context, params *protocol.TextDocumentPo
 		return nil, err
 	}
 	pos := fromProtocolPosition(tok, params.Position)
-	r, err := source.Definition(ctx, s.view, f, pos)
+	ident, err := source.Identifier(ctx, s.view, f, pos)
 	if err != nil {
 		return nil, err
 	}
-	return []protocol.Location{toProtocolLocation(s.view.FileSet(), r)}, nil
+	return []protocol.Location{toProtocolLocation(s.view.FileSet(), ident.Declaration.Range)}, nil
 }
 
 func (s *server) TypeDefinition(ctx context.Context, params *protocol.TextDocumentPositionParams) ([]protocol.Location, error) {
-	f, err := s.view.GetFile(ctx, fromProtocolURI(params.TextDocument.URI))
+	sourceURI, err := fromProtocolURI(params.TextDocument.URI)
+	if err != nil {
+		return nil, err
+	}
+	f, err := s.view.GetFile(ctx, sourceURI)
 	if err != nil {
 		return nil, err
 	}
@@ -275,11 +313,11 @@ func (s *server) TypeDefinition(ctx context.Context, params *protocol.TextDocume
 		return nil, err
 	}
 	pos := fromProtocolPosition(tok, params.Position)
-	r, err := source.TypeDefinition(ctx, s.view, f, pos)
+	ident, err := source.Identifier(ctx, s.view, f, pos)
 	if err != nil {
 		return nil, err
 	}
-	return []protocol.Location{toProtocolLocation(s.view.FileSet(), r)}, nil
+	return []protocol.Location{toProtocolLocation(s.view.FileSet(), ident.Type.Range)}, nil
 }
 
 func (s *server) Implementation(context.Context, *protocol.TextDocumentPositionParams) ([]protocol.Location, error) {

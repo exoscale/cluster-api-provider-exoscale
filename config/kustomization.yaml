@@ -15,17 +15,17 @@ resources:
 - manager/manager.yaml
 
 secretGenerator:
-- name: controller-secrets
-  env: exoscale.ini
+- env: exoscale.ini
+  name: controller-secrets
   type: Opaque
 
 patchesStrategicMerge:
 - patch/manager_image.yaml
 
 patchesJson6902:
-- target:
+- path: patch/rbac_role_cluster.yaml
+  target:
     group: rbac.authorization.k8s.io
-    version: v1
     kind: ClusterRole
     name: manager-role
-  path: patch/rbac_role_cluster.yaml
+    version: v1

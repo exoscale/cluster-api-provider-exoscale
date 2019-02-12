@@ -22,4 +22,5 @@ bin
 *.swp
 *.swo
 *~
+cluster-api-components.yaml
 provider-components.yaml

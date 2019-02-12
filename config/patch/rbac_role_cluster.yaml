@@ -1,5 +1,6 @@
+---
 - op: add
-  path: /rules/-
+  path: "/rules/-"
   value:
     apiGroups:
     - cluster.k8s.io

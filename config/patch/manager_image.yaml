@@ -6,6 +6,5 @@ spec:
   template:
     spec:
       containers:
-      # Change the value of image field below to your controller image URL
       - name: exoscale-controller
-        imagePullPolicy: Never
+        image: greut/cluster-api-provider-exoscale-controller:latest

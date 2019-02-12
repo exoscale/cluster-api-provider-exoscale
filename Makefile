@@ -1,5 +1,5 @@
 # Image URL to use all building/pushing image targets
-PREFIX = exoscale
+PREFIX = greut
 NAME = cluster-api-provider-exoscale-controller
 TAG ?= latest
 IMG = ${PREFIX}/${NAME}:${TAG}
@@ -37,7 +37,7 @@ cluster-api-components.yaml:
 manifests: cluster-api-components.yaml
 	kustomize build config > provider-components.yaml
 	echo "---" >> provider-components.yaml
-	echo cluster-api-components.yaml >> provider-components.yaml
+	cat cluster-api-components.yaml >> provider-components.yaml
 
 # Run go fmt against code
 fmt:
@@ -57,7 +57,7 @@ generate:
 docker-build:
 	docker build . -t ${IMG}
 	@echo "updating kustomize image patch file for manager resource"
-	sed -i'' -e 's@image: .*@image: '"${IMG}"'@' ./config/default/manager_image_patch.yaml
+	sed -i'' -e 's@image: .*@image: '"${IMG}"'@' ./config/patch/manager_image.yaml
 
 # Push the docker image
 docker-push:

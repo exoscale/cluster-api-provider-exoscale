@@ -24,8 +24,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
-
 	"github.com/exoscale/egoscale"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -137,7 +135,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 			return fmt.Errorf("an SSH key with that name %q already exists, please choose a different name", sshKeyName)
 		}
 	*/
-	println("MACHINESET.LABEL:", machineConfig.ObjectMeta.Labels["set"])
+	println("MACHINESET.LABEL:", machine.ObjectMeta.Labels["set"])
 
 	req := egoscale.DeployVirtualMachine{
 		Name:              machine.Name,
@@ -163,18 +161,18 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	machineSet := machine.ObjectMeta.Labels["set"]
 	switch machineSet {
 	case "master":
-		err = masterProvisioning(machine, vm, username)
+		err = a.provisionMaster(machine, vm, username)
 	case "node":
-		err = a.nodeProvisioning(cluster, machine, vm, username)
+		err = a.provisionNode(cluster, machine, vm, username)
 	default:
 		err = fmt.Errorf(`invalide machine set: %q expected "master" or "node" only`, machineSet)
 	}
-	/*
-		if err != nil {
-			cleanSSHKey(exoClient, keyPairs.Name)
-			return err
-		}
-	*/
+
+	if err != nil {
+		//cleanSSHKey(exoClient, keyPairs.Name)
+		return err
+	}
+
 	klog.Infof("Machine %q provisioning success!", machine.Name)
 
 	// XXX annotations should be replaced by the proper NodeRef
@@ -184,6 +182,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		annotations = make(map[string]string)
 	}
 	annotations[exoscalev1.ExoscaleIPAnnotationKey] = vm.IP().String()
+	annotations[exoscalev1.ExoscaleUsernameAnnotationKey] = username
 	annotations[exoscalev1.ExoscalePasswordAnnotationKey] = vm.Password
 	machine.SetAnnotations(annotations)
 
@@ -240,74 +239,6 @@ func isMasterNode(machine *clusterv1.Machine) bool {
 	return machine.ObjectMeta.Labels["set"] == "master"
 }
 
-func masterProvisioning(machine *clusterv1.Machine, vm *egoscale.VirtualMachine, username string) error {
-	sshClient := exossh.NewSSHClient(
-		vm.IP().String(),
-		username,
-		vm.Password,
-	)
-
-	test := kubeCluster{
-		Name:              vm.Name,
-		KubernetesVersion: machine.Spec.Versions.ControlPlane,
-		CalicoVersion:     kubeCalicoVersion,
-		DockerVersion:     kubeDockerVersion,
-		Address:           vm.IP().String(),
-	}
-
-	spew.Dump(test)
-
-	if err := bootstrapCluster(sshClient, test, true, false); err != nil {
-		return fmt.Errorf("cluster bootstrap failed: %s", err)
-	}
-	return nil
-}
-
-func (a *Actuator) nodeProvisioning(cluster *clusterv1.Cluster, machine *clusterv1.Machine, vm *egoscale.VirtualMachine, username string) error {
-
-	bootstrapToken, err := a.getNodeJoinToken(cluster, machine)
-	if err != nil {
-		return fmt.Errorf("failed to obtain token for node %q to join cluster %q: %v", machine.Name, cluster.Name, err)
-	}
-
-	println("BOOTSTRAPTOKEN!!!!!!!!!:", bootstrapToken)
-
-	sshClient := exossh.NewSSHClient(
-		vm.IP().String(),
-		username,
-		vm.Password,
-	)
-
-	//-XXX to be removed
-	machineClient := a.machinesGetter.Machines(machine.Namespace)
-	machineList, err := machineClient.List(v1.ListOptions{})
-	if err != nil {
-		return fmt.Errorf("failed get machine list: %v", err)
-	}
-	controlPlaneList := a.getControlPlaneMachines(machineList)
-	//XXX work only with 1 macter at the moment
-	controlPlaneMachine := controlPlaneList[0]
-	controlPlaneIP, err := a.GetIP(cluster, controlPlaneMachine)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve controlplane (GetIP): %v", err)
-	}
-	//-XXX
-
-	if err := bootstrapCluster(sshClient, kubeCluster{
-		Name:              vm.Name,
-		KubernetesVersion: machine.Spec.Versions.Kubelet,
-		DockerVersion:     kubeDockerVersion,
-		Address:           vm.IP().String(),
-		MasterIP:          controlPlaneIP,
-		Token:             bootstrapToken,
-		MasterPort:        "6433",
-	}, false, false); err != nil {
-		return fmt.Errorf("node bootstrap failed: %s", err)
-	}
-	return nil
-
-}
-
 func cleanSSHKey(exoClient *egoscale.Client, sshKeyName string) {
 	_ = exoClient.Delete(egoscale.SSHKeyPair{Name: sshKeyName})
 }
@@ -344,19 +275,65 @@ func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machi
 
 // Update updates a machine and is invoked by the Machine Controller
 func (a *Actuator) Update(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
-	klog.Infof("Updating machine %v for cluster %v.", machine.Name, cluster.Name)
+	klog.V(1).Infof("Updating machine %v for cluster %v.", machine.Name, cluster.Name)
+	klog.Warningf("Updating a machine is not yet implemented")
 
 	machineStatus, err := exoscalev1.MachineStatusFromProviderStatus(machine.Status.ProviderStatus)
 	if err != nil {
-		return fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
+		return fmt.Errorf("Cannot unmarshal machine.Status.ProviderStatus field: %v", err)
 	}
 
-	fmt.Printf("VVVVVVVV=%#v=VVVVVVVVVVV\n", machineStatus)
+	if machineStatus == nil {
+		// redoing machine status...
 
-	klog.Infof("Updating a machine is not yet implemented")
+		exoClient, err := exoclient.Client()
+		if err != nil {
+			return err
+		}
 
-	if err := a.updateResources(machine, machineStatus); err != nil {
-		return fmt.Errorf("failed to update machine resources: %s", err)
+		resp, err := exoClient.GetWithContext(ctx, &egoscale.VirtualMachine{Name: machine.Name})
+		if err != nil {
+			return err
+		}
+
+		vm := resp.(*egoscale.VirtualMachine)
+
+		// dirty trick
+		annotations := machine.GetAnnotations()
+		if annotations == nil {
+			return errors.New("could not get the annotations")
+		}
+
+		password, ok := annotations[exoscalev1.ExoscalePasswordAnnotationKey]
+		if !ok {
+			return errors.New("could not get password from the annotations")
+		}
+		vm.Password = password
+
+		username, ok := annotations[exoscalev1.ExoscaleUsernameAnnotationKey]
+		if !ok {
+			return errors.New("could not get password from the annotations")
+		}
+
+		machineStatus := &exoscalev1.ExoscaleMachineProviderStatus{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "ExoscaleMachineProviderStatus",
+				APIVersion: "exoscale.cluster.k8s.io/v1alpha1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				CreationTimestamp: metav1.Time{Time: time.Now()},
+			},
+			ID:         vm.ID,
+			IP:         *vm.IP(),
+			TemplateID: vm.TemplateID,
+			User:       username,
+			Password:   vm.Password,
+			ZoneID:     vm.ZoneID,
+		}
+
+		if err := a.updateResources(machine, machineStatus); err != nil {
+			return fmt.Errorf("failed to update machine resources: %s", err)
+		}
 	}
 
 	return nil
@@ -389,14 +366,18 @@ func (a *Actuator) Exists(ctx context.Context, cluster *clusterv1.Cluster, machi
 
 // GetIP returns IP address of the machine in the cluster.
 func (*Actuator) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (string, error) {
-	klog.Infof("Getting IP of the machine %v for cluster %v.", machine.Name, cluster.Name)
+	klog.V(1).Infof("Getting IP of the machine %v for cluster %v.", machine.Name, cluster.Name)
 
 	annotations := machine.GetAnnotations()
 	if annotations == nil {
-		return "", errors.New("could not get IP")
+		return "", errors.New("could not get the annotations")
 	}
 
-	return annotations[exoscalev1.ExoscaleIPAnnotationKey], nil
+	ip, ok := annotations[exoscalev1.ExoscaleIPAnnotationKey]
+	if !ok {
+		return "", errors.New("could not get IP from the annotations")
+	}
+	return ip, nil
 }
 
 // GetKubeConfig gets a kubeconfig from the master.

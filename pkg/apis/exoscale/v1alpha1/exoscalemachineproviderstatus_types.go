@@ -30,6 +30,8 @@ const (
 	ExoscaleIPAnnotationKey = "exoscale-ip-address"
 	// ExoscalePasswordAnnotationKey represents the machine password (XXX this is bad)
 	ExoscalePasswordAnnotationKey = "exoscale-secret-password"
+	// ExoscaleUsernameAnnotationKey represents the machine username
+	ExoscaleUsernameAnnotationKey = "exoscale-username"
 )
 
 // +genclient

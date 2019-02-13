@@ -7,7 +7,11 @@ import (
 	"os"
 	"text/template"
 
+	"github.com/davecgh/go-spew/spew"
+	"github.com/exoscale/egoscale"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ssh "sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/actuators/ssh"
+	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 )
 
 const (
@@ -212,17 +216,73 @@ func bootstrapCluster(sshClient *ssh.SSHClient, cluster kubeCluster, master, deb
 		fmt.Printf("success!\n")
 	}
 
-	// for _, file := range []string{"ca.pem", "cert.pem", "key.pem"} {
-	// 	err := sshClient.scp("/etc/docker/"+file, path.Join(getKubeconfigPath(cluster.Name), "docker", file))
-	// 	if err != nil {
-	// 		return fmt.Errorf("unable to retrieve Docker host file %q: %s", file, err)
-	// 	}
-	// }
-
-	// err := sshClient.scp("/etc/kubernetes/admin.conf", path.Join(getKubeconfigPath(cluster.Name), "kubeconfig"))
-	// if err != nil {
-	// 	return fmt.Errorf("unable to retrieve Kubernetes cluster configuration: %s", err)
-	// }
-
 	return nil
+}
+
+func (*Actuator) provisionMaster(machine *clusterv1.Machine, vm *egoscale.VirtualMachine, username string) error {
+	sshClient := ssh.NewSSHClient(
+		vm.IP().String(),
+		username,
+		vm.Password,
+	)
+
+	test := kubeCluster{
+		Name:              vm.Name,
+		KubernetesVersion: machine.Spec.Versions.ControlPlane,
+		CalicoVersion:     kubeCalicoVersion,
+		DockerVersion:     kubeDockerVersion,
+		Address:           vm.IP().String(),
+	}
+
+	spew.Dump(test)
+
+	if err := bootstrapCluster(sshClient, test, true, false); err != nil {
+		return fmt.Errorf("cluster bootstrap failed: %s", err)
+	}
+	return nil
+}
+
+func (a *Actuator) provisionNode(cluster *clusterv1.Cluster, machine *clusterv1.Machine, vm *egoscale.VirtualMachine, username string) error {
+
+	bootstrapToken, err := a.getNodeJoinToken(cluster, machine)
+	if err != nil {
+		return fmt.Errorf("failed to obtain token for node %q to join cluster %q: %v", machine.Name, cluster.Name, err)
+	}
+
+	println("BOOTSTRAPTOKEN!!!!!!!!!:", bootstrapToken)
+
+	sshClient := ssh.NewSSHClient(
+		vm.IP().String(),
+		username,
+		vm.Password,
+	)
+
+	//-XXX to be removed
+	machineClient := a.machinesGetter.Machines(machine.Namespace)
+	machineList, err := machineClient.List(v1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed get machine list: %v", err)
+	}
+	controlPlaneList := a.getControlPlaneMachines(machineList)
+	//XXX work only with 1 macter at the moment
+	controlPlaneMachine := controlPlaneList[0]
+	controlPlaneIP, err := a.GetIP(cluster, controlPlaneMachine)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve controlplane (GetIP): %v", err)
+	}
+	//-XXX
+
+	if err := bootstrapCluster(sshClient, kubeCluster{
+		Name:              vm.Name,
+		KubernetesVersion: machine.Spec.Versions.Kubelet,
+		DockerVersion:     kubeDockerVersion,
+		Address:           vm.IP().String(),
+		MasterIP:          controlPlaneIP,
+		Token:             bootstrapToken,
+		MasterPort:        "6433",
+	}, false, false); err != nil {
+		return fmt.Errorf("node bootstrap failed: %s", err)
+	}
+	return nil
+
 }

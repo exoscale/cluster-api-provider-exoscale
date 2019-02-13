@@ -26,8 +26,10 @@ import (
 )
 
 const (
-	//ExoscaleIPAnnotationKey represent a machine ip
+	// ExoscaleIPAnnotationKey represents the machine IP address
 	ExoscaleIPAnnotationKey = "exoscale-ip-address"
+	// ExoscalePasswordAnnotationKey represents the machine password (XXX this is bad)
+	ExoscalePasswordAnnotationKey = "exoscale-secret-password"
 )
 
 // +genclient
@@ -39,13 +41,12 @@ type ExoscaleMachineProviderStatus struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	ID            *egoscale.UUID `json:"id"`
-	IP            net.IP         `json:"ip"`
-	SSHKeyName    string         `json:"sshKeyName"`
-	SSHPrivateKey string         `json:"sshPrivateKey"`
-	TemplateID    *egoscale.UUID `json:"templateID"`
-	User          string         `json:"user"`
-	ZoneID        *egoscale.UUID `json:"zoneID"`
+	ID         *egoscale.UUID `json:"id"`
+	IP         net.IP         `json:"ip"`
+	TemplateID *egoscale.UUID `json:"templateID"`
+	User       string         `json:"user"`
+	Password   string         `json:"password"`
+	ZoneID     *egoscale.UUID `json:"zoneID"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

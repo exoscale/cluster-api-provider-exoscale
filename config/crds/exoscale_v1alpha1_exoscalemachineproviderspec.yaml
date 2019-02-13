@@ -33,19 +33,19 @@ spec:
           type: string
         metadata:
           type: object
+        sshKey:
+          type: string
         template:
           type: string
         type:
-          type: string
-        user:
           type: string
         zone:
           type: string
       required:
       - disk
+      - sshKey
       - template
       - type
-      - user
       - zone
   version: v1alpha1
 status:

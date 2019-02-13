@@ -121,17 +121,22 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	}
 	serviceOffering := so.(*egoscale.ServiceOffering)
 
-	sshKeyName := machine.Name + "_id_rsa"
-
-	keyPairs, err := exossh.CreateSSHKey(ctx, exoClient, sshKeyName)
-	if err != nil {
-		r := err.(*egoscale.ErrorResponse)
-		if r.ErrorCode != egoscale.ParamError && r.CSErrorCode != egoscale.InvalidParameterValueException {
-			return err
-		}
-		return fmt.Errorf("an SSH key with that name %q already exists, please choose a different name", sshKeyName)
+	//sshKeyName := machine.Name + "_id_rsa"
+	sshKeyName := ""
+	if machineConfig.SSHKey != "" {
+		sshKeyName = machineConfig.SSHKey
 	}
 
+	/*
+		keyPairs, err := exossh.CreateSSHKey(ctx, exoClient, sshKeyName)
+		if err != nil {
+			r := err.(*egoscale.ErrorResponse)
+			if r.ErrorCode != egoscale.ParamError && r.CSErrorCode != egoscale.InvalidParameterValueException {
+				return err
+			}
+			return fmt.Errorf("an SSH key with that name %q already exists, please choose a different name", sshKeyName)
+		}
+	*/
 	println("MACHINESET.LABEL:", machineConfig.ObjectMeta.Labels["set"])
 
 	req := egoscale.DeployVirtualMachine{
@@ -139,14 +144,14 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		ZoneID:            zone.ID,
 		TemplateID:        template.ID,
 		RootDiskSize:      machineConfig.Disk,
-		KeyPair:           sshKeyName,
 		SecurityGroupIDs:  []egoscale.UUID{*securityGroup},
 		ServiceOfferingID: serviceOffering.ID,
+		KeyPair:           sshKeyName,
 	}
 
 	resp, err := exoClient.RequestWithContext(ctx, req)
 	if err != nil {
-		cleanSSHKey(exoClient, keyPairs.Name)
+		//cleanSSHKey(exoClient, keyPairs.Name)
 		return fmt.Errorf("exoscale failed to DeployVirtualMachine %v", err)
 	}
 	vm := resp.(*egoscale.VirtualMachine)
@@ -158,17 +163,18 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	machineSet := machine.ObjectMeta.Labels["set"]
 	switch machineSet {
 	case "master":
-		err = masterProvisioning(machine, vm, username, keyPairs.PrivateKey)
+		err = masterProvisioning(machine, vm, username)
 	case "node":
-		err = a.nodeProvisioning(cluster, machine, vm, username, keyPairs.PrivateKey)
+		err = a.nodeProvisioning(cluster, machine, vm, username)
 	default:
 		err = fmt.Errorf(`invalide machine set: %q expected "master" or "node" only`, machineSet)
 	}
-	if err != nil {
-		cleanSSHKey(exoClient, keyPairs.Name)
-		return err
-	}
-
+	/*
+		if err != nil {
+			cleanSSHKey(exoClient, keyPairs.Name)
+			return err
+		}
+	*/
 	klog.Infof("Machine %q provisioning success!", machine.Name)
 
 	// XXX annotations should be replaced by the proper NodeRef
@@ -178,6 +184,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		annotations = make(map[string]string)
 	}
 	annotations[exoscalev1.ExoscaleIPAnnotationKey] = vm.IP().String()
+	annotations[exoscalev1.ExoscalePasswordAnnotationKey] = vm.Password
 	machine.SetAnnotations(annotations)
 
 	machineClient := a.machinesGetter.Machines(machine.Namespace)
@@ -194,17 +201,16 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		ObjectMeta: metav1.ObjectMeta{
 			CreationTimestamp: metav1.Time{Time: time.Now()},
 		},
-		ID:            vm.ID,
-		IP:            *vm.IP(),
-		SSHKeyName:    keyPairs.Name,
-		SSHPrivateKey: keyPairs.PrivateKey,
-		TemplateID:    vm.TemplateID,
-		User:          username,
-		ZoneID:        vm.ZoneID,
+		ID:         vm.ID,
+		IP:         *vm.IP(),
+		TemplateID: vm.TemplateID,
+		User:       username,
+		Password:   vm.Password,
+		ZoneID:     vm.ZoneID,
 	}
 
 	if err := a.updateResources(newMachine, machineStatus); err != nil {
-		cleanSSHKey(exoClient, keyPairs.Name)
+		//cleanSSHKey(exoClient, keyPairs.Name)
 		return fmt.Errorf("failed to update machine resources: %s", err)
 	}
 
@@ -234,15 +240,12 @@ func isMasterNode(machine *clusterv1.Machine) bool {
 	return machine.ObjectMeta.Labels["set"] == "master"
 }
 
-func masterProvisioning(machine *clusterv1.Machine, vm *egoscale.VirtualMachine, username, privateKey string) error {
-	sshClient, err := exossh.NewSSHClient(
+func masterProvisioning(machine *clusterv1.Machine, vm *egoscale.VirtualMachine, username string) error {
+	sshClient := exossh.NewSSHClient(
 		vm.IP().String(),
 		username,
-		privateKey,
+		vm.Password,
 	)
-	if err != nil {
-		return fmt.Errorf("unable to initialize SSH client: %s", err)
-	}
 
 	test := kubeCluster{
 		Name:              vm.Name,
@@ -260,7 +263,7 @@ func masterProvisioning(machine *clusterv1.Machine, vm *egoscale.VirtualMachine,
 	return nil
 }
 
-func (a *Actuator) nodeProvisioning(cluster *clusterv1.Cluster, machine *clusterv1.Machine, vm *egoscale.VirtualMachine, username, privateKey string) error {
+func (a *Actuator) nodeProvisioning(cluster *clusterv1.Cluster, machine *clusterv1.Machine, vm *egoscale.VirtualMachine, username string) error {
 
 	bootstrapToken, err := a.getNodeJoinToken(cluster, machine)
 	if err != nil {
@@ -269,14 +272,11 @@ func (a *Actuator) nodeProvisioning(cluster *clusterv1.Cluster, machine *cluster
 
 	println("BOOTSTRAPTOKEN!!!!!!!!!:", bootstrapToken)
 
-	sshClient, err := exossh.NewSSHClient(
+	sshClient := exossh.NewSSHClient(
 		vm.IP().String(),
 		username,
-		privateKey,
+		vm.Password,
 	)
-	if err != nil {
-		return fmt.Errorf("unable to initialize SSH client: %s", err)
-	}
 
 	//-XXX to be removed
 	machineClient := a.machinesGetter.Machines(machine.Namespace)
@@ -331,9 +331,11 @@ func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return err
 	}
 
-	if err := exoClient.Delete(egoscale.SSHKeyPair{Name: machineStatus.SSHKeyName}); err != nil {
-		return fmt.Errorf("cannot delete machine SSH KEY: %v", err)
-	}
+	/*
+		if err := exoClient.Delete(egoscale.SSHKeyPair{Name: machineStatus.SSHKeyName}); err != nil {
+			return fmt.Errorf("cannot delete machine SSH KEY: %v", err)
+		}
+	*/
 
 	return exoClient.Delete(egoscale.VirtualMachine{
 		ID: machineStatus.ID,
@@ -406,10 +408,7 @@ func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Mac
 		return "", fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
 	}
 
-	sshclient, err := exossh.NewSSHClient(machineStatus.IP.String(), machineStatus.User, machineStatus.SSHPrivateKey)
-	if err != nil {
-		return "", fmt.Errorf("unable to initialize SSH client: %s", err)
-	}
+	sshclient := exossh.NewSSHClient(machineStatus.IP.String(), machineStatus.User, machineStatus.Password)
 
 	var buf bytes.Buffer
 	if err := sshclient.RunCommand("sudo cat /etc/kubernetes/admin.conf", &buf, nil); err != nil {
@@ -440,7 +439,7 @@ func (a *Actuator) getNodeJoinToken(cluster *clusterv1.Cluster, machine *cluster
 
 	controlPlaneList := a.getControlPlaneMachines(machineList)
 
-	//XXX work only with 1 macter at the moment
+	// XXX Only one master is supported
 	controlPlaneMachine := controlPlaneList[0]
 	controlPlaneIP, err := a.GetIP(cluster, controlPlaneMachine)
 	if err != nil {
@@ -467,7 +466,8 @@ func (a *Actuator) getNodeJoinToken(cluster *clusterv1.Cluster, machine *cluster
 		return "", fmt.Errorf("failed to initialize new corev1 client: %v", err)
 	}
 
-	bootstrapToken, err := tokens.NewBootstrap(coreClient, 10*time.Minute)
+	// XXX this could be super slow...
+	bootstrapToken, err := tokens.NewBootstrap(coreClient, 20*time.Minute)
 	if err != nil {
 		return "", fmt.Errorf("failed to create new bootstrap token: %v", err)
 	}

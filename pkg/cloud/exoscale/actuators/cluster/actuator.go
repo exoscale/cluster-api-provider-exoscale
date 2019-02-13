@@ -327,10 +327,7 @@ func (a *Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.M
 		return "", fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
 	}
 
-	sshclient, err := exossh.NewSSHClient(machineStatus.IP.String(), machineStatus.User, machineStatus.SSHPrivateKey)
-	if err != nil {
-		return "", fmt.Errorf("unable to initialize SSH client: %s", err)
-	}
+	sshclient := exossh.NewSSHClient(machineStatus.IP.String(), machineStatus.User, machineStatus.Password)
 
 	res, err := sshclient.QuickCommand("sudo cat /etc/kubernetes/admin.conf")
 	if err != nil {

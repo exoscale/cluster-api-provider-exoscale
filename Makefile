@@ -1,5 +1,5 @@
 # Image URL to use all building/pushing image targets
-PREFIX = greut
+PREFIX = exoscale
 NAME = cluster-api-provider-exoscale-controller
 TAG ?= latest
 IMG = ${PREFIX}/${NAME}:${TAG}

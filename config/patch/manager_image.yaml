@@ -7,4 +7,4 @@ spec:
     spec:
       containers:
       - name: exoscale-controller
-        image: greut/cluster-api-provider-exoscale-controller:latest
+        image: exoscale/cluster-api-provider-exoscale-controller:latest

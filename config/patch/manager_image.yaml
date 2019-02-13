@@ -8,3 +8,19 @@ spec:
       containers:
       - name: exoscale-controller
         image: exoscale/cluster-api-provider-exoscale-controller:latest
+        env:
+        - name: EXOSCALE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: credentials
+              key: EXOSCALE_API_KEY
+        - name: EXOSCALE_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: credentials
+              key: EXOSCALE_SECRET_KEY
+        - name: EXOSCALE_COMPUTE_ENDPOINT
+          valueFrom:
+            secretKeyRef:
+              name: credentials
+              key: EXOSCALE_COMPUTE_ENDPOINT

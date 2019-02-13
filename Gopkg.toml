@@ -21,20 +21,20 @@ required = [
 
 [[constraint]]
   name="sigs.k8s.io/cluster-api"
-  #version="0.0.4-alpha.5"
-  branch="master"
+  # the last non kubernetes 1.13 version
+  revision="76653f4302ca4eb3fb853540bf041f416849a2d9"
 
 [[constraint]]
   name="github.com/exoscale/egoscale"
   version="0.13.3"
 
 [[constraint]]
-  name="sigs.k8s.io/controller-runtime"
-  version="0.1.1"
-
-[[constraint]]
   name="sigs.k8s.io/controller-tools"
   version="0.1.8"
+
+[[constraint]]
+  name="sigs.k8s.io/controller-runtime"
+  version="=0.1.9"
 
 [[override]]
   name = "k8s.io/code-generator"

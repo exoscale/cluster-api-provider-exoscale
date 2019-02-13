@@ -1,0 +1,31 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: exoscale-provider-system
+namePrefix: exoscale-provider-
+
+resources:
+- crds/exoscale_v1alpha1_exoscaleclusterproviderspec.yaml
+- crds/exoscale_v1alpha1_exoscaleclusterproviderstatus.yaml
+- crds/exoscale_v1alpha1_exoscalemachineproviderspec.yaml
+- crds/exoscale_v1alpha1_exoscalemachineproviderstatus.yaml
+- rbac/rbac_role.yaml
+- rbac/rbac_role_binding.yaml
+- manager/namespace.yaml
+- manager/manager.yaml
+
+secretGenerator:
+- env: exoscale.ini
+  name: controller-secrets
+  type: Opaque
+
+patchesStrategicMerge:
+- patch/manager_image.yaml
+
+patchesJson6902:
+- path: patch/rbac_role_cluster.yaml
+  target:
+    group: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: manager-role
+    version: v1

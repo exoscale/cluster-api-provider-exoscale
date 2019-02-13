@@ -1,5 +1,5 @@
 # Image URL to use all building/pushing image targets
-PREFIX = exoscale
+PREFIX = greut
 NAME = cluster-api-provider-exoscale-controller
 TAG ?= latest
 IMG = ${PREFIX}/${NAME}:${TAG}
@@ -29,11 +29,15 @@ run: generate fmt vet
 deploy: manifests
 	kubectl apply -f provider-components.yaml
 
+cluster-api-components.yaml:
+	echo "this only works with pre-2 kustomize"
+	kustomize build vendor/sigs.k8s.io/cluster-api/config/default/kustomization.yaml >> provider-components.yaml
+
 # Generate manifests e.g. CRD, RBAC etc.
-manifests:
-	kustomize build config/default/ > provider-components.yaml
+manifests: cluster-api-components.yaml
+	kustomize build config > provider-components.yaml
 	echo "---" >> provider-components.yaml
-	kustomize build vendor/sigs.k8s.io/cluster-api/config/default/ >> provider-components.yaml
+	cat cluster-api-components.yaml >> provider-components.yaml
 
 # Run go fmt against code
 fmt:
@@ -53,7 +57,7 @@ generate:
 docker-build:
 	docker build . -t ${IMG}
 	@echo "updating kustomize image patch file for manager resource"
-	sed -i'' -e 's@image: .*@image: '"${IMG}"'@' ./config/default/manager_image_patch.yaml
+	sed -i'' -e 's@image: .*@image: '"${IMG}"'@' ./config/patch/manager_image.yaml
 
 # Push the docker image
 docker-push:

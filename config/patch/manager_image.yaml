@@ -1,0 +1,10 @@
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: controllers
+spec:
+  template:
+    spec:
+      containers:
+      - name: exoscale-controller
+        image: greut/cluster-api-provider-exoscale-controller:latest

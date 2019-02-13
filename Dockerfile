@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM golang:1.10.7 as builder
+FROM golang:1.11.5 as builder
 
 # Copy in the go src
 WORKDIR /go/src/sigs.k8s.io/cluster-api-provider-exoscale
@@ -20,4 +20,4 @@ FROM linuxkit/ca-certificates:v0.6
 WORKDIR /root/
 COPY --from=builder /usr/local/bin/manager .
 
-ENTRYPOINT ["./manager"]
+ENTRYPOINT ["./manager", "-v", "9"]

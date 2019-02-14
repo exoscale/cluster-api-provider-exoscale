@@ -6,11 +6,17 @@ import (
 	"io"
 	"os"
 	"text/template"
+	"time"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/exoscale/egoscale"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/tools/clientcmd"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
+	"k8s.io/klog"
 	ssh "sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/actuators/ssh"
+	tokens "sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/actuators/tokens"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 )
 
@@ -307,7 +313,7 @@ func (a *Actuator) getNodeJoinToken(cluster *clusterv1.Cluster, machine *cluster
 	}
 
 	controlPlaneURL := fmt.Sprintf("https://%s:6443", controlPlaneIP)
-	klog.V(1).Infof("control plane url %q", constrolPlaneURL)
+	klog.V(1).Infof("control plane url %q", controlPlaneURL)
 
 	kubeConfig, err := a.GetKubeConfig(cluster, controlPlaneMachine)
 	if err != nil {
@@ -333,7 +339,7 @@ func (a *Actuator) getNodeJoinToken(cluster *clusterv1.Cluster, machine *cluster
 		return "", fmt.Errorf("failed to create new bootstrap token: %v", err)
 	}
 
-	klog.V(1).Infof("boostrap token %q", boostrapToken)
+	klog.V(1).Infof("boostrap token %q", bootstrapToken)
 
 	return bootstrapToken, nil
 }

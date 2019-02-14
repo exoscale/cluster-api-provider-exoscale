@@ -60,7 +60,7 @@ func NewActuator(params ActuatorParams) (*Actuator, error) {
 
 // Create creates a machine and is invoked by the Machine Controller
 func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
-	klog.Infof("Creating machine %v for cluster %v.", machine.Name, cluster.Name)
+	klog.V(1).Infof("Creating machine %v for cluster %v.", machine.Name, cluster.Name)
 
 	clusterStatus, err := exoscalev1.ClusterStatusFromProviderStatus(cluster.Status.ProviderStatus)
 	if err != nil {
@@ -154,9 +154,9 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	}
 	vm := resp.(*egoscale.VirtualMachine)
 
-	klog.Infof("Deployed instance: %q, IP: %s, password: %q", vm.Name, vm.IP().String(), vm.Password)
+	klog.V(4).Infof("Deployed instance: %q, IP: %s, password: %q", vm.Name, vm.IP().String(), vm.Password)
 
-	klog.Infof("Provisioning (can take up to several minutes):")
+	klog.V(1).Infof("Provisioning (can take up to several minutes):")
 
 	machineSet := machine.ObjectMeta.Labels["set"]
 	switch machineSet {
@@ -173,7 +173,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return err
 	}
 
-	klog.Infof("Machine %q provisioning success!", machine.Name)
+	klog.V(1).Infof("Machine %q provisioning success!", machine.Name)
 
 	// XXX annotations should be replaced by the proper NodeRef
 	// https://github.com/kubernetes-sigs/cluster-api/blob/3b5183805f4dbf859d39a2600b268192a8191950/cmd/clusterctl/clusterdeployer/clusterclient/clusterclient.go#L579-L581
@@ -247,9 +247,9 @@ func cleanSSHKey(exoClient *egoscale.Client, sshKeyName string) {
 func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
 	if cluster == nil {
 		klog.Warningf("cluster %q as been removed already", machine.Name)
-		klog.Infof("deleting machine %q.", machine.Name)
+		klog.V(1).Infof("deleting machine %q.", machine.Name)
 	} else {
-		klog.Infof("deleting machine %q from %q.", machine.Name, cluster.Name)
+		klog.V(1).Infof("deleting machine %q from %q.", machine.Name, cluster.Name)
 	}
 
 	machineStatus, err := exoscalev1.MachineStatusFromProviderStatus(machine.Status.ProviderStatus)
@@ -268,9 +268,17 @@ func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machi
 		}
 	*/
 
-	return exoClient.Delete(egoscale.VirtualMachine{
+	err = exoClient.Delete(egoscale.VirtualMachine{
 		ID: machineStatus.ID,
 	})
+	// It was already deleted externally
+	if e, ok := err.(*egoscale.ErrorResponse); ok {
+		if e.ErrorCode == egoscale.ParamError {
+			return nil
+		}
+	}
+
+	return err
 }
 
 // Update updates a machine and is invoked by the Machine Controller
@@ -341,7 +349,7 @@ func (a *Actuator) Update(ctx context.Context, cluster *clusterv1.Cluster, machi
 
 // Exists test for the existance of a machine and is invoked by the Machine Controller
 func (a *Actuator) Exists(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) (bool, error) {
-	klog.Infof("Checking if machine %v for cluster %v exists.", machine.Name, cluster.Name)
+	klog.V(1).Infof("Checking if machine %v for cluster %v exists.", machine.Name, cluster.Name)
 
 	exoClient, err := exoclient.Client()
 	if err != nil {
@@ -382,7 +390,7 @@ func (*Actuator) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (
 
 // GetKubeConfig gets a kubeconfig from the master.
 func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Machine) (string, error) {
-	klog.Infof("Getting Kubeconfig of the machine %v for cluster %v.", master.Name, cluster.Name)
+	klog.V(1).Infof("Getting Kubeconfig of the machine %v for cluster %v.", master.Name, cluster.Name)
 
 	machineStatus, err := exoscalev1.MachineStatusFromProviderStatus(master.Status.ProviderStatus)
 	if err != nil {
@@ -403,55 +411,9 @@ func (a *Actuator) getControlPlaneMachines(machineList *clusterv1.MachineList) [
 	var cpm []*clusterv1.Machine
 	for _, m := range machineList.Items {
 		if m.Spec.Versions.ControlPlane != "" {
+			klog.V(0).Infof("controlplane %q", m.Spec.Versions.ControlPlane)
 			cpm = append(cpm, m.DeepCopy())
 		}
 	}
 	return cpm
-}
-
-func (a *Actuator) getNodeJoinToken(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (string, error) {
-
-	machineClient := a.machinesGetter.Machines(machine.Namespace)
-
-	machineList, err := machineClient.List(v1.ListOptions{})
-	if err != nil {
-		return "", fmt.Errorf("failed get machine list: %v", err)
-	}
-
-	controlPlaneList := a.getControlPlaneMachines(machineList)
-
-	// XXX Only one master is supported
-	controlPlaneMachine := controlPlaneList[0]
-	controlPlaneIP, err := a.GetIP(cluster, controlPlaneMachine)
-	if err != nil {
-		return "", fmt.Errorf("failed to retrieve controlplane (GetIP): %v", err)
-	}
-
-	controlPlaneURL := fmt.Sprintf("https://%s:6443", controlPlaneIP)
-
-	kubeConfig, err := a.GetKubeConfig(cluster, controlPlaneMachine)
-	if err != nil {
-		return "", fmt.Errorf("failed to retrieve kubeconfig for cluster %q: %v", cluster.Name, err)
-	}
-
-	clientConfig, err := clientcmd.BuildConfigFromKubeconfigGetter(controlPlaneURL, func() (*clientcmdapi.Config, error) {
-		return clientcmd.Load([]byte(kubeConfig))
-	})
-
-	if err != nil {
-		return "", fmt.Errorf("failed to get client config for cluster at %q: %v", controlPlaneURL, err)
-	}
-
-	coreClient, err := corev1.NewForConfig(clientConfig)
-	if err != nil {
-		return "", fmt.Errorf("failed to initialize new corev1 client: %v", err)
-	}
-
-	// XXX this could be super slow...
-	bootstrapToken, err := tokens.NewBootstrap(coreClient, 20*time.Minute)
-	if err != nil {
-		return "", fmt.Errorf("failed to create new bootstrap token: %v", err)
-	}
-
-	return bootstrapToken, nil
 }

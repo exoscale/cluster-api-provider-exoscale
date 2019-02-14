@@ -179,7 +179,7 @@ func createMasterFirewallRules(self string) []egoscale.AuthorizeSecurityGroupIng
 			StartPort: 2379,
 			EndPort:   2380,
 			UserSecurityGroupList: []egoscale.UserSecurityGroup{
-				egoscale.UserSecurityGroup{self},
+				egoscale.UserSecurityGroup{Group: self},
 			},
 			Description: "etcd server client API",
 		},
@@ -190,7 +190,7 @@ func createMasterFirewallRules(self string) []egoscale.AuthorizeSecurityGroupIng
 			StartPort: 10250,
 			EndPort:   10252,
 			UserSecurityGroupList: []egoscale.UserSecurityGroup{
-				egoscale.UserSecurityGroup{self},
+				egoscale.UserSecurityGroup{Group: self},
 			},
 			Description: "Kubelet API, kube-scheduler, kube-controller-manager",
 		},
@@ -215,8 +215,8 @@ func createNodeFirewallRules(self, ingressSG string) []egoscale.AuthorizeSecurit
 			StartPort: 10250,
 			EndPort:   10250,
 			UserSecurityGroupList: []egoscale.UserSecurityGroup{
-				egoscale.UserSecurityGroup{self},
-				egoscale.UserSecurityGroup{ingressSG},
+				egoscale.UserSecurityGroup{Group: self},
+				egoscale.UserSecurityGroup{Group: ingressSG},
 			},
 			Description: "Kubelet API",
 		},
@@ -271,19 +271,25 @@ func (a *Actuator) Delete(cluster *clusterv1.Cluster) error {
 		return err
 	}
 
-	sg, err := exoClient.Get(egoscale.SecurityGroup{ID: clusterStatus.MasterSecurityGroupID})
+	allRules := make([]egoscale.IngressRule, 0)
+
+	sgs, err := exoClient.List(egoscale.SecurityGroup{ID: clusterStatus.MasterSecurityGroupID})
 	if err != nil {
 		return fmt.Errorf("failed to get securityGroup: %v", err)
 	}
-	masterSecurityGroup := sg.(*egoscale.SecurityGroup)
+	if len(sgs) == 1 {
+		sg := sgs[0].(*egoscale.SecurityGroup)
+		allRules = append(allRules, sg.IngressRule...)
+	}
 
-	sg, err = exoClient.Get(egoscale.SecurityGroup{ID: clusterStatus.NodeSecurityGroupID})
+	sgs, err = exoClient.List(egoscale.SecurityGroup{ID: clusterStatus.NodeSecurityGroupID})
 	if err != nil {
 		return fmt.Errorf("failed to get securityGroup: %v", err)
 	}
-	nodeSecurityGroup := sg.(*egoscale.SecurityGroup)
-
-	allRules := append(masterSecurityGroup.IngressRule, nodeSecurityGroup.IngressRule...)
+	if len(sgs) == 1 {
+		sg := sgs[0].(*egoscale.SecurityGroup)
+		allRules = append(allRules, sg.IngressRule...)
+	}
 
 	for _, r := range allRules {
 		if err := exoClient.BooleanRequest(egoscale.RevokeSecurityGroupIngress{ID: r.RuleID}); err != nil {

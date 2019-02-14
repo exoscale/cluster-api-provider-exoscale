@@ -22,8 +22,14 @@ manager: generate fmt vet
 	go build -o bin/manager sigs.k8s.io/cluster-api-provider-exoscale/cmd/manager
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
-run: generate fmt vet
-	go run ./cmd/manager/main.go
+run: clusterctl
+	bin/clusterctl create cluster -v 9 \
+		--provider exoscale \
+		-m cmd/clusterctl/examples/exoscale/machine.yaml \
+		-c cmd/clusterctl/examples/exoscale/cluster.yaml \
+		-p provider-components.yaml \
+		-e ~/.kube/config
+
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: manifests
@@ -54,7 +60,7 @@ generate:
 	go generate ./pkg/... ./cmd/...
 
 # Build the docker image
-docker-build:
+docker-build: fmt vet
 	docker build . -t ${IMG}
 	@echo "updating kustomize image patch file for manager resource"
 	sed -i'' -e 's@image: .*@image: '"${IMG}"'@' ./config/patch/manager_image.yaml

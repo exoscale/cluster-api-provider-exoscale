@@ -1,13 +1,14 @@
 apiVersion: apps/v1beta1
 kind: Deployment
 metadata:
-  name: controllers
+  name: controller-manager
 spec:
   template:
     spec:
       containers:
       - name: exoscale-controller
         image: exoscale/cluster-api-provider-exoscale-controller:latest
+        args: ["-v", "9"]
         env:
         - name: EXOSCALE_API_KEY
           valueFrom:

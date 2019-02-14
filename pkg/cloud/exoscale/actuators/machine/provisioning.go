@@ -284,5 +284,56 @@ func (a *Actuator) provisionNode(cluster *clusterv1.Cluster, machine *clusterv1.
 		return fmt.Errorf("node bootstrap failed: %s", err)
 	}
 	return nil
+}
 
+func (a *Actuator) getNodeJoinToken(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (string, error) {
+
+	machineClient := a.machinesGetter.Machines(machine.Namespace)
+
+	machineList, err := machineClient.List(v1.ListOptions{})
+	if err != nil {
+		return "", fmt.Errorf("failed get machine list: %v", err)
+	}
+
+	controlPlaneList := a.getControlPlaneMachines(machineList)
+
+	klog.V(1).Infof("control plane list %#v", controlPlaneList)
+
+	// XXX Only one master is supported
+	controlPlaneMachine := controlPlaneList[0]
+	controlPlaneIP, err := a.GetIP(cluster, controlPlaneMachine)
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve controlplane (GetIP): %v", err)
+	}
+
+	controlPlaneURL := fmt.Sprintf("https://%s:6443", controlPlaneIP)
+	klog.V(1).Infof("control plane url %q", constrolPlaneURL)
+
+	kubeConfig, err := a.GetKubeConfig(cluster, controlPlaneMachine)
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve kubeconfig for cluster %q: %v", cluster.Name, err)
+	}
+
+	clientConfig, err := clientcmd.BuildConfigFromKubeconfigGetter(controlPlaneURL, func() (*clientcmdapi.Config, error) {
+		return clientcmd.Load([]byte(kubeConfig))
+	})
+
+	if err != nil {
+		return "", fmt.Errorf("failed to get client config for cluster at %q: %v", controlPlaneURL, err)
+	}
+
+	coreClient, err := corev1.NewForConfig(clientConfig)
+	if err != nil {
+		return "", fmt.Errorf("failed to initialize new corev1 client: %v", err)
+	}
+
+	// XXX this could be super slow...
+	bootstrapToken, err := tokens.NewBootstrap(coreClient, 20*time.Minute)
+	if err != nil {
+		return "", fmt.Errorf("failed to create new bootstrap token: %v", err)
+	}
+
+	klog.V(1).Infof("boostrap token %q", boostrapToken)
+
+	return bootstrapToken, nil
 }

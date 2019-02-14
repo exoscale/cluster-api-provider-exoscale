@@ -255,26 +255,22 @@ func (a *Actuator) provisionNode(cluster *clusterv1.Cluster, machine *clusterv1.
 		return fmt.Errorf("failed to obtain token for node %q to join cluster %q: %v", machine.Name, cluster.Name, err)
 	}
 
+	//XXX work only with 1 master at the moment
+	controlPlaneMachine, err := a.getControlPlaneMachine(machine)
+	if err != nil {
+		return err
+	}
+
+	controlPlaneIP, err := a.GetIP(cluster, controlPlaneMachine)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve controlplane (GetIP): %v", err)
+	}
+
 	sshClient := ssh.NewSSHClient(
 		vm.IP().String(),
 		username,
 		vm.Password,
 	)
-
-	//-XXX must be removed, need to create a func to use in token package too
-	machineClient := a.machinesGetter.Machines(machine.Namespace)
-	machineList, err := machineClient.List(v1.ListOptions{})
-	if err != nil {
-		return fmt.Errorf("failed get machine list: %v", err)
-	}
-	controlPlaneList := a.getControlPlaneMachines(machineList)
-	//XXX work only with 1 master at the moment
-	controlPlaneMachine := controlPlaneList[0]
-	controlPlaneIP, err := a.GetIP(cluster, controlPlaneMachine)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve controlplane (GetIP): %v", err)
-	}
-	//-XXX
 
 	if err := bootstrapCluster(sshClient, kubeCluster{
 		Name:              vm.Name,
@@ -290,21 +286,31 @@ func (a *Actuator) provisionNode(cluster *clusterv1.Cluster, machine *clusterv1.
 	return nil
 }
 
-func (a *Actuator) getNodeJoinToken(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (string, error) {
-
+// getControlPlaneMachine get the first controlPlane machine found
+func (a *Actuator) getControlPlaneMachine(machine *clusterv1.Machine) (*clusterv1.Machine, error) {
 	machineClient := a.machinesGetter.Machines(machine.Namespace)
-
 	machineList, err := machineClient.List(v1.ListOptions{})
 	if err != nil {
-		return "", fmt.Errorf("failed get machine list: %v", err)
+		return nil, fmt.Errorf("failed get machine list: %v", err)
 	}
-
 	controlPlaneList := a.getControlPlaneMachines(machineList)
 
-	klog.V(1).Infof("control plane list %#v", controlPlaneList)
+	//XXX work only with 1 master at the moment
+	if len(controlPlaneList) != 1 {
+		return controlPlaneList[0], nil
+	}
 
-	// XXX Only one master is supported
-	controlPlaneMachine := controlPlaneList[0]
+	return nil, fmt.Errorf("invalid master number expect 1 (XXX for the time being) got %d", len(controlPlaneList))
+}
+
+func (a *Actuator) getNodeJoinToken(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (string, error) {
+
+	//XXX work only with 1 master at the moment
+	controlPlaneMachine, err := a.getControlPlaneMachine(machine)
+	if err != nil {
+		return "", err
+	}
+
 	controlPlaneIP, err := a.GetIP(cluster, controlPlaneMachine)
 	if err != nil {
 		return "", fmt.Errorf("failed to retrieve controlplane (GetIP): %v", err)

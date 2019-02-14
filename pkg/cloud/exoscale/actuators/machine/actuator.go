@@ -387,12 +387,20 @@ func (*Actuator) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (
 func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Machine) (string, error) {
 	klog.V(1).Infof("Getting Kubeconfig of the machine %v for cluster %v.", master.Name, cluster.Name)
 
-	machineStatus, err := exoscalev1.MachineStatusFromProviderStatus(master.Status.ProviderStatus)
-	if err != nil {
-		return "", fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
+	masterIP, ok := master.Annotations[exoscalev1.ExoscaleIPAnnotationKey]
+	if !ok {
+		return "", fmt.Errorf("failed to get IP in master machine spec: %q", master.Name)
+	}
+	user, ok := master.Annotations[exoscalev1.ExoscaleUsernameAnnotationKey]
+	if !ok {
+		return "", fmt.Errorf("failed to get user in master machine spec: %q", master.Name)
+	}
+	password, ok := master.Annotations[exoscalev1.ExoscalePasswordAnnotationKey]
+	if !ok {
+		return "", fmt.Errorf("failed to get password in master machine spec: %q", master.Name)
 	}
 
-	sshclient := exossh.NewSSHClient(machineStatus.IP.String(), machineStatus.User, machineStatus.Password)
+	sshclient := exossh.NewSSHClient(masterIP, user, password)
 
 	var buf bytes.Buffer
 	if err := sshclient.RunCommand("sudo cat /etc/kubernetes/admin.conf", &buf, nil); err != nil {

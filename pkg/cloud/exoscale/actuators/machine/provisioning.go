@@ -255,22 +255,20 @@ func (a *Actuator) provisionNode(cluster *clusterv1.Cluster, machine *clusterv1.
 		return fmt.Errorf("failed to obtain token for node %q to join cluster %q: %v", machine.Name, cluster.Name, err)
 	}
 
-	println("BOOTSTRAPTOKEN!!!!!!!!!:", bootstrapToken)
-
 	sshClient := ssh.NewSSHClient(
 		vm.IP().String(),
 		username,
 		vm.Password,
 	)
 
-	//-XXX to be removed
+	//-XXX must be removed, need to create a func to use in token package too
 	machineClient := a.machinesGetter.Machines(machine.Namespace)
 	machineList, err := machineClient.List(v1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("failed get machine list: %v", err)
 	}
 	controlPlaneList := a.getControlPlaneMachines(machineList)
-	//XXX work only with 1 macter at the moment
+	//XXX work only with 1 master at the moment
 	controlPlaneMachine := controlPlaneList[0]
 	controlPlaneIP, err := a.GetIP(cluster, controlPlaneMachine)
 	if err != nil {
@@ -285,7 +283,7 @@ func (a *Actuator) provisionNode(cluster *clusterv1.Cluster, machine *clusterv1.
 		Address:           vm.IP().String(),
 		MasterIP:          controlPlaneIP,
 		Token:             bootstrapToken,
-		MasterPort:        "6433",
+		MasterPort:        "6443",
 	}, false, false); err != nil {
 		return fmt.Errorf("node bootstrap failed: %s", err)
 	}

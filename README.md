@@ -6,18 +6,9 @@ Spawn a fresh kubernetes cluster, feel free to delete any old one if something l
 % minikube start --kubernetes-version v1.12.5 --vm-driver kvm2
 ```
 
-## hacking the clusterctl side
-
-Building the `manager` image.
-
-```
-% eval $(minikube docker-env)
-
-% make docker-build
-```
+## clusterctl side
 
 Build the manifests.
-
 
 ```console
 export EXOSCALE_API_KEY=EXO...

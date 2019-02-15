@@ -20,15 +20,15 @@ func (c *SSHClient) RunCommand(cmd string, stdout, stderr io.Writer) error {
 	var err error
 
 	retryOp := func() error {
-		if c.c, err = ssh.Dial("tcp", c.host, &ssh.ClientConfig{
+		if c.Client, err = ssh.Dial("tcp", c.host, &ssh.ClientConfig{
 			User:            c.user,
-			Auth:            []ssh.AuthMethod{ssh.PublicKeys(c.hostKey)},
+			Auth:            []ssh.AuthMethod{ssh.Password(c.password)},
 			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		}); err != nil {
 			return fmt.Errorf("unable to connect to cluster instance: %s", err)
 		}
 
-		sshSession, err := c.c.NewSession()
+		sshSession, err := c.NewSession()
 		if err != nil {
 			return fmt.Errorf("unable to create SSH session: %s", err)
 		}
@@ -56,6 +56,16 @@ func (c *SSHClient) RunCommand(cmd string, stdout, stderr io.Writer) error {
 	return nil
 }
 
+//QuickCommand run quick command over ssh and get result as string
+func (c *SSHClient) QuickCommand(command string) (string, error) {
+	var buf bytes.Buffer
+
+	if err := c.RunCommand(command, &buf, nil); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
+}
+
 //Scp like scp command
 func (c *SSHClient) Scp(src, dst string) error {
 	var buf bytes.Buffer
@@ -73,27 +83,22 @@ func (c *SSHClient) Scp(src, dst string) error {
 	return ioutil.WriteFile(dst, buf.Bytes(), 0600)
 }
 
-//SSHClient represent an ssh client
+// SSHClient represent an ssh client
 type SSHClient struct {
-	host    string
-	hostKey ssh.Signer
-	user    string
-	c       *ssh.Client
+	*ssh.Client
+	host     string
+	password string
+	user     string
 }
 
-//NewSSHClient create a new ssh client
-func NewSSHClient(host, hostUser, privateKey string) (*SSHClient, error) {
-	var c = SSHClient{
-		host: host + ":22",
-		user: hostUser,
+// NewSSHClient create a new ssh client
+func NewSSHClient(host, hostUser, password string) *SSHClient {
+	return &SSHClient{
+		Client:   nil,
+		host:     host + ":22",
+		password: password,
+		user:     hostUser,
 	}
-
-	var err error
-	if c.hostKey, err = ssh.ParsePrivateKey([]byte(privateKey)); err != nil {
-		return nil, fmt.Errorf("unable to parse cluster instance SSH private key: %s", err)
-	}
-
-	return &c, nil
 }
 
 //CreateSSHKey create an ssh key pair

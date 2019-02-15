@@ -1,10 +1,27 @@
 apiVersion: apps/v1beta1
 kind: Deployment
 metadata:
-  name: controllers
+  name: controller-manager
 spec:
   template:
     spec:
       containers:
       - name: exoscale-controller
         image: exoscale/cluster-api-provider-exoscale-controller:latest
+        args: ["-v", "9"]
+        env:
+        - name: EXOSCALE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: credentials
+              key: EXOSCALE_API_KEY
+        - name: EXOSCALE_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: credentials
+              key: EXOSCALE_SECRET_KEY
+        - name: EXOSCALE_COMPUTE_ENDPOINT
+          valueFrom:
+            secretKeyRef:
+              name: credentials
+              key: EXOSCALE_COMPUTE_ENDPOINT

@@ -17,7 +17,6 @@ limitations under the License.
 package cluster
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"time"
@@ -65,48 +64,29 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 		return fmt.Errorf("error loading cluster provider config: %v", err)
 	}
 
-	if clusterStatus.SecurityGroupID != nil {
-		klog.Infof("using existing security group id %s", clusterStatus.SecurityGroupID)
-		return nil
-	}
+	//XXX can be possible to authorize sg in each other
+	masterRules := createMasterFirewallRules(clusterSpec.MasterSecurityGroup)
+	nodeRules := createNodeFirewallRules(clusterSpec.NodeSecurityGroup, clusterSpec.MasterSecurityGroup)
 
-	exoClient, err := exoclient.Client()
-	if err != nil {
-		return err
-	}
-
-	sgs, err := exoClient.List(&egoscale.SecurityGroup{Name: clusterSpec.SecurityGroup})
-	if err != nil {
-		return fmt.Errorf("error getting network security group: %v", err)
-	}
-
-	var sgID *egoscale.UUID
-	if len(sgs) == 0 {
-		req := egoscale.CreateSecurityGroup{
-			Name: clusterSpec.SecurityGroup,
-		}
-
-		klog.Infof("creating security group %q", clusterSpec.SecurityGroup)
-
-		resp, err := exoClient.Request(req)
+	masterSGID := clusterStatus.MasterSecurityGroupID
+	if clusterStatus.MasterSecurityGroupID == nil {
+		masterSGID, err = checkSecurityGroup(clusterSpec.MasterSecurityGroup, masterRules)
 		if err != nil {
-			return fmt.Errorf("error creating or updating network security group: %v", err)
+			//XXX if fail clean sg and delete it
+			return err
 		}
-		sgID = resp.(*egoscale.SecurityGroup).ID
-
-		_, err = exoClient.Request(egoscale.AuthorizeSecurityGroupIngress{
-			SecurityGroupID: sgID,
-			CIDRList: []egoscale.CIDR{
-				*egoscale.MustParseCIDR("0.0.0.0/0"),
-				*egoscale.MustParseCIDR("::/0"),
-			},
-		})
-		if err != nil {
-			return fmt.Errorf("error creating or updating security group rule: %v", err)
-		}
-
 	} else {
-		sgID = sgs[0].(*egoscale.SecurityGroup).ID
+		klog.Infof("using existing security group id %s", clusterStatus.MasterSecurityGroupID)
+	}
+	nodeSGID := clusterStatus.NodeSecurityGroupID
+	if clusterStatus.NodeSecurityGroupID == nil {
+		nodeSGID, err = checkSecurityGroup(clusterSpec.NodeSecurityGroup, nodeRules)
+		if err != nil {
+			//XXX if fail clean sg and delete it
+			return err
+		}
+	} else {
+		klog.Infof("using existing security group id %s", clusterStatus.NodeSecurityGroupID)
 	}
 
 	// Put the data into the "Status"
@@ -118,14 +98,139 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 		ObjectMeta: metav1.ObjectMeta{
 			CreationTimestamp: metav1.Time{Time: time.Now()},
 		},
-		SecurityGroupID: sgID,
+		MasterSecurityGroupID: masterSGID,
+		NodeSecurityGroupID:   nodeSGID,
 	}
 
 	if err := a.updateResources(clusterStatus, cluster); err != nil {
 		return fmt.Errorf("error updating cluster resources: %v", err)
 	}
+	klog.Infof("reconcile cluster %q success", cluster.Name)
 
 	return nil
+}
+
+func checkSecurityGroup(sgName string, rules []egoscale.AuthorizeSecurityGroupIngress) (*egoscale.UUID, error) {
+	exoClient, err := exoclient.Client()
+	if err != nil {
+		return nil, err
+	}
+
+	sgs, err := exoClient.List(&egoscale.SecurityGroup{Name: sgName})
+	if err != nil {
+		return nil, fmt.Errorf("error getting network security group: %v", err)
+	}
+
+	var sgID *egoscale.UUID
+	if len(sgs) == 0 {
+		req := egoscale.CreateSecurityGroup{
+			Name: sgName,
+		}
+
+		klog.Infof("creating security group %q", sgName)
+
+		resp, err := exoClient.Request(req)
+		if err != nil {
+			return nil, fmt.Errorf("error creating or updating network security group: %v", err)
+		}
+		sgID = resp.(*egoscale.SecurityGroup).ID
+
+		for _, rule := range rules {
+			rule.SecurityGroupID = sgID
+			_, err = exoClient.Request(rule)
+			if err != nil {
+
+				return nil, fmt.Errorf("error creating or updating security group rule: %v", err)
+			}
+		}
+	} else {
+		sgID = sgs[0].(*egoscale.SecurityGroup).ID
+	}
+	return sgID, nil
+
+}
+
+func createMasterFirewallRules(self string) []egoscale.AuthorizeSecurityGroupIngress {
+	return []egoscale.AuthorizeSecurityGroupIngress{
+		egoscale.AuthorizeSecurityGroupIngress{
+			Protocol:  "TCP",
+			StartPort: 22,
+			EndPort:   22,
+			CIDRList: []egoscale.CIDR{
+				*egoscale.MustParseCIDR("0.0.0.0/0"),
+				*egoscale.MustParseCIDR("::/0"),
+			},
+			Description: "SSH",
+		},
+		egoscale.AuthorizeSecurityGroupIngress{
+			Protocol:  "TCP",
+			StartPort: 6443,
+			EndPort:   6443,
+			CIDRList: []egoscale.CIDR{
+				*egoscale.MustParseCIDR("0.0.0.0/0"),
+				*egoscale.MustParseCIDR("::/0"),
+			},
+			Description: "Kubernetes API server",
+		},
+		///XXX TODO if etcd is in an other security group careful you must update this rule
+		//     or make it dynamic if you leave the choice to the provider spec
+		egoscale.AuthorizeSecurityGroupIngress{
+			Protocol:  "TCP",
+			StartPort: 2379,
+			EndPort:   2380,
+			UserSecurityGroupList: []egoscale.UserSecurityGroup{
+				egoscale.UserSecurityGroup{Group: self},
+			},
+			Description: "etcd server client API",
+		},
+		//XXX if you move Control plane from master sg in an other security group
+		//    please create a new one to accept ingress from Control plane
+		egoscale.AuthorizeSecurityGroupIngress{
+			Protocol:  "TCP",
+			StartPort: 10250,
+			EndPort:   10252,
+			UserSecurityGroupList: []egoscale.UserSecurityGroup{
+				egoscale.UserSecurityGroup{Group: self},
+			},
+			Description: "Kubelet API, kube-scheduler, kube-controller-manager",
+		},
+	}
+}
+
+func createNodeFirewallRules(self, ingressSG string) []egoscale.AuthorizeSecurityGroupIngress {
+	return []egoscale.AuthorizeSecurityGroupIngress{
+		egoscale.AuthorizeSecurityGroupIngress{
+			Protocol:  "TCP",
+			StartPort: 22,
+			EndPort:   22,
+			CIDRList: []egoscale.CIDR{
+				*egoscale.MustParseCIDR("0.0.0.0/0"),
+				*egoscale.MustParseCIDR("::/0"),
+			},
+			Description: "SSH",
+		},
+		//XXX if you move Control plane from master sg in an other security group please update this rule
+		egoscale.AuthorizeSecurityGroupIngress{
+			Protocol:  "TCP",
+			StartPort: 10250,
+			EndPort:   10250,
+			UserSecurityGroupList: []egoscale.UserSecurityGroup{
+				egoscale.UserSecurityGroup{Group: self},
+				egoscale.UserSecurityGroup{Group: ingressSG},
+			},
+			Description: "Kubelet API",
+		},
+		egoscale.AuthorizeSecurityGroupIngress{
+			Protocol:    "TCP",
+			StartPort:   30000,
+			EndPort:     32767,
+			Description: "NodePort Services",
+			CIDRList: []egoscale.CIDR{
+				*egoscale.MustParseCIDR("0.0.0.0/0"),
+				*egoscale.MustParseCIDR("::/0"),
+			},
+		},
+	}
 }
 
 func (a *Actuator) updateResources(clusterStatus *exoscalev1.ExoscaleClusterProviderStatus, cluster *clusterv1.Cluster) error {
@@ -156,7 +261,7 @@ func (a *Actuator) Delete(cluster *clusterv1.Cluster) error {
 		return fmt.Errorf("error loading cluster provider config: %v", err)
 	}
 
-	if clusterStatus.SecurityGroupID == nil {
+	if clusterStatus.MasterSecurityGroupID == nil && clusterStatus.NodeSecurityGroupID == nil {
 		klog.Infof("no security group id to be deleted, skip")
 		return nil
 	}
@@ -166,21 +271,41 @@ func (a *Actuator) Delete(cluster *clusterv1.Cluster) error {
 		return err
 	}
 
-	sg, err := exoClient.Get(egoscale.SecurityGroup{ID: clusterStatus.SecurityGroupID})
+	allRules := make([]egoscale.IngressRule, 0)
+
+	sgs, err := exoClient.List(egoscale.SecurityGroup{ID: clusterStatus.MasterSecurityGroupID})
 	if err != nil {
 		return fmt.Errorf("failed to get securityGroup: %v", err)
 	}
-	securityGroup := sg.(*egoscale.SecurityGroup)
+	if len(sgs) == 1 {
+		sg := sgs[0].(*egoscale.SecurityGroup)
+		allRules = append(allRules, sg.IngressRule...)
+	}
 
-	for _, r := range securityGroup.IngressRule {
+	sgs, err = exoClient.List(egoscale.SecurityGroup{ID: clusterStatus.NodeSecurityGroupID})
+	if err != nil {
+		return fmt.Errorf("failed to get securityGroup: %v", err)
+	}
+	if len(sgs) == 1 {
+		sg := sgs[0].(*egoscale.SecurityGroup)
+		allRules = append(allRules, sg.IngressRule...)
+	}
+
+	for _, r := range allRules {
 		if err := exoClient.BooleanRequest(egoscale.RevokeSecurityGroupIngress{ID: r.RuleID}); err != nil {
 			return fmt.Errorf("failed to revoke securityGroup ingress rule: %v", err)
 		}
 	}
 
-	return exoClient.BooleanRequest(egoscale.DeleteSecurityGroup{
-		ID: clusterStatus.SecurityGroupID,
+	err = exoClient.BooleanRequest(egoscale.DeleteSecurityGroup{
+		ID: clusterStatus.MasterSecurityGroupID,
 	})
+
+	err = exoClient.BooleanRequest(egoscale.DeleteSecurityGroup{
+		ID: clusterStatus.NodeSecurityGroupID,
+	})
+
+	return err
 }
 
 // The Machine Actuator interface must implement GetIP and GetKubeConfig functions as a workaround for issues
@@ -200,23 +325,28 @@ func (*Actuator) GetIP(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (
 }
 
 // GetKubeConfig gets a kubeconfig from the master.
-func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Machine) (string, error) {
+func (a *Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Machine) (string, error) {
 	klog.Infof("Getting Kubeconfig of the machine %v for cluster %v.", master.Name, cluster.Name)
 
-	machineStatus, err := exoscalev1.MachineStatusFromProviderStatus(master.Status.ProviderStatus)
-	if err != nil {
-		return "", fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
+	masterIP, ok := master.Annotations[exoscalev1.ExoscaleIPAnnotationKey]
+	if !ok {
+		return "", fmt.Errorf("failed to get IP in master machine spec: %q", master.Name)
+	}
+	user, ok := master.Annotations[exoscalev1.ExoscaleUsernameAnnotationKey]
+	if !ok {
+		return "", fmt.Errorf("failed to get user in master machine spec: %q", master.Name)
+	}
+	password, ok := master.Annotations[exoscalev1.ExoscalePasswordAnnotationKey]
+	if !ok {
+		return "", fmt.Errorf("failed to get password in master machine spec: %q", master.Name)
 	}
 
-	sshclient, err := exossh.NewSSHClient(machineStatus.IP.String(), machineStatus.User, machineStatus.SSHPrivateKey)
-	if err != nil {
-		return "", fmt.Errorf("unable to initialize SSH client: %s", err)
-	}
+	sshclient := exossh.NewSSHClient(masterIP, user, password)
 
-	var buf bytes.Buffer
-	if err := sshclient.RunCommand("sudo cat /etc/kubernetes/admin.conf", &buf, nil); err != nil {
+	res, err := sshclient.QuickCommand("sudo cat /etc/kubernetes/admin.conf")
+	if err != nil {
 		return "", fmt.Errorf("Provisionner exoscale GetKubeConfig() failed to run ssh cmd: %v", err)
 	}
 
-	return buf.String(), nil
+	return res, nil
 }

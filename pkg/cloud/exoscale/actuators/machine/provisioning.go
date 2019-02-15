@@ -6,8 +6,18 @@ import (
 	"io"
 	"os"
 	"text/template"
+	"time"
 
+	"github.com/davecgh/go-spew/spew"
+	"github.com/exoscale/egoscale"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/tools/clientcmd"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
+	"k8s.io/klog"
 	ssh "sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/actuators/ssh"
+	tokens "sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/actuators/tokens"
+	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 )
 
 const (
@@ -24,8 +34,8 @@ type kubeBootstrapStep struct {
 	command string
 }
 
-// kubeBootstrapSteps represents a k8s instance bootstrap steps
-var kubeBootstrapSteps = []kubeBootstrapStep{
+// provisioningSteps represents an instance provisioning steps for k8s
+var provisioningSteps = []kubeBootstrapStep{
 	{
 		name: "Instance system upgrade",
 		command: `\
@@ -130,9 +140,14 @@ sudo -E DEBIAN_FRONTEND=noninteractive apt-get install -y kubelet=${PKG_VERSION}
 	kubeadm=${PKG_VERSION} \
 	kubectl=${PKG_VERSION}
 sudo apt-mark hold kubelet kubeadm kubectl`,
-	}, {
-		name: "Kubernetes cluster node initialization",
-		command: `\
+	},
+}
+
+// masterBootstapSteps represents a k8s instance bootstrap steps
+var masterBootstapSteps = kubeBootstrapStep{
+
+	name: "Kubernetes cluster node initialization",
+	command: `\
 set -xe
 
 sudo kubeadm init \
@@ -143,7 +158,17 @@ sudo kubectl --kubeconfig=/etc/kubernetes/admin.conf apply \
 		-f https://docs.projectcalico.org/v{{ .CalicoVersion }}/getting-started/kubernetes/installation/hosted/etcd.yaml
 sudo kubectl --kubeconfig=/etc/kubernetes/admin.conf apply \
 		-f https://docs.projectcalico.org/v{{ .CalicoVersion }}/getting-started/kubernetes/installation/hosted/calico.yaml`,
-	},
+}
+
+// nodeJoinSteps represents a k8s node join steps
+var nodeJoinSteps = kubeBootstrapStep{
+	name: "Kubernetes cluster node initialization",
+	command: `\
+set -xe
+
+sudo kubeadm join \
+	--token {{ .Token }} {{ .MasterIP }}:{{ .MasterPort }} \
+	--discovery-token-unsafe-skip-ca-verification`,
 }
 
 type kubeCluster struct {
@@ -152,10 +177,19 @@ type kubeCluster struct {
 	DockerVersion     string
 	CalicoVersion     string
 	Address           string
+	Token             string
+	MasterIP          string
+	MasterPort        string
+	Sha256Hash        string
 }
 
-func bootstrapExokubeCluster(sshClient *ssh.SSHClient, cluster kubeCluster, debug bool) error {
-	for _, step := range kubeBootstrapSteps {
+func bootstrapCluster(sshClient *ssh.SSHClient, cluster kubeCluster, master, debug bool) error {
+	if master {
+		provisioningSteps = append(provisioningSteps, masterBootstapSteps)
+	} else {
+		provisioningSteps = append(provisioningSteps, nodeJoinSteps)
+	}
+	for _, step := range provisioningSteps {
 		var (
 			stdout, stderr io.Writer
 			cmd            bytes.Buffer
@@ -188,17 +222,128 @@ func bootstrapExokubeCluster(sshClient *ssh.SSHClient, cluster kubeCluster, debu
 		fmt.Printf("success!\n")
 	}
 
-	// for _, file := range []string{"ca.pem", "cert.pem", "key.pem"} {
-	// 	err := sshClient.scp("/etc/docker/"+file, path.Join(getKubeconfigPath(cluster.Name), "docker", file))
-	// 	if err != nil {
-	// 		return fmt.Errorf("unable to retrieve Docker host file %q: %s", file, err)
-	// 	}
-	// }
-
-	// err := sshClient.scp("/etc/kubernetes/admin.conf", path.Join(getKubeconfigPath(cluster.Name), "kubeconfig"))
-	// if err != nil {
-	// 	return fmt.Errorf("unable to retrieve Kubernetes cluster configuration: %s", err)
-	// }
-
 	return nil
+}
+
+func (*Actuator) provisionMaster(machine *clusterv1.Machine, vm *egoscale.VirtualMachine, username string) error {
+	sshClient := ssh.NewSSHClient(
+		vm.IP().String(),
+		username,
+		vm.Password,
+	)
+
+	test := kubeCluster{
+		Name:              vm.Name,
+		KubernetesVersion: machine.Spec.Versions.ControlPlane,
+		CalicoVersion:     kubeCalicoVersion,
+		DockerVersion:     kubeDockerVersion,
+		Address:           vm.IP().String(),
+	}
+
+	spew.Dump(test)
+
+	if err := bootstrapCluster(sshClient, test, true, false); err != nil {
+		return fmt.Errorf("cluster bootstrap failed: %s", err)
+	}
+	return nil
+}
+
+func (a *Actuator) provisionNode(cluster *clusterv1.Cluster, machine *clusterv1.Machine, vm *egoscale.VirtualMachine, username string) error {
+
+	bootstrapToken, err := a.getNodeJoinToken(cluster, machine)
+	if err != nil {
+		return fmt.Errorf("failed to obtain token for node %q to join cluster %q: %v", machine.Name, cluster.Name, err)
+	}
+
+	//XXX work only with 1 master at the moment
+	controlPlaneMachine, err := a.getControlPlaneMachine(machine)
+	if err != nil {
+		return err
+	}
+
+	controlPlaneIP, err := a.GetIP(cluster, controlPlaneMachine)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve controlplane (GetIP): %v", err)
+	}
+
+	sshClient := ssh.NewSSHClient(
+		vm.IP().String(),
+		username,
+		vm.Password,
+	)
+
+	if err := bootstrapCluster(sshClient, kubeCluster{
+		Name:              vm.Name,
+		KubernetesVersion: machine.Spec.Versions.Kubelet,
+		DockerVersion:     kubeDockerVersion,
+		Address:           vm.IP().String(),
+		MasterIP:          controlPlaneIP,
+		Token:             bootstrapToken,
+		MasterPort:        "6443",
+	}, false, false); err != nil {
+		return fmt.Errorf("node bootstrap failed: %s", err)
+	}
+	return nil
+}
+
+// getControlPlaneMachine get the first controlPlane machine found
+func (a *Actuator) getControlPlaneMachine(machine *clusterv1.Machine) (*clusterv1.Machine, error) {
+	machineClient := a.machinesGetter.Machines(machine.Namespace)
+	machineList, err := machineClient.List(v1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed get machine list: %v", err)
+	}
+	controlPlaneList := a.getControlPlaneMachines(machineList)
+
+	//XXX work only with 1 master at the moment
+	if len(controlPlaneList) == 1 {
+		return controlPlaneList[0], nil
+	}
+
+	return nil, fmt.Errorf("invalid master number expect 1 (XXX for the time being) got %d", len(controlPlaneList))
+}
+
+func (a *Actuator) getNodeJoinToken(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (string, error) {
+
+	//XXX work only with 1 master at the moment
+	controlPlaneMachine, err := a.getControlPlaneMachine(machine)
+	if err != nil {
+		return "", err
+	}
+
+	controlPlaneIP, err := a.GetIP(cluster, controlPlaneMachine)
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve controlplane (GetIP): %v", err)
+	}
+
+	controlPlaneURL := fmt.Sprintf("https://%s:6443", controlPlaneIP)
+	klog.V(1).Infof("control plane url %q", controlPlaneURL)
+
+	kubeConfig, err := a.GetKubeConfig(cluster, controlPlaneMachine)
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve kubeconfig for cluster %q: %v", cluster.Name, err)
+	}
+
+	clientConfig, err := clientcmd.BuildConfigFromKubeconfigGetter(controlPlaneURL, func() (*clientcmdapi.Config, error) {
+		return clientcmd.Load([]byte(kubeConfig))
+	})
+
+	if err != nil {
+		return "", fmt.Errorf("failed to get client config for cluster at %q: %v", controlPlaneURL, err)
+	}
+
+	coreClient, err := corev1.NewForConfig(clientConfig)
+	if err != nil {
+		return "", fmt.Errorf("failed to initialize new corev1 client: %v", err)
+	}
+
+	// XXX this could be super slow...
+	bootstrapToken, err := tokens.NewBootstrap(coreClient, 20*time.Minute)
+	if err != nil {
+		return "", fmt.Errorf("failed to create new bootstrap token: %v", err)
+	}
+
+	klog.V(1).Infof("boostrap token %q", bootstrapToken)
+
+	return bootstrapToken, nil
 }

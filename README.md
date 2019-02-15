@@ -38,6 +38,18 @@ Run the `clusterctl` command.
         -e ~/.kube/config
 ```
 
+Follow the master bootstrap.
+
+```console
+% kubectl logs -f exoscale-provider-controllers-... -n exoscale-provider-system
+```
+
+Follow the node bootstrap.
+
+```console
+% kubectl --kubeconfig kubeconfig logs -f exoscale-provider-controllers-... -n exoscale-provider-system
+```
+
 Clean up by deleting the data from the CRDs before removing the other resources.
 
 ```console
@@ -71,6 +83,8 @@ Same as above.
 ```console
 % go run cmd/manager/main.go -v 9
 ```
+
+**WARNING**, doing so means the workers step cannot be completed. You'll only get the master nodes.
 
 ## Using [KIND](https://github.com/kubernetes-sigs/kind)
 

@@ -31,9 +31,7 @@ spec:
           type: string
         metadata:
           type: object
-        sshKeyName:
-          type: string
-        sshPrivateKey:
+        password:
           type: string
         templateID:
           type: object
@@ -44,10 +42,9 @@ spec:
       required:
       - id
       - ip
-      - sshKeyName
-      - sshPrivateKey
       - templateID
       - user
+      - password
       - zoneID
   version: v1alpha1
 status:

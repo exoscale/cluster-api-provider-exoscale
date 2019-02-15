@@ -16,7 +16,7 @@ resources:
 
 secretGenerator:
 - env: exoscale.ini
-  name: controller-secrets
+  name: credentials
   type: Opaque
 
 patchesStrategicMerge:

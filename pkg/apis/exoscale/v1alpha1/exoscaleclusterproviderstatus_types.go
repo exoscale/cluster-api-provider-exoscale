@@ -32,7 +32,8 @@ type ExoscaleClusterProviderStatus struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	SecurityGroupID *egoscale.UUID `json:"securityGroupID"`
+	MasterSecurityGroupID *egoscale.UUID `json:"masterSecurityGroupID"`
+	NodeSecurityGroupID   *egoscale.UUID `json:"nodeSecurityGroupID"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

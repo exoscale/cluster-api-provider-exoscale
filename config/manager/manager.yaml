@@ -16,7 +16,7 @@ spec:
 apiVersion: apps/v1beta1
 kind: Deployment
 metadata:
-  name: controllers
+  name: controller-manager
   labels:
     control-plane: exoscale-controller-manager
     controller-tools.k8s.io: "1.0"

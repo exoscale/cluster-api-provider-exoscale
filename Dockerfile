@@ -20,4 +20,4 @@ FROM linuxkit/ca-certificates:v0.6
 WORKDIR /root/
 COPY --from=builder /usr/local/bin/manager .
 
-ENTRYPOINT ["./manager", "-v", "9"]
+ENTRYPOINT ["./manager"]

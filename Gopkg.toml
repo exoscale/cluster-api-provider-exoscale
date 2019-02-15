@@ -69,3 +69,7 @@ required = [
 [[constraint]]
   name = "github.com/cenkalti/backoff"
   version = "2.1.1"
+
+[[constraint]]
+  branch = "master"
+  name = "k8s.io/cluster-bootstrap"

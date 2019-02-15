@@ -42,7 +42,6 @@ Follow the node bootstrap.
 
 ### have a look to your new node
 
-have a look to your nodes:
 ```
 % kubectl --kubeconfig kubeconfig get nodes
 my-exoscale-master-jg4dw   Ready    master   3m   v1.12.5

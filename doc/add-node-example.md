@@ -6,9 +6,9 @@
 
 [cluster-api-provider-exoscale](https://github.com/pierre-emmanuelJ/cluster-api-provider-exoscale#cluster-api-provider-exoscale)
 
-## Now you have a Kubernetes cluster deployed
+## Add a node to a deployed cluster
 
-have a look to your nodes:
+have a look to your nodes on your deployed cluster:
 ```
 % kubectl --kubeconfig kubeconfig get nodes
 my-exoscale-master-jg4dw   Ready    master   2m   v1.12.5

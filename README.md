@@ -1,4 +1,4 @@
-# cluster-api-provider-exoscale
+# Kubernetes Cluster API Provider Exoscale
 
 Spawn a fresh kubernetes cluster, feel free to delete any old one if something looks funny.
 

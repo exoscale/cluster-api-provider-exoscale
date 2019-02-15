@@ -123,3 +123,10 @@ nodes:
 ```
 
 **NB** kubeadm v1.12 is `v1alpha3` when v1.13 is `v1beta`
+
+
+
+## Use Exoscale Cluster API
+
+### nodes example
+- [add a node to a deployed cluster](./doc/add-node-example.md)

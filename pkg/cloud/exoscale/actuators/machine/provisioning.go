@@ -296,7 +296,7 @@ func (a *Actuator) getControlPlaneMachine(machine *clusterv1.Machine) (*clusterv
 	controlPlaneList := a.getControlPlaneMachines(machineList)
 
 	//XXX work only with 1 master at the moment
-	if len(controlPlaneList) != 1 {
+	if len(controlPlaneList) == 1 {
 		return controlPlaneList[0], nil
 	}
 

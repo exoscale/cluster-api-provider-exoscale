@@ -1,4 +1,8 @@
-# cluster-api-provider-exoscale
+<img src="https://user-images.githubusercontent.com/15922119/44146028-0dac3246-a08e-11e8-99dc-95c8731e9f3a.png" alt="Exoscale" align="right" height="100" width="100">
+<img src="https://github.com/kubernetes/kubernetes/raw/master/logo/logo.png" alt="Exoscale" align="right" height="100" width="100">
+
+
+# Kubernetes Cluster API Provider Exoscale
 
 Spawn a fresh kubernetes cluster, feel free to delete any old one if something looks funny.
 
@@ -6,18 +10,9 @@ Spawn a fresh kubernetes cluster, feel free to delete any old one if something l
 % minikube start --kubernetes-version v1.12.5 --vm-driver kvm2
 ```
 
-## hacking the clusterctl side
-
-Building the `manager` image.
-
-```
-% eval $(minikube docker-env)
-
-% make docker-build
-```
+## clusterctl side
 
 Build the manifests.
-
 
 ```console
 export EXOSCALE_API_KEY=EXO...
@@ -132,3 +127,10 @@ nodes:
 ```
 
 **NB** kubeadm v1.12 is `v1alpha3` when v1.13 is `v1beta`
+
+
+
+## Use Exoscale Cluster API
+
+### nodes example
+- [add a node to a deployed cluster](./doc/add-node-example.md)

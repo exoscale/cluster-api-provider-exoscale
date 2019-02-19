@@ -5,10 +5,10 @@ namespace: exoscale-provider-system
 namePrefix: exoscale-provider-
 
 resources:
-- crds/exoscale_v1alpha1_exoscaleclusterproviderspec.yaml
-- crds/exoscale_v1alpha1_exoscaleclusterproviderstatus.yaml
-- crds/exoscale_v1alpha1_exoscalemachineproviderspec.yaml
-- crds/exoscale_v1alpha1_exoscalemachineproviderstatus.yaml
+#- crds/exoscale_v1alpha1_exoscaleclusterproviderspec.yaml
+#- crds/exoscale_v1alpha1_exoscaleclusterproviderstatus.yaml
+#- crds/exoscale_v1alpha1_exoscalemachineproviderspec.yaml
+#- crds/exoscale_v1alpha1_exoscalemachineproviderstatus.yaml
 - rbac/rbac_role.yaml
 - rbac/rbac_role_binding.yaml
 - manager/namespace.yaml

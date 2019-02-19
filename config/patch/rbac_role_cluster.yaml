@@ -4,14 +4,11 @@
   value:
     apiGroups:
     - cluster.k8s.io
-    - exoscale.k8s.io
     resources:
     - clusters
     - clusters/status
     - machines
     - machines/status
-    - machinedeployments
-    - machinesets
     verbs:
     - get
     - list

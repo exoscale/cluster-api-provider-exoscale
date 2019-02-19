@@ -31,9 +31,6 @@ run: clusterctl
 		-e ~/.kube/config
 
 
-# Deploy controller in the configured Kubernetes cluster in ~/.kube/config
-deploy: manifests
-	kubectl apply -f provider-components.yaml
 
 cluster-api-components.yaml:
 	echo "this only works with pre-2 kustomize"

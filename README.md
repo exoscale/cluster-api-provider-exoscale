@@ -132,3 +132,4 @@ nodes:
 
 ### nodes example
 - [add a node to a deployed cluster](./doc/add-node-example.md)
+- [delete a node to a deployed cluster](./doc/delete-node-example.md)

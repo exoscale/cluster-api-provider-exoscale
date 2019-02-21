@@ -41,7 +41,7 @@ func initLogs() {
 	flags := flag.NewFlagSet("klog", flag.ExitOnError)
 	klog.InitFlags(flags)
 	flags.Set("alsologtostderr", "true") // nolint: errcheck
-	flags.Set("v", "3")                  // nolint: errcheck
+	//flags.Set("v", "3")                  // nolint: errcheck
 	flag.Parse()
 }
 

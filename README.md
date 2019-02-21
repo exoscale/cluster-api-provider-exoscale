@@ -19,7 +19,7 @@ export EXOSCALE_API_KEY=EXO...
 export EXOSCALE_SECRET_KEY=...
 export EXOSCALE_COMPUTE_ENDPOINT=https://api.exoscale.com/compute
 
-% make deploy
+% make manifests
 ```
 
 Run the `clusterctl` command.
@@ -69,10 +69,8 @@ By default, the manager is run as a container. Let's run it manually instead.
 +#- manager_image_patch.yaml
 ```
 
-Same as above.
-
 ```console
-% make deploy
+% make manifests
 ```
 
 ```console
@@ -95,7 +93,7 @@ This is highly experimental...
         -c cmd/clusterctl/examples/exoscale/cluster.yaml \
         -p provider-components.yaml \
         --bootstrap-type kind \
-        --bootstrap-flags "image=kindest/node:v1.12.3" \
+        --bootstrap-flags "image=kindest/node:v1.12.5" \
         --bootstrap-flags "config=kind-config.yaml" \
         --bootstrap-flags "loglevel=debug"
 ```

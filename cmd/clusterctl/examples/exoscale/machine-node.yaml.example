@@ -18,4 +18,4 @@ items:
         type: medium
         disk: 50
     versions:
-      kubelet: 1.12.5
+      kubelet: 1.13.3

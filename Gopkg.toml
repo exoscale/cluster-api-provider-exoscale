@@ -21,8 +21,7 @@ required = [
 
 [[constraint]]
   name="sigs.k8s.io/cluster-api"
-  # the last non kubernetes 1.13 version
-  revision="76653f4302ca4eb3fb853540bf041f416849a2d9"
+  revision="eca8ab1849974505761a4c8b4b9fca53e0bb4569"
 
 [[constraint]]
   name="github.com/exoscale/egoscale"
@@ -30,31 +29,31 @@ required = [
 
 [[constraint]]
   name="sigs.k8s.io/controller-tools"
-  version="0.1.8"
+  version="v0.1.9"
 
 [[constraint]]
   name="sigs.k8s.io/controller-runtime"
-  version="=0.1.9"
+  version="v0.1.10"
 
 [[override]]
   name = "k8s.io/code-generator"
-  version = "kubernetes-1.12.5"
+  version = "kubernetes-1.13.3"
 
 [[override]]
   name = "k8s.io/api"
-  version = "kubernetes-1.12.5"
+  version = "kubernetes-1.13.3"
 
 [[override]]
   name = "k8s.io/apiextensions-apiserver"
-  version = "kubernetes-1.12.5"
+  version = "kubernetes-1.13.3"
 
 [[override]]
   name = "k8s.io/apimachinery"
-  version = "kubernetes-1.12.5"
+  version = "kubernetes-1.13.3"
 
 [[override]]
   name = "k8s.io/client-go"
-  version = "kubernetes-1.12.5"
+  version = "kubernetes-1.13.3"
 
 # For dependency below: Refer to issue https://github.com/golang/dep/issues/1799
 [[override]]

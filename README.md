@@ -31,7 +31,7 @@ export EXOSCALE_SECRET_KEY=...
 export EXOSCALE_COMPUTE_ENDPOINT=https://api.exoscale.com/compute
 ```
 
-[kind](https://github.com/kubernetes-sigs/kind) is required to act as the bootstrap cluster.
+[kind](https://github.com/kubernetes-sigs/kind) is required to act as the bootstrap cluster. `run` calls `clusterctl`.
 
 ```
 % go get -u sigs.k8s.io/kind
@@ -53,12 +53,19 @@ Follow the node bootstrap.
 % kubectl --kubeconfig kubeconfig logs -f exoscale-provider-controllers-... -n exoscale-provider-system
 ```
 
-Clean up by deleting the data from the CRDs before removing the other resources.
+And finally.
 
 ```console
-% kubectl delete machines.cluster.k8s.io my-exoscale-...
-% kubectl delete clusters.cluster.k8s.io my-exoscale-...
-% kubectl delete -f provider-components.yaml
+% kubectl --kubeconfig kubeconfig get nodes
+NAME                       STATUS   ROLES    AGE     VERSION
+my-exoscale-master-s5lmn   Ready    master   4m23s   v1.13.3
+my-exoscale-node-n7dww     Ready    <none>   34s     v1.13.3
+```
+
+Deleting the cluster use `clusterctl` as well.
+
+```console
+% make delete
 ```
 
 

@@ -29,13 +29,20 @@ bin/clusterctl: generate fmt vet
 manager: generate fmt vet
 	go build -o bin/manager sigs.k8s.io/cluster-api-provider-exoscale/cmd/manager
 
-# Run against the configured Kubernetes cluster in ~/.kube/config
+.PHONY: run
 run: bin/clusterctl provider-components.yaml
 	bin/clusterctl create cluster -v 9 \
 		--provider exoscale \
 		-m cmd/clusterctl/examples/exoscale/machine.yaml \
 		-c cmd/clusterctl/examples/exoscale/cluster.yaml \
 		-p provider-components.yaml \
+		--bootstrap-type kind
+
+.PHONY: delete
+delete: bin/clusterctl provider-components.yaml
+	bin/clusterctl delete cluster -v 9 \
+		-p provider-components.yaml \
+		--kubeconfig kubeconfig \
 		--bootstrap-type kind
 
 # Generate manifests e.g. CRD, RBAC etc.

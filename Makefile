@@ -22,19 +22,22 @@ manager: generate fmt vet
 	go build -o bin/manager sigs.k8s.io/cluster-api-provider-exoscale/cmd/manager
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
-run: clusterctl
+run: clusterctl provider-components.yaml
 	bin/clusterctl create cluster -v 9 \
 		--provider exoscale \
 		-m cmd/clusterctl/examples/exoscale/machine.yaml \
 		-c cmd/clusterctl/examples/exoscale/cluster.yaml \
 		-p provider-components.yaml \
-		-e ~/.kube/config
+		--bootstrap-type kind
 
 # Generate manifests e.g. CRD, RBAC etc.
-manifests:
-	kustomize build config > provider-components.yaml
-	echo "---" >> provider-components.yaml
-	kustomize build vendor/sigs.k8s.io/cluster-api/config/default >> provider-components.yaml
+provider-components.yaml:
+	kustomize build config > $@
+	echo "---" >> $@
+	kustomize build vendor/sigs.k8s.io/cluster-api/config/default >> $@
+
+.PHONY: manifests
+manifests: provider-components.yaml
 
 # Run go fmt against code
 fmt:

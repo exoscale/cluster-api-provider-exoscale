@@ -8,7 +8,6 @@ spec:
       containers:
       - name: exoscale-controller
         image: exoscale/cluster-api-provider-exoscale-controller:latest
-        args: ["-v", "9"]
         env:
         - name: EXOSCALE_API_KEY
           valueFrom:

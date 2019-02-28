@@ -5,7 +5,15 @@ TAG ?= latest
 IMG = ${PREFIX}/${NAME}:${TAG}
 
 
-all: test manager clusterctl
+.PHONy: all
+all: test manager bin/clusterctl
+
+.PHONY: clean
+clean:
+	rm bin/clusterctl
+	rm config/crds/*.yaml
+	rm config/rbac/*.yaml
+	rm provider-components.yaml
 
 # Run tests
 test: generate fmt vet manifests
@@ -14,7 +22,7 @@ test: generate fmt vet manifests
 		./cmd/...
 
 # Build clusterctl binary
-clusterctl: generate fmt vet
+bin/clusterctl: generate fmt vet
 	go build -o bin/clusterctl sigs.k8s.io/cluster-api-provider-exoscale/cmd/clusterctl
 
 # Build manager binary
@@ -22,7 +30,7 @@ manager: generate fmt vet
 	go build -o bin/manager sigs.k8s.io/cluster-api-provider-exoscale/cmd/manager
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
-run: clusterctl provider-components.yaml
+run: bin/clusterctl provider-components.yaml
 	bin/clusterctl create cluster -v 9 \
 		--provider exoscale \
 		-m cmd/clusterctl/examples/exoscale/machine.yaml \

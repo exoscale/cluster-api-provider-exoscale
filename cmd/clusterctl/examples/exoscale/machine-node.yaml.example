@@ -7,6 +7,7 @@ items:
   metadata:
     generateName: my-exoscale-node-
     labels:
+      cluster.k8s.io/cluster-name: my-exoscale-cluster
       set: node
   spec:
     providerSpec:
@@ -18,4 +19,4 @@ items:
         type: medium
         disk: 50
     versions:
-      kubelet: 1.12.5
+      kubelet: 1.13.3

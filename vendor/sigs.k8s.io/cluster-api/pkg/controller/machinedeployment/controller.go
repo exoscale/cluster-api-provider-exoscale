@@ -37,16 +37,18 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-// controllerKind contains the schema.GroupVersionKind for this controller type.
-var controllerKind = v1alpha1.SchemeGroupVersion.WithKind("MachineDeployment")
+var (
+	// controllerKind contains the schema.GroupVersionKind for this controller type.
+	controllerKind = v1alpha1.SchemeGroupVersion.WithKind("MachineDeployment")
+)
 
-// ReconcileMachineDeployment reconciles a MachineDeployment object
+// ReconcileMachineDeployment reconciles a MachineDeployment object.
 type ReconcileMachineDeployment struct {
 	client.Client
 	scheme *runtime.Scheme
 }
 
-// newReconciler returns a new reconcile.Reconciler
+// newReconciler returns a new reconcile.Reconciler.
 func newReconciler(mgr manager.Manager) *ReconcileMachineDeployment {
 	return &ReconcileMachineDeployment{Client: mgr.GetClient(), scheme: mgr.GetScheme()}
 }
@@ -57,31 +59,37 @@ func Add(mgr manager.Manager) error {
 	return add(mgr, newReconciler(mgr), r.MachineSetToDeployments)
 }
 
-// add adds a new Controller to mgr with r as the reconcile.Reconciler
+// add adds a new Controller to mgr with r as the reconcile.Reconciler.
 func add(mgr manager.Manager, r reconcile.Reconciler, mapFn handler.ToRequestsFunc) error {
-	// Create a new controller
+	// Create a new controller.
 	c, err := controller.New("machinedeployment-controller", mgr, controller.Options{Reconciler: r})
 	if err != nil {
 		return err
 	}
 
-	// Watch for changes to MachineDeployment
-	err = c.Watch(&source.Kind{Type: &v1alpha1.MachineDeployment{}}, &handler.EnqueueRequestForObject{})
+	// Watch for changes to MachineDeployment.
+	err = c.Watch(&source.Kind{
+		Type: &v1alpha1.MachineDeployment{}},
+		&handler.EnqueueRequestForObject{},
+	)
 	if err != nil {
 		return err
 	}
 
-	// Watch for changes to MachineSet and reconcile the owner MachineDeployment
-	err = c.Watch(&source.Kind{Type: &v1alpha1.MachineSet{}},
-		&handler.EnqueueRequestForOwner{OwnerType: &v1alpha1.MachineDeployment{}, IsController: true})
-	if err != nil {
-		return err
-	}
-
-	// Map MachineSet changes to MachineDeployment
+	// Watch for changes to MachineSet and reconcile the owner MachineDeployment.
 	err = c.Watch(
 		&source.Kind{Type: &v1alpha1.MachineSet{}},
-		&handler.EnqueueRequestsFromMapFunc{ToRequests: mapFn})
+		&handler.EnqueueRequestForOwner{OwnerType: &v1alpha1.MachineDeployment{}, IsController: true},
+	)
+	if err != nil {
+		return err
+	}
+
+	// Map MachineSet changes to MachineDeployment.
+	err = c.Watch(
+		&source.Kind{Type: &v1alpha1.MachineSet{}},
+		&handler.EnqueueRequestsFromMapFunc{ToRequests: mapFn},
+	)
 	if err != nil {
 		return err
 	}
@@ -89,52 +97,45 @@ func add(mgr manager.Manager, r reconcile.Reconciler, mapFn handler.ToRequestsFu
 	return nil
 }
 
-var _ reconcile.Reconciler = &ReconcileMachineDeployment{}
-
 func (r *ReconcileMachineDeployment) getMachineSetsForDeployment(d *v1alpha1.MachineDeployment) ([]*v1alpha1.MachineSet, error) {
-	// List all MachineSets to find those we own but that no longer match our
-	// selector.
+	// List all MachineSets to find those we own but that no longer match our selector.
 	machineSets := &v1alpha1.MachineSetList{}
-	listOptions := &client.ListOptions{
-		Namespace: d.Namespace,
-		// This is set so the fake client can be used for unit test. See:
-		// https://github.com/kubernetes-sigs/controller-runtime/issues/168
-		Raw: &metav1.ListOptions{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: v1alpha1.SchemeGroupVersion.String(),
-				Kind:       "MachineSet",
-			},
-		},
-	}
+	listOptions := &client.ListOptions{Namespace: d.Namespace}
+
 	if err := r.Client.List(context.Background(), listOptions, machineSets); err != nil {
 		return nil, err
 	}
 
 	// TODO: flush out machine set adoption.
 
-	var filteredMS []*v1alpha1.MachineSet
-	for idx, _ := range machineSets.Items {
+	filteredMS := make([]*v1alpha1.MachineSet, 0, len(machineSets.Items))
+	for idx := range machineSets.Items {
 		ms := &machineSets.Items[idx]
 		if metav1.GetControllerOf(ms) == nil || (metav1.GetControllerOf(ms) != nil && !metav1.IsControlledBy(ms, d)) {
 			klog.V(4).Infof("%s not controlled by %v", ms.Name, d.Name)
 			continue
 		}
+
 		selector, err := metav1.LabelSelectorAsSelector(&d.Spec.Selector)
 		if err != nil {
 			klog.Errorf("Skipping machineset %v, failed to get label selector from spec selector.", ms.Name)
 			continue
 		}
+
 		// If a deployment with a nil or empty selector creeps in, it should match nothing, not everything.
 		if selector.Empty() {
 			klog.Warningf("Skipping machineset %v as the selector is empty.", ms.Name)
 			continue
 		}
+
 		if !selector.Matches(labels.Set(ms.Labels)) {
 			klog.V(4).Infof("Skipping machineset %v, label mismatch.", ms.Name)
 			continue
 		}
+
 		filteredMS = append(filteredMS, ms)
 	}
+
 	return filteredMS, nil
 }
 
@@ -144,8 +145,7 @@ func (r *ReconcileMachineDeployment) getMachineSetsForDeployment(d *v1alpha1.Mac
 func (r *ReconcileMachineDeployment) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	// Fetch the MachineDeployment instance
 	d := &v1alpha1.MachineDeployment{}
-	err := r.Get(context.TODO(), request.NamespacedName, d)
-	if err != nil {
+	if err := r.Get(context.TODO(), request.NamespacedName, d); err != nil {
 		if apierrors.IsNotFound(err) {
 			// Object not found, return.  Created objects are automatically garbage collected.
 			// For additional cleanup logic use finalizers.
@@ -167,6 +167,17 @@ func (r *ReconcileMachineDeployment) Reconcile(request reconcile.Request) (recon
 			}
 		}
 		return reconcile.Result{}, nil
+	}
+
+	// Make sure that label selector can match template's labels.
+	// TODO(vincepri): Move to a validation (admission) webhook when supported.
+	selector, err := metav1.LabelSelectorAsSelector(&d.Spec.Selector)
+	if err != nil {
+		return reconcile.Result{}, errors.Wrapf(err, "failed to parse MachineDeployment %q label selector", d.Name)
+	}
+
+	if !selector.Matches(labels.Set(d.Spec.Template.Labels)) {
+		return reconcile.Result{}, errors.Errorf("failed validation on MachineDeployment %q label selector, cannot match any machines ", d.Name)
 	}
 
 	msList, err := r.getMachineSetsForDeployment(d)
@@ -199,37 +210,29 @@ func (r *ReconcileMachineDeployment) Reconcile(request reconcile.Request) (recon
 // match a MachineSet.
 func (r *ReconcileMachineDeployment) getMachineDeploymentsForMachineSet(ms *v1alpha1.MachineSet) []*v1alpha1.MachineDeployment {
 	if len(ms.Labels) == 0 {
-		klog.Warningf("no machine deployments found for MachineSet %v because it has no labels", ms.Name)
+		klog.Warningf("No machine deployments found for MachineSet %v because it has no labels", ms.Name)
 		return nil
 	}
 
 	dList := &v1alpha1.MachineDeploymentList{}
-	listOptions := &client.ListOptions{
-		Namespace: ms.Namespace,
-		// This is set so the fake client can be used for unit test. See:
-		// https://github.com/kubernetes-sigs/controller-runtime/issues/168
-		Raw: &metav1.ListOptions{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: v1alpha1.SchemeGroupVersion.String(),
-				Kind:       "MachineDeployment",
-			},
-		},
-	}
+	listOptions := &client.ListOptions{Namespace: ms.Namespace}
 	if err := r.Client.List(context.Background(), listOptions, dList); err != nil {
-		klog.Warningf("failed to list machine deployments, %v", err)
+		klog.Warningf("Failed to list machine deployments: %v", err)
 		return nil
 	}
 
-	var deployments []*v1alpha1.MachineDeployment
+	deployments := make([]*v1alpha1.MachineDeployment, 0, len(dList.Items))
 	for idx, d := range dList.Items {
 		selector, err := metav1.LabelSelectorAsSelector(&d.Spec.Selector)
 		if err != nil {
 			continue
 		}
+
 		// If a deployment with a nil or empty selector creeps in, it should match nothing, not everything.
 		if selector.Empty() || !selector.Matches(labels.Set(ms.Labels)) {
 			continue
 		}
+
 		deployments = append(deployments, &dList.Items[idx])
 	}
 
@@ -249,48 +252,44 @@ func (r *ReconcileMachineDeployment) getMachineMapForDeployment(d *v1alpha1.Mach
 	if err != nil {
 		return nil, err
 	}
+
 	machines := &v1alpha1.MachineList{}
-	listOptions := &client.ListOptions{
-		Namespace: d.Namespace,
-		// This is set so the fake client can be used for unit test. See:
-		// https://github.com/kubernetes-sigs/controller-runtime/issues/168
-		Raw: &metav1.ListOptions{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: v1alpha1.SchemeGroupVersion.String(),
-				Kind:       "Machine",
-			},
-		},
-	}
+	listOptions := &client.ListOptions{Namespace: d.Namespace}
 	if err = r.Client.List(context.Background(), listOptions.MatchingLabels(selector), machines); err != nil {
 		return nil, err
 	}
+
 	// Group Machines by their controller (if it's in msList).
 	machineMap := make(map[types.UID]*v1alpha1.MachineList, len(msList))
 	for _, ms := range msList {
 		machineMap[ms.UID] = &v1alpha1.MachineList{}
 	}
+
 	for idx := range machines.Items {
 		machine := &machines.Items[idx]
+
 		// Do not ignore inactive Machines because Recreate Deployments need to verify that no
 		// Machines from older versions are running before spinning up new Machines.
 		controllerRef := metav1.GetControllerOf(machine)
 		if controllerRef == nil {
 			continue
 		}
+
 		// Only append if we care about this UID.
 		if machineList, ok := machineMap[controllerRef.UID]; ok {
 			machineList.Items = append(machineList.Items, *machine)
 		}
 	}
+
 	return machineMap, nil
 }
 
 func (r *ReconcileMachineDeployment) MachineSetToDeployments(o handler.MapObject) []reconcile.Request {
 	result := []reconcile.Request{}
+
 	ms := &v1alpha1.MachineSet{}
 	key := client.ObjectKey{Namespace: o.Meta.GetNamespace(), Name: o.Meta.GetName()}
-	err := r.Client.Get(context.Background(), key, ms)
-	if err != nil {
+	if err := r.Client.Get(context.Background(), key, ms); err != nil {
 		klog.Errorf("Unable to retrieve Machineset %v from store: %v", key, err)
 		return nil
 	}
@@ -308,8 +307,8 @@ func (r *ReconcileMachineDeployment) MachineSetToDeployments(o handler.MapObject
 	}
 
 	for _, md := range mds {
-		result = append(result, reconcile.Request{
-			NamespacedName: client.ObjectKey{Namespace: md.Namespace, Name: md.Name}})
+		name := client.ObjectKey{Namespace: md.Namespace, Name: md.Name}
+		result = append(result, reconcile.Request{NamespacedName: name})
 	}
 
 	return result

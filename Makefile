@@ -5,7 +5,15 @@ TAG ?= latest
 IMG = ${PREFIX}/${NAME}:${TAG}
 
 
-all: test manager clusterctl
+.PHONy: all
+all: test manager bin/clusterctl
+
+.PHONY: clean
+clean:
+	rm bin/clusterctl
+	rm config/crds/*.yaml
+	rm config/rbac/*.yaml
+	rm provider-components.yaml
 
 # Run tests
 test: generate fmt vet manifests
@@ -14,33 +22,37 @@ test: generate fmt vet manifests
 		./cmd/...
 
 # Build clusterctl binary
-clusterctl: generate fmt vet
+bin/clusterctl: generate fmt vet
 	go build -o bin/clusterctl sigs.k8s.io/cluster-api-provider-exoscale/cmd/clusterctl
 
 # Build manager binary
 manager: generate fmt vet
 	go build -o bin/manager sigs.k8s.io/cluster-api-provider-exoscale/cmd/manager
 
-# Run against the configured Kubernetes cluster in ~/.kube/config
-run: clusterctl
+.PHONY: run
+run: bin/clusterctl provider-components.yaml
 	bin/clusterctl create cluster -v 9 \
 		--provider exoscale \
 		-m cmd/clusterctl/examples/exoscale/machine.yaml \
 		-c cmd/clusterctl/examples/exoscale/cluster.yaml \
 		-p provider-components.yaml \
-		-e ~/.kube/config
+		--bootstrap-type kind
 
-
-
-cluster-api-components.yaml:
-	echo "this only works with pre-2 kustomize"
-	kustomize build vendor/sigs.k8s.io/cluster-api/config/default/kustomization.yaml >> provider-components.yaml
+.PHONY: delete
+delete: bin/clusterctl provider-components.yaml
+	bin/clusterctl delete cluster -v 9 \
+		-p provider-components.yaml \
+		--kubeconfig kubeconfig \
+		--bootstrap-type kind
 
 # Generate manifests e.g. CRD, RBAC etc.
-manifests: cluster-api-components.yaml
-	kustomize build config > provider-components.yaml
-	echo "---" >> provider-components.yaml
-	cat cluster-api-components.yaml >> provider-components.yaml
+provider-components.yaml:
+	kustomize build config > $@
+	echo "---" >> $@
+	kustomize build vendor/sigs.k8s.io/cluster-api/config/default >> $@
+
+.PHONY: manifests
+manifests: generate provider-components.yaml
 
 # Run go fmt against code
 fmt:

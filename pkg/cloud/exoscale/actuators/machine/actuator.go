@@ -55,7 +55,7 @@ func NewActuator(params ActuatorParams) (*Actuator, error) {
 
 // Create creates a machine and is invoked by the Machine Controller
 func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
-	klog.V(1).Infof("Creating machine %v for cluster %v.", machine.Name, cluster.Name)
+	klog.V(1).Infof("Creating machine %q, for cluster %#v.", machine.Name, cluster)
 
 	clusterStatus, err := exoscalev1.ClusterStatusFromProviderStatus(cluster.Status.ProviderStatus)
 	if err != nil {
@@ -344,11 +344,7 @@ func (a *Actuator) Update(ctx context.Context, cluster *clusterv1.Cluster, machi
 
 // Exists test for the existance of a machine and is invoked by the Machine Controller
 func (a *Actuator) Exists(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) (bool, error) {
-	if cluster == nil || machine == nil {
-		return false, fmt.Errorf("got nil? cluster is %v, machine is %v", cluster, machine)
-	}
-
-	klog.V(1).Infof("Checking if machine %v for cluster %v exists.", machine.Name, cluster.Name)
+	klog.V(1).Infof("Checking if machine %q exists for cluster %#v.", machine.Name, cluster)
 
 	exoClient, err := exoclient.Client()
 	if err != nil {

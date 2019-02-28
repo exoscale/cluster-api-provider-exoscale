@@ -45,7 +45,7 @@ provider-components.yaml:
 	kustomize build vendor/sigs.k8s.io/cluster-api/config/default >> $@
 
 .PHONY: manifests
-manifests: provider-components.yaml
+manifests: generate provider-components.yaml
 
 # Run go fmt against code
 fmt:

@@ -7,6 +7,7 @@ items:
   metadata:
     generateName: my-exoscale-master-
     labels:
+      cluster.k8s.io/cluster-name: my-exoscale-cluster
       set: master
   spec:
     providerSpec:
@@ -26,6 +27,7 @@ items:
   metadata:
     generateName: my-exoscale-node-
     labels:
+      cluster.k8s.io/cluster-name: my-exoscale-cluster
       set: node
   spec:
     providerSpec:

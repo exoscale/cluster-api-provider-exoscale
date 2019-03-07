@@ -64,13 +64,24 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 		return fmt.Errorf("error loading cluster provider config: %v", err)
 	}
 
+	masterSecurityGroup := clusterSpec.MasterSecurityGroup
+	if masterSecurityGroup == "" {
+		// XXX change with cluster.GenerateName -master when it will be valid
+		masterSecurityGroup = cluster.ObjectMeta.Name + "-master"
+	}
+	nodeSecurityGroup := clusterSpec.NodeSecurityGroup
+	if nodeSecurityGroup == "" {
+		// XXX change with cluster.GenerateName -node when it will be valid
+		nodeSecurityGroup = cluster.ObjectMeta.Name + "-node"
+	}
+
 	//XXX can be possible to authorize sg in each other
-	masterRules := createMasterFirewallRules(clusterSpec.MasterSecurityGroup)
-	nodeRules := createNodeFirewallRules(clusterSpec.NodeSecurityGroup, clusterSpec.MasterSecurityGroup)
+	masterRules := createMasterFirewallRules(masterSecurityGroup)
+	nodeRules := createNodeFirewallRules(nodeSecurityGroup, masterSecurityGroup)
 
 	masterSGID := clusterStatus.MasterSecurityGroupID
 	if clusterStatus.MasterSecurityGroupID == nil {
-		masterSGID, err = checkSecurityGroup(clusterSpec.MasterSecurityGroup, masterRules)
+		masterSGID, err = checkSecurityGroup(masterSecurityGroup, masterRules)
 		if err != nil {
 			//XXX if fail clean sg and delete it
 			return err
@@ -80,7 +91,7 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 	}
 	nodeSGID := clusterStatus.NodeSecurityGroupID
 	if clusterStatus.NodeSecurityGroupID == nil {
-		nodeSGID, err = checkSecurityGroup(clusterSpec.NodeSecurityGroup, nodeRules)
+		nodeSGID, err = checkSecurityGroup(nodeSecurityGroup, nodeRules)
 		if err != nil {
 			//XXX if fail clean sg and delete it
 			return err

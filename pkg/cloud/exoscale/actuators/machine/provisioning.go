@@ -8,7 +8,6 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/exoscale/egoscale"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -239,8 +238,6 @@ func (*Actuator) provisionMaster(machine *clusterv1.Machine, vm *egoscale.Virtua
 		DockerVersion:     kubeDockerVersion,
 		Address:           vm.IP().String(),
 	}
-
-	spew.Dump(test)
 
 	if err := bootstrapCluster(sshClient, test, true, false); err != nil {
 		return fmt.Errorf("cluster bootstrap failed: %s", err)

@@ -15,6 +15,7 @@ spec:
     value:
       apiVersion: "exoscale.cluster.k8s.io/v1alpha1"
       kind: "ExoscaleClusterProviderSpec"
-
-      masterSecurityGroup: master-kubernetes
-      nodeSecurityGroup: node-kubernetes
+      # If name is empty "xxxxx-master" will be created
+      masterSecurityGroup: ""
+      # If name is empty "xxxxx-node" will be created
+      nodeSecurityGroup: ""

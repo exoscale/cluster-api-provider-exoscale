@@ -31,10 +31,10 @@ type ExoscaleClusterProviderSpec struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// MasterSecurityGroup is the name of master firewalling security group.
-	MasterSecurityGroup string `json:"masterSecurityGroup"`
-	// NodeSecurityGroup is the name of nodes firewalling security group.
-	NodeSecurityGroup string `json:"nodeSecurityGroup"`
+	// MasterSecurityGroup is the prefix name of master firewalling security group.
+	MasterSecurityGroupPrefix string `json:"masterSecurityGroupPrefix"`
+	// NodeSecurityGroup is the prefix name of nodes firewalling security group.
+	NodeSecurityGroupPrefix string `json:"nodeSecurityGroupPrefix"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

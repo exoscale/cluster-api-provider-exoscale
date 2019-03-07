@@ -64,8 +64,14 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 		return fmt.Errorf("error loading cluster provider config: %v", err)
 	}
 
-	masterSecurityGroup := clusterSpec.MasterSecurityGroupPrefix + cluster.GenerateName
-	nodeSecurityGroup := clusterSpec.NodeSecurityGroupPrefix + cluster.GenerateName
+	masterSecurityGroup := clusterSpec.MasterSecurityGroup
+	if masterSecurityGroup == "" {
+		masterSecurityGroup = cluster.GenerateName + "-master"
+	}
+	nodeSecurityGroup := clusterSpec.NodeSecurityGroup
+	if nodeSecurityGroup == "" {
+		nodeSecurityGroup = cluster.GenerateName + "-node"
+	}
 
 	//XXX can be possible to authorize sg in each other
 	masterRules := createMasterFirewallRules(masterSecurityGroup)

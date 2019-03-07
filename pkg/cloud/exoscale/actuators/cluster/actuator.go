@@ -66,11 +66,13 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 
 	masterSecurityGroup := clusterSpec.MasterSecurityGroup
 	if masterSecurityGroup == "" {
-		masterSecurityGroup = cluster.GenerateName + "-master"
+		// XXX change with cluster.GenerateName -master when it will be valid
+		masterSecurityGroup = cluster.ObjectMeta.Name + "-master"
 	}
 	nodeSecurityGroup := clusterSpec.NodeSecurityGroup
 	if nodeSecurityGroup == "" {
-		nodeSecurityGroup = cluster.GenerateName + "-node"
+		// XXX change with cluster.GenerateName -node when it will be valid
+		nodeSecurityGroup = cluster.ObjectMeta.Name + "-node"
 	}
 
 	//XXX can be possible to authorize sg in each other

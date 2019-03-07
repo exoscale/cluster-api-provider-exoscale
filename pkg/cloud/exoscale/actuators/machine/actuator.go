@@ -179,6 +179,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	annotations[exoscalev1.ExoscaleIPAnnotationKey] = vm.IP().String()
 	annotations[exoscalev1.ExoscaleUsernameAnnotationKey] = username
 	annotations[exoscalev1.ExoscalePasswordAnnotationKey] = vm.Password
+	annotations[exoscalev1.ExoscaleVMIDAnnotationKey] = vm.ID.String()
 	machine.SetAnnotations(annotations)
 
 	machineClient := a.machinesGetter.Machines(machine.Namespace)
@@ -247,9 +248,19 @@ func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machi
 		klog.V(1).Infof("deleting machine %q from %q.", machine.Name, cluster.Name)
 	}
 
-	machineStatus, err := exoscalev1.MachineStatusFromProviderStatus(machine.Status.ProviderStatus)
+	annotations := machine.GetAnnotations()
+	if annotations == nil {
+		return errors.New("could not get the annotations")
+	}
+
+	strID, ok := annotations[exoscalev1.ExoscaleVMIDAnnotationKey]
+	if !ok {
+		return errors.New("could not get VM ID from the annotations")
+	}
+
+	id, err := egoscale.ParseUUID(strID)
 	if err != nil {
-		return fmt.Errorf("cannot unmarshal machine.Spec field: %v", err)
+		return err
 	}
 
 	exoClient, err := exoclient.Client()
@@ -264,7 +275,7 @@ func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machi
 	*/
 
 	err = exoClient.Delete(egoscale.VirtualMachine{
-		ID: machineStatus.ID,
+		ID: id,
 	})
 	// It was already deleted externally
 	if e, ok := err.(*egoscale.ErrorResponse); ok {

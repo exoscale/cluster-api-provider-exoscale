@@ -32,6 +32,8 @@ const (
 	ExoscalePasswordAnnotationKey = "exoscale-secret-password"
 	// ExoscaleUsernameAnnotationKey represents the machine username
 	ExoscaleUsernameAnnotationKey = "exoscale-username"
+	// ExoscaleVMIDAnnotationKey represents the machine ID
+	ExoscaleVMIDAnnotationKey = "exoscale-vm-id"
 )
 
 // +genclient

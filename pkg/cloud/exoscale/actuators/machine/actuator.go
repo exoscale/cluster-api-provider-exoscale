@@ -160,7 +160,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	case "node":
 		err = a.provisionNode(cluster, machine, vm, username)
 	default:
-		err = fmt.Errorf(`invalide machine set: %q expected "master" or "node" only`, machineSet)
+		err = fmt.Errorf(`invalid machine set: %q expected "master" or "node" only`, machineSet)
 	}
 
 	if err != nil {

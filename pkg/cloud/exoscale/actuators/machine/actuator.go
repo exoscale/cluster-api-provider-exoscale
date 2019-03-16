@@ -130,7 +130,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 			return fmt.Errorf("an SSH key with that name %q already exists, please choose a different name", sshKeyName)
 		}
 	*/
-	println("MACHINESET.LABEL:", machine.ObjectMeta.Labels["set"])
+	klog.V(4).Infof("MACHINESET.LABEL: %q", machine.ObjectMeta.Labels["set"])
 
 	req := egoscale.DeployVirtualMachine{
 		Name:              machine.Name,

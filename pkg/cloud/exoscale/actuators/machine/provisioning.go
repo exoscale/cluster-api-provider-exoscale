@@ -41,7 +41,7 @@ var provisioningSteps = []kubeBootstrapStep{
 set -xe
 
 sudo -E DEBIAN_FRONTEND=noninteractive apt-get update
-sudo -E DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+#sudo -E DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
 sudo -E DEBIAN_FRONTEND=noninteractive apt-get install -y \
 	apt-transport-https \
 	ca-certificates \
@@ -183,12 +183,14 @@ type kubeCluster struct {
 }
 
 func bootstrapCluster(sshClient *ssh.SSHClient, cluster kubeCluster, master, debug bool) error {
+	provStep := make([]kubeBootstrapStep, len(provisioningSteps))
+	copy(provStep, provisioningSteps)
 	if master {
-		provisioningSteps = append(provisioningSteps, masterBootstapSteps)
+		provStep = append(provStep, masterBootstapSteps)
 	} else {
-		provisioningSteps = append(provisioningSteps, nodeJoinSteps)
+		provStep = append(provStep, nodeJoinSteps)
 	}
-	for _, step := range provisioningSteps {
+	for _, step := range provStep {
 		var (
 			stdout, stderr io.Writer
 			cmd            bytes.Buffer
@@ -246,7 +248,6 @@ func (*Actuator) provisionMaster(machine *clusterv1.Machine, vm *egoscale.Virtua
 }
 
 func (a *Actuator) provisionNode(cluster *clusterv1.Cluster, machine *clusterv1.Machine, vm *egoscale.VirtualMachine, username string) error {
-
 	bootstrapToken, err := a.getNodeJoinToken(cluster, machine)
 	if err != nil {
 		return fmt.Errorf("failed to obtain token for node %q to join cluster %q: %v", machine.Name, cluster.Name, err)

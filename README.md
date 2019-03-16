@@ -74,3 +74,8 @@ Deleting the cluster use `clusterctl` as well.
 ### nodes example
 - [add a node to a deployed cluster](./doc/add-node-example.md)
 - [delete a node to a deployed cluster](./doc/delete-node-example.md)
+
+### Create a cluster with `kubectl` and `clusterctl phases`
+- [cluster with two nodes](./doc/create-cluster-kubectl.md)
+
+

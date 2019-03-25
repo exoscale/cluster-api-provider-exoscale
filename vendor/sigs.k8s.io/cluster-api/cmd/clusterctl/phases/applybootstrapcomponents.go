@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Kubernetes Authors.
+Copyright 2019 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,22 +20,12 @@ import (
 	"github.com/pkg/errors"
 	"k8s.io/klog"
 	"sigs.k8s.io/cluster-api/cmd/clusterctl/clusterdeployer/clusterclient"
-	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 )
 
-func ApplyMachines(client clusterclient.Client, namespace string, machines []*clusterv1.Machine) error {
-	if namespace == "" {
-		namespace = client.GetContextNamespace()
-	}
-
-	err := client.EnsureNamespace(namespace)
-	if err != nil {
-		return errors.Wrapf(err, "unable to ensure namespace %q", namespace)
-	}
-
-	klog.Infof("Creating machines in namespace %q", namespace)
-	if err := client.CreateMachines(machines, namespace); err != nil {
-		return err
+func ApplyBootstrapComponents(client clusterclient.Client, components string) error {
+	klog.Info("Applying Bootstrap-only Components")
+	if err := client.Apply(components); err != nil {
+		return errors.Wrap(err, "unable to apply bootstrap-only components")
 	}
 
 	return nil

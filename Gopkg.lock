@@ -1169,7 +1169,6 @@
   analyzer-version = 1
   input-imports = [
     "github.com/cenkalti/backoff",
-    "github.com/davecgh/go-spew/spew",
     "github.com/emicklei/go-restful",
     "github.com/exoscale/egoscale",
     "github.com/ghodss/yaml",

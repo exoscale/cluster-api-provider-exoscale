@@ -41,7 +41,7 @@ var provisioningSteps = []kubeBootstrapStep{
 set -xe
 
 sudo -E DEBIAN_FRONTEND=noninteractive apt-get update
-#sudo -E DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+sudo -E DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::="--force-confnew" upgrade -y
 sudo -E DEBIAN_FRONTEND=noninteractive apt-get install -y \
 	apt-transport-https \
 	ca-certificates \

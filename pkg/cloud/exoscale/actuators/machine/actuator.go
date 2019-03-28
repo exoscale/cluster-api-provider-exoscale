@@ -262,17 +262,19 @@ func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machi
 	if err != nil {
 		return err
 	}
-	vm := resp.(*egoscale.VirtualMachine)
 
-	err = exoClient.Delete(egoscale.VirtualMachine{
-		ID: vm.ID,
-	})
 	// It was already deleted externally
 	if e, ok := err.(*egoscale.ErrorResponse); ok {
 		if e.ErrorCode == egoscale.ParamError {
 			return nil
 		}
 	}
+
+	vm := resp.(*egoscale.VirtualMachine)
+
+	err = exoClient.Delete(egoscale.VirtualMachine{
+		ID: vm.ID,
+	})
 
 	return err
 }

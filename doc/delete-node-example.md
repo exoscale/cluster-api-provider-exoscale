@@ -4,7 +4,7 @@
 
 ### Follow the instructions on
 
-[cluster-api-provider-exoscale](https://github.com/pierre-emmanuelJ/cluster-api-provider-exoscale#cluster-api-provider-exoscale)
+[cluster-api-provider-exoscale](https://github.com/exoscale/cluster-api-provider-exoscale#run)
 
 ## Delete a node to a deployed cluster
 

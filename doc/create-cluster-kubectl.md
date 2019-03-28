@@ -52,7 +52,7 @@ Follow the cluster bootstrap.
 
 Get your new `kubeconfig`from the new bootstrapped cluster
 ```
-% ./clusterctl --kubeconfig=$KUBECONFIG  \
+% ./bin/clusterctl --kubeconfig=$KUBECONFIG  \
              alpha phases  \
              get-kubeconfig \
              --provider exoscale \

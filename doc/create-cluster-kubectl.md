@@ -16,10 +16,9 @@ With [kind](https://github.com/kubernetes-sigs/kind):
 run `make`
 
 ```
-% ./bin/clusterctl --kubeconfig=$KUBECONFIG  \
-                   alpha phases \
-                   apply-cluster-api-components \
-                   -p provider-components.yaml
+% kubectl --kubeconfig=$KUBECONFIG \
+            apply -f \
+            provider-components.yaml
 ```
 You can use the kubeconfig of your bootstrap cluster, `$KUBECONFIG` in our case with `kind`
  

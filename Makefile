@@ -46,6 +46,7 @@ delete: bin/clusterctl provider-components.yaml
 		--bootstrap-type kind
 
 # Generate manifests e.g. CRD, RBAC etc.
+.PHONY: provider-components.yaml
 provider-components.yaml:
 	kustomize build config > $@
 	echo "---" >> $@

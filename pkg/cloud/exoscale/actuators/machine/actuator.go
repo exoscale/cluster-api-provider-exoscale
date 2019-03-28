@@ -247,11 +247,6 @@ func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machi
 		klog.V(1).Infof("deleting machine %q from %q.", machine.Name, cluster.Name)
 	}
 
-	machineStatus, err := exoscalev1.MachineStatusFromProviderStatus(machine.Status.ProviderStatus)
-	if err != nil {
-		return fmt.Errorf("cannot unmarshal machine.Spec field: %v", err)
-	}
-
 	exoClient, err := exoclient.Client()
 	if err != nil {
 		return err
@@ -263,15 +258,23 @@ func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machi
 		}
 	*/
 
-	err = exoClient.Delete(egoscale.VirtualMachine{
-		ID: machineStatus.ID,
-	})
+	resp, err := exoClient.GetWithContext(ctx, egoscale.VirtualMachine{Name: machine.Name})
+	if err != nil {
+		return err
+	}
+
 	// It was already deleted externally
 	if e, ok := err.(*egoscale.ErrorResponse); ok {
 		if e.ErrorCode == egoscale.ParamError {
 			return nil
 		}
 	}
+
+	vm := resp.(*egoscale.VirtualMachine)
+
+	err = exoClient.Delete(egoscale.VirtualMachine{
+		ID: vm.ID,
+	})
 
 	return err
 }

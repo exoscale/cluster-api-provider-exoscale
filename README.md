@@ -7,13 +7,6 @@
 
 ## docker side
 
-```diff
---- a/Makefile
-+++ b/Makefile
--PREFIX = exoscale
-+PREFIX = greut
-```
-
 ```console
 % make docker-build
 

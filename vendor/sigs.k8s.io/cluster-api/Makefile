@@ -22,7 +22,7 @@ export KUBEBUILDER_CONTROLPLANE_START_TIMEOUT ?=60s
 export KUBEBUILDER_CONTROLPLANE_STOP_TIMEOUT ?=60s
 
 # Image URL to use all building/pushing image targets
-export CONTROLLER_IMG ?= gcr.io/k8s-cluster-api/cluster-api-controller:latest
+export CONTROLLER_IMG ?= gcr.io/k8s-cluster-api/cluster-api-controller:0.1.0
 export EXAMPLE_PROVIDER_IMG ?= gcr.io/k8s-cluster-api/example-provider-controller:latest
 
 all: test manager clusterctl
@@ -84,6 +84,7 @@ lint-full: dep-ensure ## Run slower linters to detect possible issues
 .PHONY: generate
 generate: clientset dep-ensure ## Generate code
 	go generate ./pkg/... ./cmd/...
+	$(MAKE) gazelle
 
 .PHONY: clientset
 clientset: ## Generate a typed clientset
@@ -100,6 +101,7 @@ clientset: ## Generate a typed clientset
 		--listers-package sigs.k8s.io/cluster-api/pkg/client/listers_generated \
 		--output-package sigs.k8s.io/cluster-api/pkg/client/informers_generated \
 		--go-header-file=./hack/boilerplate.go.txt
+	$(MAKE) gazelle
 
 .PHONY: clean
 clean: ## Remove all generated files

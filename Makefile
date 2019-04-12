@@ -48,9 +48,9 @@ delete: bin/clusterctl provider-components.yaml
 # Generate manifests e.g. CRD, RBAC etc.
 .PHONY: provider-components.yaml
 provider-components.yaml:
-	kustomize build config > $@
+	kubectl kustomize config > $@
 	echo "---" >> $@
-	kustomize build vendor/sigs.k8s.io/cluster-api/config/default >> $@
+	kubectl kustomize vendor/sigs.k8s.io/cluster-api/config/default >> $@
 
 .PHONY: manifests
 manifests: generate provider-components.yaml

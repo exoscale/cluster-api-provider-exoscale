@@ -5,7 +5,11 @@
 # Kubernetes Cluster API Provider Exoscale
 
 
-## docker side
+## Prerequisite
+
+- [kubectl 1.14+](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
+
+## Docker side
 
 ```console
 % make docker-build
@@ -64,11 +68,11 @@ Deleting the cluster use `clusterctl` as well.
 
 ## Use Exoscale Cluster API
 
-### nodes example
-- [add a node to a deployed cluster](./doc/add-node-example.md)
-- [delete a node to a deployed cluster](./doc/delete-node-example.md)
+### Nodes example
+- [Add a node to a deployed cluster](./doc/add-node-example.md)
+- [Delete a node to a deployed cluster](./doc/delete-node-example.md)
 
 ### Create a cluster with `kubectl`
-- [cluster with two nodes example](./doc/create-cluster-kubectl.md)
+- [Cluster with two nodes example](./doc/create-cluster-kubectl.md)
 
 

@@ -8,6 +8,7 @@
 ## Prerequisite
 
 - [kubectl 1.14+](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
+- deepcopy-gen ($ go get k8s.io/code-generator/cmd/deepcopy-gen)
 
 ## Docker side
 

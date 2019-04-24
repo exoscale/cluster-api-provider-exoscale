@@ -14,6 +14,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/klog"
+	exoscalev1 "sigs.k8s.io/cluster-api-provider-exoscale/pkg/apis/exoscale/v1alpha1"
 	ssh "sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/actuators/ssh"
 	tokens "sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/actuators/tokens"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
@@ -182,13 +183,21 @@ type kubeCluster struct {
 	Sha256Hash        string
 }
 
-func bootstrapCluster(sshClient *ssh.SSHClient, cluster kubeCluster, master, debug bool) error {
+func bootstrapCluster(sshClient *ssh.SSHClient, cluster kubeCluster, master, provisioned, debug bool) error {
 	provStep := make([]kubeBootstrapStep, len(provisioningSteps))
 	copy(provStep, provisioningSteps)
 	if master {
-		provStep = append(provStep, masterBootstapSteps)
+		if !provisioned {
+			provStep = append(provStep, masterBootstapSteps)
+		} else {
+			provStep = []kubeBootstrapStep{masterBootstapSteps}
+		}
 	} else {
-		provStep = append(provStep, nodeJoinSteps)
+		if !provisioned {
+			provStep = append(provStep, nodeJoinSteps)
+		} else {
+			provStep = []kubeBootstrapStep{nodeJoinSteps}
+		}
 	}
 	for _, step := range provStep {
 		var (
@@ -233,7 +242,12 @@ func (*Actuator) provisionMaster(machine *clusterv1.Machine, vm *egoscale.Virtua
 		vm.Password,
 	)
 
-	test := kubeCluster{
+	machineConfig, err := exoscalev1.MachineSpecFromProviderSpec(machine.Spec.ProviderSpec)
+	if err != nil {
+		return fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
+	}
+
+	kubeCluster := kubeCluster{
 		Name:              vm.Name,
 		KubernetesVersion: machine.Spec.Versions.ControlPlane,
 		CalicoVersion:     kubeCalicoVersion,
@@ -241,7 +255,7 @@ func (*Actuator) provisionMaster(machine *clusterv1.Machine, vm *egoscale.Virtua
 		Address:           vm.IP().String(),
 	}
 
-	if err := bootstrapCluster(sshClient, test, true, false); err != nil {
+	if err := bootstrapCluster(sshClient, kubeCluster, true, machineConfig.Provisioned, false); err != nil {
 		return fmt.Errorf("cluster bootstrap failed: %s", err)
 	}
 	return nil
@@ -264,6 +278,11 @@ func (a *Actuator) provisionNode(cluster *clusterv1.Cluster, machine *clusterv1.
 		return fmt.Errorf("failed to retrieve controlplane (GetIP): %v", err)
 	}
 
+	machineConfig, err := exoscalev1.MachineSpecFromProviderSpec(machine.Spec.ProviderSpec)
+	if err != nil {
+		return fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
+	}
+
 	sshClient := ssh.NewSSHClient(
 		vm.IP().String(),
 		username,
@@ -278,7 +297,7 @@ func (a *Actuator) provisionNode(cluster *clusterv1.Cluster, machine *clusterv1.
 		MasterIP:          controlPlaneIP,
 		Token:             bootstrapToken,
 		MasterPort:        "6443",
-	}, false, false); err != nil {
+	}, false, machineConfig.Provisioned, false); err != nil {
 		return fmt.Errorf("node bootstrap failed: %s", err)
 	}
 	return nil

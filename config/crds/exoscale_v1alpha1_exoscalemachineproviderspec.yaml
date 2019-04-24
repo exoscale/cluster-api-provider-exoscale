@@ -33,8 +33,6 @@ spec:
           type: string
         metadata:
           type: object
-        provisioned:
-          type: boolean
         sshKey:
           type: string
         template:
@@ -47,7 +45,6 @@ spec:
       - disk
       - sshKey
       - template
-      - provisioned
       - type
       - zone
   version: v1alpha1

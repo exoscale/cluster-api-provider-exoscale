@@ -14,7 +14,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/klog"
-	exoscalev1 "sigs.k8s.io/cluster-api-provider-exoscale/pkg/apis/exoscale/v1alpha1"
 	ssh "sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/actuators/ssh"
 	tokens "sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/actuators/tokens"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
@@ -34,11 +33,10 @@ type kubeBootstrapStep struct {
 	command string
 }
 
-// provisioningSteps represents an instance provisioning steps for k8s
-var provisioningSteps = []kubeBootstrapStep{
-	{
-		name: "Instance system upgrade",
-		command: `\
+var systemUpdate = kubeBootstrapStep{
+
+	name: "Instance system upgrade",
+	command: `\
 set -xe
 
 sudo -E DEBIAN_FRONTEND=noninteractive apt-get update
@@ -51,25 +49,26 @@ sudo -E DEBIAN_FRONTEND=noninteractive apt-get install -y \
 	software-properties-common
 nohup sh -c 'sleep 5s ; sudo reboot' &
 exit`,
-	},
-	{
-		name: "Docker Engine installation",
-		command: `\
+}
+
+var dockerInstall = kubeBootstrapStep{
+	name: "Docker Engine installation",
+	command: `\
 set -xe
 
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
 
 sudo add-apt-repository \
-	"deb [arch=amd64] https://download.docker.com/linux/ubuntu \
-	$(lsb_release -cs) \
-	stable"
+"deb [arch=amd64] https://download.docker.com/linux/ubuntu \
+$(lsb_release -cs) \
+stable"
 
 sudo -E DEBIAN_FRONTEND=noninteractive apt-get update
 
 PKG_VERSION=$(apt-cache madison docker-ce | awk '$3 ~ /{{ .DockerVersion }}/ { print $3 }' | sort -t : -k 2 -n | tail -n 1)
 if [[ -z "${PKG_VERSION}" ]]; then
-	echo "error: unable to find docker-ce package for version {{ .DockerVersion }}" >&2
-	exit 1
+echo "error: unable to find docker-ce package for version {{ .DockerVersion }}" >&2
+exit 1
 fi
 
 sudo -E DEBIAN_FRONTEND=noninteractive apt-get install -y docker-ce=${PKG_VERSION}
@@ -77,32 +76,32 @@ sudo apt-mark hold docker-ce
 
 cat <<EOF > csr.json
 {
-	"hosts": ["{{ .Address }}"],
-	"key": {"algo": "rsa", "size": 2048},
-	"names": [{"C": "CH", "L": "Lausanne", "O": "Exoscale", "OU": "exokube", "ST": ""}]
+"hosts": ["{{ .Address }}"],
+"key": {"algo": "rsa", "size": 2048},
+"names": [{"C": "CH", "L": "Lausanne", "O": "Exoscale", "OU": "exokube", "ST": ""}]
 }
 EOF
 
 cfssl genkey -initca csr.json | cfssljson -bare ca
 
 cfssl gencert \
-	-ca ca.pem \
-	-ca-key ca-key.pem \
-	-hostname {{ .Address }} csr.json | cfssljson -bare
+-ca ca.pem \
+-ca-key ca-key.pem \
+-hostname {{ .Address }} csr.json | cfssljson -bare
 
 cat <<EOF | sudo tee /etc/docker/daemon.json
 {
-	"hosts": ["unix:///var/run/docker.sock", "tcp://0.0.0.0:2376"],
-	"tlsverify": true,
-	"tlscacert": "/etc/docker/ca.pem",
-	"tlscert": "/etc/docker/cert.pem",
-	"tlskey": "/etc/docker/key.pem",
-	"exec-opts": ["native.cgroupdriver=systemd"],
-	"storage-driver": "overlay2",
-	"log-driver": "json-file",
-	"log-opts": {
-		"max-size": "100m"
-	}
+"hosts": ["unix:///var/run/docker.sock", "tcp://0.0.0.0:2376"],
+"tlsverify": true,
+"tlscacert": "/etc/docker/ca.pem",
+"tlscert": "/etc/docker/cert.pem",
+"tlskey": "/etc/docker/key.pem",
+"exec-opts": ["native.cgroupdriver=systemd"],
+"storage-driver": "overlay2",
+"log-driver": "json-file",
+"log-opts": {
+	"max-size": "100m"
+}
 }
 EOF
 
@@ -118,10 +117,12 @@ ExecStart=
 ExecStart=/usr/bin/dockerd
 EOF
 sudo systemctl daemon-reload \
- && sudo systemctl restart docker`,
-	},
-	{
-		name: "Kubernetes cluster node installation", command: `\
+&& sudo systemctl restart docker`,
+}
+
+var kubeletInstall = kubeBootstrapStep{
+
+	name: "kubelet, kubeadm, kubectl installation", command: `\
 set -xe
 
 curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
@@ -140,7 +141,6 @@ sudo -E DEBIAN_FRONTEND=noninteractive apt-get install -y kubelet=${PKG_VERSION}
 	kubeadm=${PKG_VERSION} \
 	kubectl=${PKG_VERSION}
 sudo apt-mark hold kubelet kubeadm kubectl`,
-	},
 }
 
 // masterBootstapSteps represents a k8s instance bootstrap steps
@@ -183,22 +183,26 @@ type kubeCluster struct {
 	Sha256Hash        string
 }
 
-func bootstrapCluster(sshClient *ssh.SSHClient, cluster kubeCluster, master, provisioned, debug bool) error {
-	provStep := make([]kubeBootstrapStep, len(provisioningSteps))
-	copy(provStep, provisioningSteps)
-	if master {
-		if !provisioned {
-			provStep = append(provStep, masterBootstapSteps)
-		} else {
-			provStep = []kubeBootstrapStep{masterBootstapSteps}
-		}
-	} else {
-		if !provisioned {
-			provStep = append(provStep, nodeJoinSteps)
-		} else {
-			provStep = []kubeBootstrapStep{nodeJoinSteps}
-		}
+func bootstrapCluster(sshClient *ssh.SSHClient, cluster kubeCluster, master, debug bool) error {
+	provStep := []kubeBootstrapStep{}
+
+	_, err := sshClient.QuickCommand("docker")
+	if err != nil {
+		provStep = append(provStep, systemUpdate)
+		provStep = append(provStep, dockerInstall)
 	}
+
+	_, err = sshClient.QuickCommand("kubelet -h")
+	if err != nil {
+		provStep = append(provStep, kubeletInstall)
+	}
+
+	if master {
+		provStep = append(provStep, masterBootstapSteps)
+	} else {
+		provStep = append(provStep, nodeJoinSteps)
+	}
+
 	for _, step := range provStep {
 		var (
 			stdout, stderr io.Writer
@@ -242,11 +246,6 @@ func (*Actuator) provisionMaster(machine *clusterv1.Machine, vm *egoscale.Virtua
 		vm.Password,
 	)
 
-	machineConfig, err := exoscalev1.MachineSpecFromProviderSpec(machine.Spec.ProviderSpec)
-	if err != nil {
-		return fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
-	}
-
 	kubeCluster := kubeCluster{
 		Name:              vm.Name,
 		KubernetesVersion: machine.Spec.Versions.ControlPlane,
@@ -255,7 +254,7 @@ func (*Actuator) provisionMaster(machine *clusterv1.Machine, vm *egoscale.Virtua
 		Address:           vm.IP().String(),
 	}
 
-	if err := bootstrapCluster(sshClient, kubeCluster, true, machineConfig.Provisioned, false); err != nil {
+	if err := bootstrapCluster(sshClient, kubeCluster, true, false); err != nil {
 		return fmt.Errorf("cluster bootstrap failed: %s", err)
 	}
 	return nil
@@ -278,11 +277,6 @@ func (a *Actuator) provisionNode(cluster *clusterv1.Cluster, machine *clusterv1.
 		return fmt.Errorf("failed to retrieve controlplane (GetIP): %v", err)
 	}
 
-	machineConfig, err := exoscalev1.MachineSpecFromProviderSpec(machine.Spec.ProviderSpec)
-	if err != nil {
-		return fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
-	}
-
 	sshClient := ssh.NewSSHClient(
 		vm.IP().String(),
 		username,
@@ -297,7 +291,7 @@ func (a *Actuator) provisionNode(cluster *clusterv1.Cluster, machine *clusterv1.
 		MasterIP:          controlPlaneIP,
 		Token:             bootstrapToken,
 		MasterPort:        "6443",
-	}, false, machineConfig.Provisioned, false); err != nil {
+	}, false, false); err != nil {
 		return fmt.Errorf("node bootstrap failed: %s", err)
 	}
 	return nil

@@ -37,7 +37,6 @@ type ExoscaleMachineProviderSpec struct {
 	IPv6              bool   `json:"ipv6,omitempty"`
 	SSHKey            string `json:"sshKey"`
 	Template          string `json:"template"`
-	Provisioned       bool   `json:"provisioned"`
 	Type              string `json:"type"`
 	Zone              string `json:"zone"`
 }

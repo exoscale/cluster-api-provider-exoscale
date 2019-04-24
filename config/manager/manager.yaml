@@ -41,7 +41,7 @@ spec:
         operator: Exists
       containers:
       - name: exoscale-controller
-        image: exoscale/cluster-api-provider-exoscale-controller:0.1.1
+        image: exoscale/cluster-api-provider-exoscale-controller:latest
         imagePullPolicy: Always
         volumeMounts:
         - name: config

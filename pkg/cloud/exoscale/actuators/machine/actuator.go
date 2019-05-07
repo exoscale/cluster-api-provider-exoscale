@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/exoscale/egoscale"
@@ -153,7 +154,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 
 	klog.V(1).Infof("Provisioning (can take up to several minutes):")
 
-	machineSet := machine.ObjectMeta.Labels["set"]
+	machineSet := strings.ToLower(machine.ObjectMeta.Labels["set"])
 	switch machineSet {
 	case "master":
 		err = a.provisionMaster(machine, vm, username)
@@ -411,15 +412,4 @@ func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Mac
 	}
 
 	return buf.String(), nil
-}
-
-func (a *Actuator) getControlPlaneMachines(machineList *clusterv1.MachineList) []*clusterv1.Machine {
-	var cpm []*clusterv1.Machine
-	for _, m := range machineList.Items {
-		if m.Spec.Versions.ControlPlane != "" {
-			klog.V(0).Infof("controlplane %q", m.Spec.Versions.ControlPlane)
-			cpm = append(cpm, m.DeepCopy())
-		}
-	}
-	return cpm
 }

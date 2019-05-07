@@ -15,11 +15,9 @@ items:
         apiVersion: exoscale.cluster.k8s.io/v1alpha1
         kind: ExoscaleMachineProviderSpec
         zone: de-fra-1
-        # if template not provisioned we recommend only ubuntu
+        # if template not provisioned we recommend only ubuntu template
+        # provisioned template example (docker, kubelet, kubeadm)
         template: "Linux Ubuntu 18.04 LTS 64-bit"
-        # if you provide a template already provisioned (docker, kubelet, kubeadm, kubectl),
-        # set value to "true"
-        provisioned: false
         type: medium
         disk: 50
     versions:
@@ -41,10 +39,8 @@ items:
         zone: de-fra-1
         template: "Linux Ubuntu 18.04 LTS 64-bit"
          # if template not provisioned we recommend only ubuntu
+         # provisioned template example (docker, kubelet, kubeadm)
         template: "Linux Ubuntu 18.04 LTS 64-bit"
-        # if you provide a template already provisioned (docker, kubelet, kubeadm, kubectl),
-        # set value to "true"
-        provisioned: false
         type: medium
         disk: 50
     versions:

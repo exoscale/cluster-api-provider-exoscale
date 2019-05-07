@@ -300,18 +300,19 @@ func (a *Actuator) provisionNode(cluster *clusterv1.Cluster, machine *clusterv1.
 // getControlPlaneMachine get the first controlPlane machine found
 func (a *Actuator) getControlPlaneMachine(machine *clusterv1.Machine) (*clusterv1.Machine, error) {
 	machineClient := a.machinesGetter.Machines(machine.Namespace)
-	machineList, err := machineClient.List(v1.ListOptions{})
+	controlPlaneList, err := machineClient.List(v1.ListOptions{
+		LabelSelector: "set=master",
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed get machine list: %v", err)
+		return nil, fmt.Errorf("failed get master machines list: %v", err)
 	}
-	controlPlaneList := a.getControlPlaneMachines(machineList)
 
 	//XXX work only with 1 master at the moment
-	if len(controlPlaneList) == 1 {
-		return controlPlaneList[0], nil
+	if len(controlPlaneList.Items) == 1 {
+		return &controlPlaneList.Items[0], nil
 	}
 
-	return nil, fmt.Errorf("invalid master number expect 1 (XXX for the time being) got %d", len(controlPlaneList))
+	return nil, fmt.Errorf("invalid master number expect 1 (XXX for the time being) got %d", len(controlPlaneList.Items))
 }
 
 func (a *Actuator) getNodeJoinToken(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (string, error) {

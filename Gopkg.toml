@@ -21,11 +21,11 @@ required = [
 
 [[constraint]]
   name="sigs.k8s.io/cluster-api"
-  revision="0.1.0"
+  revision="2461be4bcef798177d17e67746abc6dcb7767053"
 
 [[constraint]]
   name="github.com/exoscale/egoscale"
-  version="0.14.3"
+  version="0.17.0"
 
 [[constraint]]
   name="sigs.k8s.io/controller-tools"

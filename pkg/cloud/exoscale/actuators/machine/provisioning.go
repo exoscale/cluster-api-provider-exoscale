@@ -221,7 +221,7 @@ func bootstrapCluster(sshClient *ssh.SSHClient, cluster kubeCluster, master, deb
 			return fmt.Errorf("template error: %s", err)
 		}
 
-		fmt.Printf("%s... ", step.name)
+		klog.V(4).Infof("%s... ", step.name)
 
 		if err := sshClient.RunCommand(cmd.String(), stdout, stderr); err != nil {
 			fmt.Printf("\n%s: failed\n", step.name)
@@ -233,7 +233,7 @@ func bootstrapCluster(sshClient *ssh.SSHClient, cluster kubeCluster, master, deb
 			return err
 		}
 
-		fmt.Printf("success!\n")
+		klog.V(4).Infof("success!\n")
 	}
 
 	return nil
@@ -267,7 +267,7 @@ func (a *Actuator) provisionNode(cluster *clusterv1.Cluster, machine *clusterv1.
 	}
 
 	//XXX work only with 1 master at the moment
-	controlPlaneMachine, err := a.getControlPlaneMachine(machine)
+	controlPlaneMachine, err := a.getControlPlaneMachine(machine, cluster.Name)
 	if err != nil {
 		return err
 	}
@@ -298,10 +298,10 @@ func (a *Actuator) provisionNode(cluster *clusterv1.Cluster, machine *clusterv1.
 }
 
 // getControlPlaneMachine get the first controlPlane machine found
-func (a *Actuator) getControlPlaneMachine(machine *clusterv1.Machine) (*clusterv1.Machine, error) {
+func (a *Actuator) getControlPlaneMachine(machine *clusterv1.Machine, clusterName string) (*clusterv1.Machine, error) {
 	machineClient := a.machinesGetter.Machines(machine.Namespace)
 	controlPlaneList, err := machineClient.List(v1.ListOptions{
-		LabelSelector: "set=master",
+		LabelSelector: fmt.Sprintf("cluster.k8s.io/cluster-name=%s, set=master", clusterName),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed get master machines list: %v", err)
@@ -318,7 +318,7 @@ func (a *Actuator) getControlPlaneMachine(machine *clusterv1.Machine) (*clusterv
 func (a *Actuator) getNodeJoinToken(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (string, error) {
 
 	//XXX work only with 1 master at the moment
-	controlPlaneMachine, err := a.getControlPlaneMachine(machine)
+	controlPlaneMachine, err := a.getControlPlaneMachine(machine, cluster.Name)
 	if err != nil {
 		return "", err
 	}

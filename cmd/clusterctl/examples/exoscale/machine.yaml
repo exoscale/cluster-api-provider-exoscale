@@ -10,6 +10,7 @@ items:
       cluster.k8s.io/cluster-name: my-exoscale-cluster
       set: master
   spec:
+    providerID: Exoscale
     providerSpec:
       value:
         apiVersion: exoscale.cluster.k8s.io/v1alpha1
@@ -32,12 +33,12 @@ items:
       cluster.k8s.io/cluster-name: my-exoscale-cluster
       set: node
   spec:
+    providerID: Exoscale
     providerSpec:
       value:
         apiVersion: exoscale.cluster.k8s.io/v1alpha1
         kind: ExoscaleMachineProviderSpec
         zone: de-fra-1
-        template: "Linux Ubuntu 18.04 LTS 64-bit"
          # if template not provisioned we recommend only ubuntu
          # provisioned template example (docker, kubelet, kubeadm)
         template: "Linux Ubuntu 18.04 LTS 64-bit"

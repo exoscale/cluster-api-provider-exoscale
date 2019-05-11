@@ -63,6 +63,13 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return fmt.Errorf("Cannot unmarshal cluster.Status field: %v", err)
 	}
 
+	machinePhase := "Pending"
+	machine.Status.Phase = &machinePhase
+	machineClient := a.machinesGetter.Machines(machine.Namespace)
+	if _, err := machineClient.UpdateStatus(machine); err != nil {
+		return err
+	}
+
 	machineConfig, err := exoscalev1.MachineSpecFromProviderSpec(machine.Spec.ProviderSpec)
 	if err != nil {
 		return fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
@@ -131,26 +138,56 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 			return fmt.Errorf("an SSH key with that name %q already exists, please choose a different name", sshKeyName)
 		}
 	*/
+
 	klog.V(4).Infof("MACHINESET.LABEL: %q", machine.ObjectMeta.Labels["set"])
 
-	req := egoscale.DeployVirtualMachine{
-		Name:              machine.Name,
-		ZoneID:            zone.ID,
-		TemplateID:        template.ID,
-		RootDiskSize:      machineConfig.Disk,
-		SecurityGroupIDs:  []egoscale.UUID{*securityGroup},
-		ServiceOfferingID: serviceOffering.ID,
-		KeyPair:           sshKeyName,
-	}
-
-	resp, err := exoClient.RequestWithContext(ctx, req)
+	resp, err := exoClient.GetWithContext(ctx, &egoscale.VirtualMachine{Name: machine.Name})
 	if err != nil {
-		//cleanSSHKey(exoClient, keyPairs.Name)
-		return fmt.Errorf("exoscale failed to DeployVirtualMachine %v", err)
+		req := egoscale.DeployVirtualMachine{
+			Name:              machine.Name,
+			ZoneID:            zone.ID,
+			TemplateID:        template.ID,
+			RootDiskSize:      machineConfig.Disk,
+			SecurityGroupIDs:  []egoscale.UUID{*securityGroup},
+			ServiceOfferingID: serviceOffering.ID,
+			KeyPair:           sshKeyName,
+		}
+
+		resp, err = exoClient.RequestWithContext(ctx, req)
+		if err != nil {
+			//cleanSSHKey(exoClient, keyPairs.Name)
+			return fmt.Errorf("exoscale failed to DeployVirtualMachine %v", err)
+		}
 	}
 	vm := resp.(*egoscale.VirtualMachine)
 
 	klog.V(4).Infof("Deployed instance: %q, IP: %s, password: %q", vm.Name, vm.IP().String(), vm.Password)
+
+	// XXX annotations should be replaced by the proper NodeRef
+	// https://github.com/kubernetes-sigs/cluster-api/blob/3b5183805f4dbf859d39a2600b268192a8191950/cmd/clusterctl/clusterdeployer/clusterclient/clusterclient.go#L579-L581
+	annotations := machine.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+
+	if annotations[exoscalev1.ExoscaleIPAnnotationKey] == "" {
+		annotations[exoscalev1.ExoscaleIPAnnotationKey] = vm.IP().String()
+	}
+	if annotations[exoscalev1.ExoscaleUsernameAnnotationKey] == "" {
+		annotations[exoscalev1.ExoscaleUsernameAnnotationKey] = username
+	}
+	if annotations[exoscalev1.ExoscalePasswordAnnotationKey] == "" {
+		annotations[exoscalev1.ExoscalePasswordAnnotationKey] = vm.Password
+	} else {
+		vm.Password = annotations[exoscalev1.ExoscalePasswordAnnotationKey]
+	}
+	machine.SetAnnotations(annotations)
+
+	machineClient = a.machinesGetter.Machines(machine.Namespace)
+	newMachine, err := machineClient.Update(machine)
+	if err != nil {
+		return err
+	}
 
 	klog.V(1).Infof("Provisioning (can take up to several minutes):")
 
@@ -163,30 +200,12 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	default:
 		err = fmt.Errorf(`invalid machine set: %q expected "master" or "node" only`, machineSet)
 	}
-
 	if err != nil {
 		//cleanSSHKey(exoClient, keyPairs.Name)
 		return err
 	}
 
 	klog.V(1).Infof("Machine %q provisioning success!", machine.Name)
-
-	// XXX annotations should be replaced by the proper NodeRef
-	// https://github.com/kubernetes-sigs/cluster-api/blob/3b5183805f4dbf859d39a2600b268192a8191950/cmd/clusterctl/clusterdeployer/clusterclient/clusterclient.go#L579-L581
-	annotations := machine.GetAnnotations()
-	if annotations == nil {
-		annotations = make(map[string]string)
-	}
-	annotations[exoscalev1.ExoscaleIPAnnotationKey] = vm.IP().String()
-	annotations[exoscalev1.ExoscaleUsernameAnnotationKey] = username
-	annotations[exoscalev1.ExoscalePasswordAnnotationKey] = vm.Password
-	machine.SetAnnotations(annotations)
-
-	machineClient := a.machinesGetter.Machines(machine.Namespace)
-	newMachine, err := machineClient.Update(machine)
-	if err != nil {
-		return err
-	}
 
 	machineStatus := &exoscalev1.ExoscaleMachineProviderStatus{
 		TypeMeta: metav1.TypeMeta{
@@ -203,6 +222,9 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		Password:   vm.Password,
 		ZoneID:     vm.ZoneID,
 	}
+
+	machinePhase = "Ready"
+	newMachine.Status.Phase = &machinePhase
 
 	if err := a.updateResources(newMachine, machineStatus); err != nil {
 		//cleanSSHKey(exoClient, keyPairs.Name)
@@ -290,58 +312,13 @@ func (a *Actuator) Update(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return fmt.Errorf("Cannot unmarshal machine.Status.ProviderStatus field: %v", err)
 	}
 
-	if machineStatus == nil {
+	if machineStatus == nil || machineStatus.ID == nil {
 		// redoing machine status...
-
-		exoClient, err := exoclient.Client()
-		if err != nil {
-			return err
-		}
-
-		resp, err := exoClient.GetWithContext(ctx, &egoscale.VirtualMachine{Name: machine.Name})
-		if err != nil {
-			return err
-		}
-
-		vm := resp.(*egoscale.VirtualMachine)
-
-		// dirty trick
-		annotations := machine.GetAnnotations()
-		if annotations == nil {
-			return errors.New("could not get the annotations")
-		}
-
-		password, ok := annotations[exoscalev1.ExoscalePasswordAnnotationKey]
-		if !ok {
-			return errors.New("could not get password from the annotations")
-		}
-		vm.Password = password
-
-		username, ok := annotations[exoscalev1.ExoscaleUsernameAnnotationKey]
-		if !ok {
-			return errors.New("could not get password from the annotations")
-		}
-
-		machineStatus := &exoscalev1.ExoscaleMachineProviderStatus{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "ExoscaleMachineProviderStatus",
-				APIVersion: "exoscale.cluster.k8s.io/v1alpha1",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				CreationTimestamp: metav1.Time{Time: time.Now()},
-			},
-			ID:         vm.ID,
-			IP:         *vm.IP(),
-			TemplateID: vm.TemplateID,
-			User:       username,
-			Password:   vm.Password,
-			ZoneID:     vm.ZoneID,
-		}
-
-		if err := a.updateResources(machine, machineStatus); err != nil {
-			return fmt.Errorf("failed to update machine resources: %s", err)
-		}
+		// Very dirty way
+		return a.Create(ctx, cluster, machine)
 	}
+
+	// TODO Update implem ...
 
 	return nil
 }

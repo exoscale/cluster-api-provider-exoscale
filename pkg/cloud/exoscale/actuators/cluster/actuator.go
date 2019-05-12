@@ -76,7 +76,7 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 	}
 
 	//XXX can be possible to authorize sg in each other
-	masterRules := createMasterFirewallRules(masterSecurityGroup)
+	masterRules := createMasterFirewallRules(masterSecurityGroup, nodeSecurityGroup)
 	nodeRules := createNodeFirewallRules(nodeSecurityGroup, masterSecurityGroup)
 
 	masterSGID := clusterStatus.MasterSecurityGroupID
@@ -161,7 +161,7 @@ func checkSecurityGroup(sgName string, rules []egoscale.AuthorizeSecurityGroupIn
 
 }
 
-func createMasterFirewallRules(self string) []egoscale.AuthorizeSecurityGroupIngress {
+func createMasterFirewallRules(self, nodeSG string) []egoscale.AuthorizeSecurityGroupIngress {
 	return []egoscale.AuthorizeSecurityGroupIngress{
 		egoscale.AuthorizeSecurityGroupIngress{
 			Protocol:  "TCP",
@@ -205,10 +205,30 @@ func createMasterFirewallRules(self string) []egoscale.AuthorizeSecurityGroupIng
 			},
 			Description: "Kubelet API, kube-scheduler, kube-controller-manager",
 		},
+		egoscale.AuthorizeSecurityGroupIngress{
+			Protocol:  "TCP",
+			StartPort: 179,
+			EndPort:   179,
+			UserSecurityGroupList: []egoscale.UserSecurityGroup{
+				egoscale.UserSecurityGroup{Group: self},
+				egoscale.UserSecurityGroup{Group: nodeSG},
+			},
+			Description: "Calico BGP",
+		},
+		egoscale.AuthorizeSecurityGroupIngress{
+			Protocol:  "TCP",
+			StartPort: 6666,
+			EndPort:   6666,
+			UserSecurityGroupList: []egoscale.UserSecurityGroup{
+				egoscale.UserSecurityGroup{Group: self},
+				egoscale.UserSecurityGroup{Group: nodeSG},
+			},
+			Description: "Calico etcd",
+		},
 	}
 }
 
-func createNodeFirewallRules(self, ingressSG string) []egoscale.AuthorizeSecurityGroupIngress {
+func createNodeFirewallRules(self, masterSG string) []egoscale.AuthorizeSecurityGroupIngress {
 	return []egoscale.AuthorizeSecurityGroupIngress{
 		egoscale.AuthorizeSecurityGroupIngress{
 			Protocol:  "TCP",
@@ -227,7 +247,7 @@ func createNodeFirewallRules(self, ingressSG string) []egoscale.AuthorizeSecurit
 			EndPort:   10250,
 			UserSecurityGroupList: []egoscale.UserSecurityGroup{
 				egoscale.UserSecurityGroup{Group: self},
-				egoscale.UserSecurityGroup{Group: ingressSG},
+				egoscale.UserSecurityGroup{Group: masterSG},
 			},
 			Description: "Kubelet API",
 		},

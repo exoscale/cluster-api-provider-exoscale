@@ -201,9 +201,20 @@ func (a *Actuator) Update(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return fmt.Errorf("Cannot unmarshal machine.Status.ProviderStatus field: %v", err)
 	}
 
-	if machine.Status.Phase == nil {
+	annotations := machineGetAnnotations(machine)
+	if machine.Status.Phase == nil && annotations[exoscalev1.ExoscaleIPAnnotationKey] == "" {
 		klog.Warningf("Error machine %q not created", machine.Name)
 		return a.Create(ctx, cluster, machine)
+	}
+
+	if *machine.Status.Phase == exoscalev1.MachinePhaseFailure {
+		machinePhase := exoscalev1.MachinePhaseInstalling
+		machine.Status.Phase = &machinePhase
+
+		if err := a.updateResources(machine, machineStatus); err != nil {
+			return fmt.Errorf("failed to update machine resources: %v", err)
+		}
+
 	}
 
 	exoClient, err := exoclient.Client()
@@ -248,9 +259,21 @@ func (a *Actuator) Update(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return fmt.Errorf("Cannot unmarshal machine.Status.ProviderStatus field: %v", err)
 	}
 
-	if *machine.Status.Phase != exoscalev1.MachinePhasePending {
+	if *machine.Status.Phase != exoscalev1.MachinePhasePending &&
+		*machine.Status.Phase != exoscalev1.MachinePhaseInstalling &&
+		*machine.Status.Phase != exoscalev1.MachinePhaseReady {
+		// Should never go in this condition
 		//TODO throw error into controller
-		klog.Warningf("machine %q is in failure phase TODO throw error into controller return nil to release controller", machine.Name)
+		klog.Warningf("machine %q is in unknow phase TODO throw error into controller return nil to release controller", machine.Name)
+		return nil
+	}
+
+	if *machine.Status.Phase == exoscalev1.MachinePhaseInstalling {
+		return fmt.Errorf("machine %q installing", machine.Name)
+	}
+
+	if *machine.Status.Phase == exoscalev1.MachinePhaseReady {
+		// Success machine installed
 		return nil
 	}
 
@@ -258,27 +281,44 @@ func (a *Actuator) Update(ctx context.Context, cluster *clusterv1.Cluster, machi
 	switch machineSet {
 	case "master":
 		klog.V(1).Infof("Provisioning Master %q (can take up to several minutes):", machine.Name)
-		err = a.provisionMaster(machine, machineStatus)
+		go func() {
+			err = a.provisionMaster(machine, machineStatus)
+			a.provisioningAsyncResult(err, machine, machineStatus)
+		}()
 	case "node":
 		klog.V(1).Infof("Provisioning Node %q", machine.Name)
-		err = a.provisionNode(cluster, machine, machineStatus)
+		bootstrapToken, err := a.getNodeJoinToken(cluster, machine)
+		if err != nil {
+			return fmt.Errorf("failed to obtain token for node %q to join cluster %q: %v", machine.Name, cluster.Name, err)
+		}
+		go func() {
+			err = a.provisionNode(cluster, machine, machineStatus, bootstrapToken)
+			a.provisioningAsyncResult(err, machine, machineStatus)
+		}()
 	default:
-		err = fmt.Errorf(`invalid machine set: %q expected "master" or "node" only`, machineSet)
-	}
-	if err != nil {
-		return err
-	}
-
-	klog.V(1).Infof("Machine %q provisioning success!", machine.Name)
-
-	machinePhase := exoscalev1.MachinePhaseReady
-	machine.Status.Phase = &machinePhase
-	if err := a.updateResources(machine, machineStatus); err != nil {
-		//cleanSSHKey(exoClient, keyPairs.Name)
-		return fmt.Errorf("failed to update machine resources: %s", err)
+		return fmt.Errorf(`invalid machine set: %q expected "master" or "node" only`, machineSet)
 	}
 
 	return nil
+}
+
+func (a *Actuator) provisioningAsyncResult(errResult error,
+	machine *v1alpha1.Machine,
+	mProviderStatus *exoscalev1.ExoscaleMachineProviderStatus) {
+	if errResult != nil {
+		machinePhase := exoscalev1.MachinePhaseFailure
+		machine.Status.Phase = &machinePhase
+	} else {
+		klog.V(1).Infof("Machine %q provisioning success!", machine.Name)
+
+		machinePhase := exoscalev1.MachinePhaseReady
+		machine.Status.Phase = &machinePhase
+	}
+
+	if err := a.updateResources(machine, mProviderStatus); err != nil {
+		// it should never fail
+		klog.Fatalf("failed to update machine resources: %v", err)
+	}
 }
 
 func (a *Actuator) AddVirtualMachineTOMachineStatus(vm *egoscale.VirtualMachine, machine *v1alpha1.Machine, username string) error {

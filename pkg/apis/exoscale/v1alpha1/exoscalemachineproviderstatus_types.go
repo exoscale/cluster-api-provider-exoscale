@@ -36,10 +36,12 @@ const (
 	MachinePhaseBooting = "Booting"
 	// MachinePhasePending machine phase pending
 	MachinePhasePending = "Pending"
-	// MachinePhaseFailure machine phase failure
-	MachinePhaseFailure = "Failure"
+	// MachinePhaseInstalling machine phase pending
+	MachinePhaseInstalling = "Installing"
 	// MachinePhaseReady machine phase ready
 	MachinePhaseReady = "Ready"
+	// MachinePhaseFailure machine phase failure
+	MachinePhaseFailure = "Failure"
 )
 
 // +genclient

@@ -261,11 +261,7 @@ func (*Actuator) provisionMaster(machine *clusterv1.Machine, vmStatus *exoscalev
 	return nil
 }
 
-func (a *Actuator) provisionNode(cluster *clusterv1.Cluster, machine *clusterv1.Machine, vmStatus *exoscalev1.ExoscaleMachineProviderStatus) error {
-	bootstrapToken, err := a.getNodeJoinToken(cluster, machine)
-	if err != nil {
-		return fmt.Errorf("failed to obtain token for node %q to join cluster %q: %v", machine.Name, cluster.Name, err)
-	}
+func (a *Actuator) provisionNode(cluster *clusterv1.Cluster, machine *clusterv1.Machine, vmStatus *exoscalev1.ExoscaleMachineProviderStatus, bootstrapToken string) error {
 
 	//XXX work only with 1 master at the moment
 	controlPlaneMachine, err := a.getControlPlaneMachine(machine, cluster.Name)

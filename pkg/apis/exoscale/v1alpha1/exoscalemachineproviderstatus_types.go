@@ -32,6 +32,14 @@ const (
 	ExoscalePasswordAnnotationKey = "exoscale-secret-password"
 	// ExoscaleUsernameAnnotationKey represents the machine username
 	ExoscaleUsernameAnnotationKey = "exoscale-username"
+	// MachinePhaseBooting machine phase booting
+	MachinePhaseBooting = "Booting"
+	// MachinePhasePending machine phase pending
+	MachinePhasePending = "Pending"
+	// MachinePhaseFailure machine phase failure
+	MachinePhaseFailure = "Failure"
+	// MachinePhaseReady machine phase ready
+	MachinePhaseReady = "Ready"
 )
 
 // +genclient
@@ -43,12 +51,14 @@ type ExoscaleMachineProviderStatus struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	ID         *egoscale.UUID `json:"id"`
-	IP         net.IP         `json:"ip"`
-	TemplateID *egoscale.UUID `json:"templateID"`
-	User       string         `json:"user"`
-	Password   string         `json:"password"`
-	ZoneID     *egoscale.UUID `json:"zoneID"`
+	ID                *egoscale.UUID           `json:"id"`
+	IP                net.IP                   `json:"ip"`
+	TemplateID        *egoscale.UUID           `json:"templateID"`
+	User              string                   `json:"user"`
+	Password          string                   `json:"password"`
+	ZoneID            *egoscale.UUID           `json:"zoneID"`
+	ServiceOfferingID *egoscale.UUID           `json:"serviceOfferingID"`
+	AsyncJobResult    *egoscale.AsyncJobResult `json:"asyncJobResult"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

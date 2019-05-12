@@ -8,12 +8,12 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/exoscale/egoscale"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/klog"
+	exoscalev1 "sigs.k8s.io/cluster-api-provider-exoscale/pkg/apis/exoscale/v1alpha1"
 	ssh "sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/actuators/ssh"
 	tokens "sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/actuators/tokens"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
@@ -239,19 +239,20 @@ func bootstrapCluster(sshClient *ssh.SSHClient, cluster kubeCluster, master, deb
 	return nil
 }
 
-func (*Actuator) provisionMaster(machine *clusterv1.Machine, vm *egoscale.VirtualMachine, username string) error {
+func (*Actuator) provisionMaster(machine *clusterv1.Machine, vmStatus *exoscalev1.ExoscaleMachineProviderStatus) error {
+	ip := vmStatus.IP.String()
 	sshClient := ssh.NewSSHClient(
-		vm.IP().String(),
-		username,
-		vm.Password,
+		ip,
+		vmStatus.User,
+		vmStatus.Password,
 	)
 
 	kubeCluster := kubeCluster{
-		Name:              vm.Name,
+		Name:              machine.Name,
 		KubernetesVersion: machine.Spec.Versions.ControlPlane,
 		CalicoVersion:     kubeCalicoVersion,
 		DockerVersion:     kubeDockerVersion,
-		Address:           vm.IP().String(),
+		Address:           ip,
 	}
 
 	if err := bootstrapCluster(sshClient, kubeCluster, true, false); err != nil {
@@ -260,7 +261,7 @@ func (*Actuator) provisionMaster(machine *clusterv1.Machine, vm *egoscale.Virtua
 	return nil
 }
 
-func (a *Actuator) provisionNode(cluster *clusterv1.Cluster, machine *clusterv1.Machine, vm *egoscale.VirtualMachine, username string) error {
+func (a *Actuator) provisionNode(cluster *clusterv1.Cluster, machine *clusterv1.Machine, vmStatus *exoscalev1.ExoscaleMachineProviderStatus) error {
 	bootstrapToken, err := a.getNodeJoinToken(cluster, machine)
 	if err != nil {
 		return fmt.Errorf("failed to obtain token for node %q to join cluster %q: %v", machine.Name, cluster.Name, err)
@@ -277,17 +278,19 @@ func (a *Actuator) provisionNode(cluster *clusterv1.Cluster, machine *clusterv1.
 		return fmt.Errorf("failed to retrieve controlplane (GetIP): %v", err)
 	}
 
+	ip := vmStatus.IP.String()
+
 	sshClient := ssh.NewSSHClient(
-		vm.IP().String(),
-		username,
-		vm.Password,
+		ip,
+		vmStatus.User,
+		vmStatus.Password,
 	)
 
 	if err := bootstrapCluster(sshClient, kubeCluster{
-		Name:              vm.Name,
+		Name:              machine.Name,
 		KubernetesVersion: machine.Spec.Versions.Kubelet,
 		DockerVersion:     kubeDockerVersion,
-		Address:           vm.IP().String(),
+		Address:           ip,
 		MasterIP:          controlPlaneIP,
 		Token:             bootstrapToken,
 		MasterPort:        "6443",
@@ -321,6 +324,10 @@ func (a *Actuator) getNodeJoinToken(cluster *clusterv1.Cluster, machine *cluster
 	controlPlaneMachine, err := a.getControlPlaneMachine(machine, cluster.Name)
 	if err != nil {
 		return "", err
+	}
+
+	if controlPlaneMachine.Status.Phase == nil || *controlPlaneMachine.Status.Phase != exoscalev1.MachinePhaseReady {
+		return "", fmt.Errorf("machine master %q not ready", controlPlaneMachine.Name)
 	}
 
 	controlPlaneIP, err := a.GetIP(cluster, controlPlaneMachine)

@@ -19,6 +19,39 @@ spec:
             of an object. Servers should convert recognized schemas to the latest
             internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources'
           type: string
+        asyncJobResult:
+          properties:
+            accountid:
+              type: object
+            cmd:
+              type: string
+            created:
+              type: string
+            jobid:
+              type: object
+            jobinstanceid:
+              type: object
+            jobinstancetype:
+              type: string
+            jobprocstatus:
+              format: int64
+              type: integer
+            jobresult:
+              format: byte
+              type: string
+            jobresultcode:
+              format: int64
+              type: integer
+            jobresulttype:
+              type: string
+            jobstatus:
+              format: int64
+              type: integer
+            userid:
+              type: object
+          required:
+          - jobid
+          type: object
         id:
           type: object
         ip:
@@ -33,6 +66,8 @@ spec:
           type: object
         password:
           type: string
+        serviceOfferingID:
+          type: object
         templateID:
           type: object
         user:
@@ -46,6 +81,8 @@ spec:
       - user
       - password
       - zoneID
+      - serviceOfferingID
+      - asyncJobResult
   version: v1alpha1
 status:
   acceptedNames:

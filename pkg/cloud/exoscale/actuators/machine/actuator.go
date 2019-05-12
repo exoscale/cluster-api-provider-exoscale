@@ -207,6 +207,17 @@ func (a *Actuator) Update(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return a.Create(ctx, cluster, machine)
 	}
 
+	if machine.Status.Phase == nil {
+		machinePhase := exoscalev1.MachinePhaseReady
+		machine.Status.Phase = &machinePhase
+
+		if err := a.updateResources(machine, machineStatus); err != nil {
+			return fmt.Errorf("failed to update machine resources: %v", err)
+		}
+
+		return nil
+	}
+
 	// Not possible but try
 	if *machine.Status.Phase == exoscalev1.MachinePhaseDeleting {
 		return nil

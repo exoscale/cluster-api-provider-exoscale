@@ -7,7 +7,7 @@ items:
   metadata:
     generateName: my-exoscale-master-
     labels:
-      cluster.k8s.io/cluster-name: my-exoscale-cluster-testt
+      cluster.k8s.io/cluster-name: my-exoscale-cluster
       set: master
   spec:
     providerID: Exoscale
@@ -18,7 +18,7 @@ items:
         zone: de-fra-1
         # if template not provisioned we recommend only ubuntu template
         # provisioned template example (docker, kubelet, kubeadm)
-        template: "k8s-node"
+        template: "Linux Ubuntu 18.04 LTS 64-bit"
         type: medium
         disk: 50
     versions:
@@ -30,7 +30,7 @@ items:
   metadata:
     generateName: my-exoscale-node-
     labels:
-      cluster.k8s.io/cluster-name: my-exoscale-cluster-testt
+      cluster.k8s.io/cluster-name: my-exoscale-cluster
       set: node
   spec:
     providerID: Exoscale
@@ -41,7 +41,7 @@ items:
         zone: de-fra-1
          # if template not provisioned we recommend only ubuntu
          # provisioned template example (docker, kubelet, kubeadm)
-        template: "k8s-node"
+        template: "Linux Ubuntu 18.04 LTS 64-bit"
         type: medium
         disk: 50
     versions:

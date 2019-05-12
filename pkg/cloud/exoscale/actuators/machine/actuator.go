@@ -207,8 +207,13 @@ func (a *Actuator) Update(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return a.Create(ctx, cluster, machine)
 	}
 
+	// Not possible but try
+	if *machine.Status.Phase == exoscalev1.MachinePhaseDeleting {
+		return nil
+	}
+
 	if *machine.Status.Phase == exoscalev1.MachinePhaseFailure {
-		machinePhase := exoscalev1.MachinePhaseInstalling
+		machinePhase := exoscalev1.MachinePhasePending
 		machine.Status.Phase = &machinePhase
 
 		if err := a.updateResources(machine, machineStatus); err != nil {
@@ -260,16 +265,11 @@ func (a *Actuator) Update(ctx context.Context, cluster *clusterv1.Cluster, machi
 	}
 
 	if *machine.Status.Phase != exoscalev1.MachinePhasePending &&
-		*machine.Status.Phase != exoscalev1.MachinePhaseInstalling &&
 		*machine.Status.Phase != exoscalev1.MachinePhaseReady {
 		// Should never go in this condition
 		//TODO throw error into controller
 		klog.Warningf("machine %q is in unknow phase TODO throw error into controller return nil to release controller", machine.Name)
 		return nil
-	}
-
-	if *machine.Status.Phase == exoscalev1.MachinePhaseInstalling {
-		return fmt.Errorf("machine %q installing", machine.Name)
 	}
 
 	if *machine.Status.Phase == exoscalev1.MachinePhaseReady {
@@ -408,9 +408,43 @@ func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machi
 		klog.V(1).Infof("deleting machine %q from %q.", machine.Name, cluster.Name)
 	}
 
+	machineStatus, err := exoscalev1.MachineStatusFromProviderStatus(machine.Status.ProviderStatus)
+	if err != nil {
+		return fmt.Errorf("Cannot unmarshal machine.Status.ProviderStatus field: %v", err)
+	}
+
+	phase := ""
+	if machine.Status.Phase != nil {
+		phase = *machine.Status.Phase
+	}
+
 	exoClient, err := exoclient.Client()
 	if err != nil {
 		return err
+	}
+
+	if phase == exoscalev1.MachinePhaseDeleting {
+		req := &egoscale.QueryAsyncJobResult{JobID: machineStatus.AsyncJobResult.JobID}
+		resp, err := exoClient.SyncRequestWithContext(ctx, req)
+		if err != nil {
+			return err
+		}
+
+		result, ok := resp.(*egoscale.AsyncJobResult)
+		if !ok {
+			return fmt.Errorf("wrong type. AsyncJobResult expected, got %T", resp)
+		}
+
+		if result.JobStatus == egoscale.Success {
+			return nil
+		}
+		if result.JobStatus == egoscale.Pending {
+			return fmt.Errorf("machine %q already deleting", machine.Name)
+		}
+		if result.JobStatus == egoscale.Failure {
+			return a.Delete(ctx, cluster, machine)
+		}
+
 	}
 
 	/*
@@ -419,33 +453,47 @@ func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machi
 		}
 	*/
 
-	resp, err := exoClient.GetWithContext(ctx, egoscale.VirtualMachine{Name: machine.Name})
-	if err != nil {
-		return err
-	}
-
-	// It was already deleted externally
-	if e, ok := err.(*egoscale.ErrorResponse); ok {
-		if e.ErrorCode == egoscale.ParamError {
-			return nil
+	vmID := machineStatus.ID
+	if vmID == nil {
+		resp, err := exoClient.GetWithContext(ctx, egoscale.VirtualMachine{Name: machine.Name})
+		if err != nil {
+			return err
 		}
+
+		// It was already deleted externally
+		if e, ok := err.(*egoscale.ErrorResponse); ok {
+			if e.ErrorCode == egoscale.ParamError {
+				return nil
+			}
+		}
+
+		vm := resp.(*egoscale.VirtualMachine)
+		vmID = vm.ID
 	}
 
-	vm := resp.(*egoscale.VirtualMachine)
-
-	err = exoClient.Delete(egoscale.VirtualMachine{
-		ID: vm.ID,
+	result, err := exoClient.SyncRequestWithContext(ctx, egoscale.DestroyVirtualMachine{
+		ID: vmID,
 	})
 
-	machineClient := a.machinesGetter.Machines(machine.Namespace)
-
-	machine.ObjectMeta.Finalizers = nil
-
-	if _, err := machineClient.Update(machine); err != nil {
-		return err
+	jobResult, ok := result.(*egoscale.AsyncJobResult)
+	if !ok {
+		return fmt.Errorf("wrong type, AsyncJobResult was expected instead of %T", result)
 	}
 
-	return err
+	// Successful response
+	if jobResult.JobID == nil || jobResult.JobStatus != egoscale.Pending {
+		klog.V(4).Infof("Instance: %q deleted", machine.Name)
+		return nil
+	}
+
+	machinePhase := exoscalev1.MachinePhaseDeleting
+	machine.Status.Phase = &machinePhase
+	machineStatus.AsyncJobResult = jobResult
+	if err := a.updateResources(machine, machineStatus); err != nil {
+		return fmt.Errorf("failed to update machine resources: %s", err)
+	}
+
+	return fmt.Errorf("machine %q deleting", machine.Name)
 }
 
 // Exists test for the existance of a machine and is invoked by the Machine Controller

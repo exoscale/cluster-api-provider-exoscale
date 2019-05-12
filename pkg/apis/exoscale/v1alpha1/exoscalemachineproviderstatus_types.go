@@ -36,10 +36,10 @@ const (
 	MachinePhaseBooting = "Booting"
 	// MachinePhasePending machine phase pending
 	MachinePhasePending = "Pending"
-	// MachinePhaseInstalling machine phase pending
-	MachinePhaseInstalling = "Installing"
 	// MachinePhaseReady machine phase ready
 	MachinePhaseReady = "Ready"
+	// MachinePhaseDeleting machine phase booting
+	MachinePhaseDeleting = "Deleting"
 	// MachinePhaseFailure machine phase failure
 	MachinePhaseFailure = "Failure"
 )

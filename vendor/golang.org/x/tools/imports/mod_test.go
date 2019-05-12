@@ -5,6 +5,7 @@ package imports
 import (
 	"archive/zip"
 	"fmt"
+	"go/build"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -515,9 +516,10 @@ func setup(t *testing.T, main, wd string) *modTest {
 	}
 
 	env := &fixEnv{
+		GOROOT:      build.Default.GOROOT,
 		GOPATH:      filepath.Join(dir, "gopath"),
 		GO111MODULE: "on",
-		GOPROXY:     "file://" + filepath.ToSlash(proxyDir),
+		GOPROXY:     proxyDirToURL(proxyDir),
 		WorkingDir:  filepath.Join(mainDir, wd),
 	}
 

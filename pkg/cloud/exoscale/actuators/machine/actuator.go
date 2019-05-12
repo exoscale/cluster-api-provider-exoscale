@@ -33,6 +33,7 @@ import (
 	exoscalev1 "sigs.k8s.io/cluster-api-provider-exoscale/pkg/apis/exoscale/v1alpha1"
 	exossh "sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/actuators/ssh"
 	exoclient "sigs.k8s.io/cluster-api-provider-exoscale/pkg/cloud/exoscale/client"
+	"sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	client "sigs.k8s.io/cluster-api/pkg/client/clientset_generated/clientset/typed/cluster/v1alpha1"
 )
@@ -131,6 +132,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 			return fmt.Errorf("an SSH key with that name %q already exists, please choose a different name", sshKeyName)
 		}
 	*/
+
 	klog.V(4).Infof("MACHINESET.LABEL: %q", machine.ObjectMeta.Labels["set"])
 
 	req := egoscale.DeployVirtualMachine{
@@ -143,47 +145,193 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		KeyPair:           sshKeyName,
 	}
 
-	resp, err := exoClient.RequestWithContext(ctx, req)
+	result, err := exoClient.SyncRequestWithContext(ctx, req)
 	if err != nil {
-		//cleanSSHKey(exoClient, keyPairs.Name)
-		return fmt.Errorf("exoscale failed to DeployVirtualMachine %v", err)
+		return err
 	}
-	vm := resp.(*egoscale.VirtualMachine)
 
-	klog.V(4).Infof("Deployed instance: %q, IP: %s, password: %q", vm.Name, vm.IP().String(), vm.Password)
+	jobResult, ok := result.(*egoscale.AsyncJobResult)
+	if !ok {
+		return fmt.Errorf("wrong type, AsyncJobResult was expected instead of %T", result)
+	}
 
-	klog.V(1).Infof("Provisioning (can take up to several minutes):")
+	vm := new(egoscale.VirtualMachine)
+	// Successful response
+	if jobResult.JobID == nil || jobResult.JobStatus != egoscale.Pending {
+		if errR := jobResult.Result(vm); errR != nil {
+			return errR
+		}
+		klog.V(4).Infof("Deployed instance: %q, IP: %s, password: %q", vm.Name, vm.IP().String(), vm.Password)
+	}
+
+	if vm.ID != nil {
+		return a.AddVirtualMachineTOMachineStatus(vm, machine, username)
+	}
+
+	machineStatus := &exoscalev1.ExoscaleMachineProviderStatus{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ExoscaleMachineProviderStatus",
+			APIVersion: "exoscale.cluster.k8s.io/v1alpha1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			CreationTimestamp: metav1.Time{Time: time.Now()},
+		},
+		AsyncJobResult:    jobResult,
+		User:              username,
+		ZoneID:            zone.ID,
+		TemplateID:        template.ID,
+		ServiceOfferingID: serviceOffering.ID,
+	}
+	machinePhase := exoscalev1.MachinePhaseBooting
+	machine.Status.Phase = &machinePhase
+	if err := a.updateResources(machine, machineStatus); err != nil {
+		//cleanSSHKey(exoClient, keyPairs.Name)
+		return fmt.Errorf("failed to update machine resources: %s", err)
+	}
+
+	return nil
+}
+
+// Update updates a machine and is invoked by the Machine Controller
+func (a *Actuator) Update(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
+	klog.V(1).Infof("Updating machine %v for cluster %v.", machine.Name, cluster.Name)
+
+	machineStatus, err := exoscalev1.MachineStatusFromProviderStatus(machine.Status.ProviderStatus)
+	if err != nil {
+		return fmt.Errorf("Cannot unmarshal machine.Status.ProviderStatus field: %v", err)
+	}
+
+	annotations := machineGetAnnotations(machine)
+	if machine.Status.Phase == nil && annotations[exoscalev1.ExoscaleIPAnnotationKey] == "" {
+		klog.Warningf("Error machine %q not created", machine.Name)
+		return a.Create(ctx, cluster, machine)
+	}
+
+	// Not possible but try
+	if *machine.Status.Phase == exoscalev1.MachinePhaseDeleting {
+		return nil
+	}
+
+	if *machine.Status.Phase == exoscalev1.MachinePhaseFailure {
+		machinePhase := exoscalev1.MachinePhasePending
+		machine.Status.Phase = &machinePhase
+
+		if err := a.updateResources(machine, machineStatus); err != nil {
+			return fmt.Errorf("failed to update machine resources: %v", err)
+		}
+
+	}
+
+	exoClient, err := exoclient.Client()
+	if err != nil {
+		return err
+	}
+
+	vm := new(egoscale.VirtualMachine)
+	if *machine.Status.Phase == exoscalev1.MachinePhaseBooting {
+		req := &egoscale.QueryAsyncJobResult{JobID: machineStatus.AsyncJobResult.JobID}
+		resp, err := exoClient.SyncRequestWithContext(ctx, req)
+		if err != nil {
+			return err
+		}
+
+		result, ok := resp.(*egoscale.AsyncJobResult)
+		if !ok {
+			return fmt.Errorf("wrong type. AsyncJobResult expected, got %T", resp)
+		}
+
+		if result.JobStatus == egoscale.Success {
+			if errR := result.Result(vm); errR != nil {
+				return errR
+			}
+			klog.V(4).Infof("Deployed instance: %q, IP: %s, password: %q", vm.Name, vm.IP().String(), vm.Password)
+
+			err := a.AddVirtualMachineTOMachineStatus(vm, machine, machineStatus.User)
+			if err != nil {
+				return err
+			}
+		}
+		if result.JobStatus == egoscale.Pending {
+			return fmt.Errorf("machine %q booting", machine.Name)
+		}
+		if result.JobStatus == egoscale.Failure {
+			return a.Create(ctx, cluster, machine)
+		}
+	}
+
+	machineStatus, err = exoscalev1.MachineStatusFromProviderStatus(machine.Status.ProviderStatus)
+	if err != nil {
+		return fmt.Errorf("Cannot unmarshal machine.Status.ProviderStatus field: %v", err)
+	}
+
+	if *machine.Status.Phase != exoscalev1.MachinePhasePending &&
+		*machine.Status.Phase != exoscalev1.MachinePhaseReady {
+		// Should never go in this condition
+		//TODO throw error into controller
+		klog.Warningf("machine %q is in unknow phase TODO throw error into controller return nil to release controller", machine.Name)
+		return nil
+	}
+
+	if *machine.Status.Phase == exoscalev1.MachinePhaseReady {
+		// Success machine installed
+		return nil
+	}
 
 	machineSet := strings.ToLower(machine.ObjectMeta.Labels["set"])
 	switch machineSet {
 	case "master":
-		err = a.provisionMaster(machine, vm, username)
+		klog.V(1).Infof("Provisioning Master %q (can take up to several minutes):", machine.Name)
+		go func() {
+			err = a.provisionMaster(machine, machineStatus)
+			a.provisioningAsyncResult(err, machine, machineStatus)
+		}()
 	case "node":
-		err = a.provisionNode(cluster, machine, vm, username)
+		klog.V(1).Infof("Provisioning Node %q", machine.Name)
+		bootstrapToken, err := a.getNodeJoinToken(cluster, machine)
+		if err != nil {
+			return fmt.Errorf("failed to obtain token for node %q to join cluster %q: %v", machine.Name, cluster.Name, err)
+		}
+		go func() {
+			err = a.provisionNode(cluster, machine, machineStatus, bootstrapToken)
+			a.provisioningAsyncResult(err, machine, machineStatus)
+		}()
 	default:
-		err = fmt.Errorf(`invalid machine set: %q expected "master" or "node" only`, machineSet)
+		return fmt.Errorf(`invalid machine set: %q expected "master" or "node" only`, machineSet)
 	}
 
-	if err != nil {
-		//cleanSSHKey(exoClient, keyPairs.Name)
-		return err
+	return nil
+}
+
+func (a *Actuator) provisioningAsyncResult(errResult error,
+	machine *v1alpha1.Machine,
+	mProviderStatus *exoscalev1.ExoscaleMachineProviderStatus) {
+	if errResult != nil {
+		machinePhase := exoscalev1.MachinePhaseFailure
+		machine.Status.Phase = &machinePhase
+	} else {
+		klog.V(1).Infof("Machine %q provisioning success!", machine.Name)
+
+		machinePhase := exoscalev1.MachinePhaseReady
+		machine.Status.Phase = &machinePhase
 	}
 
-	klog.V(1).Infof("Machine %q provisioning success!", machine.Name)
+	if err := a.updateResources(machine, mProviderStatus); err != nil {
+		// it should never fail
+		klog.Fatalf("failed to update machine resources: %v", err)
+	}
+}
 
+func (a *Actuator) AddVirtualMachineTOMachineStatus(vm *egoscale.VirtualMachine, machine *v1alpha1.Machine, username string) error {
 	// XXX annotations should be replaced by the proper NodeRef
 	// https://github.com/kubernetes-sigs/cluster-api/blob/3b5183805f4dbf859d39a2600b268192a8191950/cmd/clusterctl/clusterdeployer/clusterclient/clusterclient.go#L579-L581
-	annotations := machine.GetAnnotations()
-	if annotations == nil {
-		annotations = make(map[string]string)
-	}
+	annotations := machineGetAnnotations(machine)
 	annotations[exoscalev1.ExoscaleIPAnnotationKey] = vm.IP().String()
 	annotations[exoscalev1.ExoscaleUsernameAnnotationKey] = username
 	annotations[exoscalev1.ExoscalePasswordAnnotationKey] = vm.Password
 	machine.SetAnnotations(annotations)
-
 	machineClient := a.machinesGetter.Machines(machine.Namespace)
-	newMachine, err := machineClient.Update(machine)
+	var err error
+	machine, err = machineClient.Update(machine)
 	if err != nil {
 		return err
 	}
@@ -204,12 +352,24 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		ZoneID:     vm.ZoneID,
 	}
 
-	if err := a.updateResources(newMachine, machineStatus); err != nil {
+	machinePhase := exoscalev1.MachinePhasePending
+	machine.Status.Phase = &machinePhase
+
+	if err := a.updateResources(machine, machineStatus); err != nil {
 		//cleanSSHKey(exoClient, keyPairs.Name)
 		return fmt.Errorf("failed to update machine resources: %s", err)
 	}
 
 	return nil
+}
+
+func machineGetAnnotations(machine *v1alpha1.Machine) map[string]string {
+	annotations := machine.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+
+	return annotations
 }
 
 func (a *Actuator) updateResources(machine *clusterv1.Machine, machineStatus *exoscalev1.ExoscaleMachineProviderStatus) error {
@@ -248,9 +408,43 @@ func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machi
 		klog.V(1).Infof("deleting machine %q from %q.", machine.Name, cluster.Name)
 	}
 
+	machineStatus, err := exoscalev1.MachineStatusFromProviderStatus(machine.Status.ProviderStatus)
+	if err != nil {
+		return fmt.Errorf("Cannot unmarshal machine.Status.ProviderStatus field: %v", err)
+	}
+
+	phase := ""
+	if machine.Status.Phase != nil {
+		phase = *machine.Status.Phase
+	}
+
 	exoClient, err := exoclient.Client()
 	if err != nil {
 		return err
+	}
+
+	if phase == exoscalev1.MachinePhaseDeleting {
+		req := &egoscale.QueryAsyncJobResult{JobID: machineStatus.AsyncJobResult.JobID}
+		resp, err := exoClient.SyncRequestWithContext(ctx, req)
+		if err != nil {
+			return err
+		}
+
+		result, ok := resp.(*egoscale.AsyncJobResult)
+		if !ok {
+			return fmt.Errorf("wrong type. AsyncJobResult expected, got %T", resp)
+		}
+
+		if result.JobStatus == egoscale.Success {
+			return nil
+		}
+		if result.JobStatus == egoscale.Pending {
+			return fmt.Errorf("machine %q already deleting", machine.Name)
+		}
+		if result.JobStatus == egoscale.Failure {
+			return a.Delete(ctx, cluster, machine)
+		}
+
 	}
 
 	/*
@@ -259,91 +453,47 @@ func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machi
 		}
 	*/
 
-	resp, err := exoClient.GetWithContext(ctx, egoscale.VirtualMachine{Name: machine.Name})
-	if err != nil {
-		return err
-	}
-
-	// It was already deleted externally
-	if e, ok := err.(*egoscale.ErrorResponse); ok {
-		if e.ErrorCode == egoscale.ParamError {
-			return nil
-		}
-	}
-
-	vm := resp.(*egoscale.VirtualMachine)
-
-	err = exoClient.Delete(egoscale.VirtualMachine{
-		ID: vm.ID,
-	})
-
-	return err
-}
-
-// Update updates a machine and is invoked by the Machine Controller
-func (a *Actuator) Update(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
-	klog.V(1).Infof("Updating machine %v for cluster %v.", machine.Name, cluster.Name)
-	klog.Warningf("Updating a machine is not yet implemented")
-
-	machineStatus, err := exoscalev1.MachineStatusFromProviderStatus(machine.Status.ProviderStatus)
-	if err != nil {
-		return fmt.Errorf("Cannot unmarshal machine.Status.ProviderStatus field: %v", err)
-	}
-
-	if machineStatus == nil {
-		// redoing machine status...
-
-		exoClient, err := exoclient.Client()
+	vmID := machineStatus.ID
+	if vmID == nil {
+		resp, err := exoClient.GetWithContext(ctx, egoscale.VirtualMachine{Name: machine.Name})
 		if err != nil {
 			return err
 		}
 
-		resp, err := exoClient.GetWithContext(ctx, &egoscale.VirtualMachine{Name: machine.Name})
-		if err != nil {
-			return err
+		// It was already deleted externally
+		if e, ok := err.(*egoscale.ErrorResponse); ok {
+			if e.ErrorCode == egoscale.ParamError {
+				return nil
+			}
 		}
 
 		vm := resp.(*egoscale.VirtualMachine)
-
-		// dirty trick
-		annotations := machine.GetAnnotations()
-		if annotations == nil {
-			return errors.New("could not get the annotations")
-		}
-
-		password, ok := annotations[exoscalev1.ExoscalePasswordAnnotationKey]
-		if !ok {
-			return errors.New("could not get password from the annotations")
-		}
-		vm.Password = password
-
-		username, ok := annotations[exoscalev1.ExoscaleUsernameAnnotationKey]
-		if !ok {
-			return errors.New("could not get password from the annotations")
-		}
-
-		machineStatus := &exoscalev1.ExoscaleMachineProviderStatus{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "ExoscaleMachineProviderStatus",
-				APIVersion: "exoscale.cluster.k8s.io/v1alpha1",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				CreationTimestamp: metav1.Time{Time: time.Now()},
-			},
-			ID:         vm.ID,
-			IP:         *vm.IP(),
-			TemplateID: vm.TemplateID,
-			User:       username,
-			Password:   vm.Password,
-			ZoneID:     vm.ZoneID,
-		}
-
-		if err := a.updateResources(machine, machineStatus); err != nil {
-			return fmt.Errorf("failed to update machine resources: %s", err)
-		}
+		vmID = vm.ID
 	}
 
-	return nil
+	result, err := exoClient.SyncRequestWithContext(ctx, egoscale.DestroyVirtualMachine{
+		ID: vmID,
+	})
+
+	jobResult, ok := result.(*egoscale.AsyncJobResult)
+	if !ok {
+		return fmt.Errorf("wrong type, AsyncJobResult was expected instead of %T", result)
+	}
+
+	// Successful response
+	if jobResult.JobID == nil || jobResult.JobStatus != egoscale.Pending {
+		klog.V(4).Infof("Instance: %q deleted", machine.Name)
+		return nil
+	}
+
+	machinePhase := exoscalev1.MachinePhaseDeleting
+	machine.Status.Phase = &machinePhase
+	machineStatus.AsyncJobResult = jobResult
+	if err := a.updateResources(machine, machineStatus); err != nil {
+		return fmt.Errorf("failed to update machine resources: %s", err)
+	}
+
+	return fmt.Errorf("machine %q deleting", machine.Name)
 }
 
 // Exists test for the existance of a machine and is invoked by the Machine Controller

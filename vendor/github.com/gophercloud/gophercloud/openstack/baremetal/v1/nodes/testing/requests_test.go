@@ -141,9 +141,11 @@ func TestUpdateNode(t *testing.T) {
 	c := client.ServiceClient()
 	actual, err := nodes.Update(c, "1234asdf", nodes.UpdateOpts{
 		nodes.UpdateOperation{
-			Op:    nodes.ReplaceOp,
-			Path:  "/driver",
-			Value: "new-driver",
+			Op:   nodes.ReplaceOp,
+			Path: "/properties",
+			Value: map[string]interface{}{
+				"root_gb": 25,
+			},
 		},
 	}).Extract()
 	if err != nil {
@@ -252,6 +254,22 @@ func TestNodeChangeProvisionStateActive(t *testing.T) {
 	th.AssertNoErr(t, err)
 }
 
+func TestHandleNodeChangeProvisionStateConfigDrive(t *testing.T) {
+	th.SetupHTTP()
+	defer th.TeardownHTTP()
+
+	HandleNodeChangeProvisionStateConfigDrive(t)
+
+	c := client.ServiceClient()
+
+	err := nodes.ChangeProvisionState(c, "1234asdf", nodes.ProvisionStateOpts{
+		Target:      nodes.TargetActive,
+		ConfigDrive: ConfigDriveMap,
+	}).ExtractErr()
+
+	th.AssertNoErr(t, err)
+}
+
 func TestNodeChangeProvisionStateClean(t *testing.T) {
 	th.SetupHTTP()
 	defer th.TeardownHTTP()
@@ -272,6 +290,30 @@ func TestNodeChangeProvisionStateClean(t *testing.T) {
 	}).ExtractErr()
 
 	th.AssertNoErr(t, err)
+}
+
+func TestNodeChangeProvisionStateCleanWithConflict(t *testing.T) {
+	th.SetupHTTP()
+	defer th.TeardownHTTP()
+	HandleNodeChangeProvisionStateCleanWithConflict(t)
+
+	c := client.ServiceClient()
+	err := nodes.ChangeProvisionState(c, "1234asdf", nodes.ProvisionStateOpts{
+		Target: nodes.TargetClean,
+		CleanSteps: []nodes.CleanStep{
+			{
+				Interface: "deploy",
+				Step:      "upgrade_firmware",
+				Args: map[string]string{
+					"force": "True",
+				},
+			},
+		},
+	}).ExtractErr()
+
+	if _, ok := err.(gophercloud.ErrDefault409); !ok {
+		t.Fatal("ErrDefault409 was expected to occur")
+	}
 }
 
 func TestCleanStepRequiresInterface(t *testing.T) {
@@ -324,5 +366,67 @@ func TestChangePowerState(t *testing.T) {
 
 	c := client.ServiceClient()
 	err := nodes.ChangePowerState(c, "1234asdf", opts).ExtractErr()
+	th.AssertNoErr(t, err)
+}
+
+func TestChangePowerStateWithConflict(t *testing.T) {
+	th.SetupHTTP()
+	defer th.TeardownHTTP()
+	HandleChangePowerStateWithConflict(t)
+
+	opts := nodes.PowerStateOpts{
+		Target:  nodes.PowerOn,
+		Timeout: 100,
+	}
+
+	c := client.ServiceClient()
+	err := nodes.ChangePowerState(c, "1234asdf", opts).ExtractErr()
+	if _, ok := err.(gophercloud.ErrDefault409); !ok {
+		t.Fatal("ErrDefault409 was expected to occur")
+	}
+}
+
+func TestSetRAIDConfig(t *testing.T) {
+	th.SetupHTTP()
+	defer th.TeardownHTTP()
+	HandleSetRAIDConfig(t)
+
+	sizeGB := 100
+	isRootVolume := true
+
+	config := nodes.RAIDConfigOpts{
+		LogicalDisks: []nodes.LogicalDisk{
+			{
+				SizeGB:       &sizeGB,
+				IsRootVolume: &isRootVolume,
+				RAIDLevel:    nodes.RAID1,
+			},
+		},
+	}
+
+	c := client.ServiceClient()
+	err := nodes.SetRAIDConfig(c, "1234asdf", config).ExtractErr()
+	th.AssertNoErr(t, err)
+}
+
+// Without specifying a size, we need to send a string: "MAX"
+func TestSetRAIDConfigMaxSize(t *testing.T) {
+	th.SetupHTTP()
+	defer th.TeardownHTTP()
+	HandleSetRAIDConfigMaxSize(t)
+
+	isRootVolume := true
+
+	config := nodes.RAIDConfigOpts{
+		LogicalDisks: []nodes.LogicalDisk{
+			{
+				IsRootVolume: &isRootVolume,
+				RAIDLevel:    nodes.RAID1,
+			},
+		},
+	}
+
+	c := client.ServiceClient()
+	err := nodes.SetRAIDConfig(c, "1234asdf", config).ExtractErr()
 	th.AssertNoErr(t, err)
 }

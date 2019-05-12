@@ -134,6 +134,14 @@ func (in *ExoscaleMachineProviderStatus) DeepCopyInto(out *ExoscaleMachineProvid
 		in, out := &in.ZoneID, &out.ZoneID
 		*out = (*in).DeepCopy()
 	}
+	if in.ServiceOfferingID != nil {
+		in, out := &in.ServiceOfferingID, &out.ServiceOfferingID
+		*out = (*in).DeepCopy()
+	}
+	if in.AsyncJobResult != nil {
+		in, out := &in.AsyncJobResult, &out.AsyncJobResult
+		*out = (*in).DeepCopy()
+	}
 	return
 }
 

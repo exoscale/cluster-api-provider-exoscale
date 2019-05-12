@@ -26,6 +26,8 @@ spec:
         disk:
           format: int64
           type: integer
+        ipv6:
+          type: boolean
         kind:
           description: 'Kind is a string value representing the REST resource this
             object represents. Servers may infer this from the endpoint the client

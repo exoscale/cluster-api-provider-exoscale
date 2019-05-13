@@ -261,6 +261,16 @@ func createNodeFirewallRules(self, masterSG string) []egoscale.AuthorizeSecurity
 				*egoscale.MustParseCIDR("::/0"),
 			},
 		},
+		egoscale.AuthorizeSecurityGroupIngress{
+			Protocol:  "TCP",
+			StartPort: 179,
+			EndPort:   179,
+			UserSecurityGroupList: []egoscale.UserSecurityGroup{
+				egoscale.UserSecurityGroup{Group: self},
+				egoscale.UserSecurityGroup{Group: masterSG},
+			},
+			Description: "Calico BGP",
+		},
 	}
 }
 

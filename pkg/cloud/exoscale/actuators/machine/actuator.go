@@ -36,6 +36,7 @@ import (
 	"sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	clusterv1 "sigs.k8s.io/cluster-api/pkg/apis/cluster/v1alpha1"
 	client "sigs.k8s.io/cluster-api/pkg/client/clientset_generated/clientset/typed/cluster/v1alpha1"
+	capierror "sigs.k8s.io/cluster-api/pkg/controller/error"
 )
 
 // Actuator is responsible for performing machine reconciliation
@@ -58,6 +59,9 @@ func NewActuator(params ActuatorParams) (*Actuator, error) {
 // Create creates a machine and is invoked by the Machine Controller
 func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machine *clusterv1.Machine) error {
 	klog.V(1).Infof("Creating machine %q, for cluster %#v.", machine.Name, cluster)
+	if cluster == nil {
+		return fmt.Errorf("missing cluster for machine %s/%s", machine.Namespace, machine.Name)
+	}
 
 	clusterStatus, err := exoscalev1.ClusterStatusFromProviderStatus(cluster.Status.ProviderStatus)
 	if err != nil {
@@ -74,7 +78,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		securityGroup = clusterStatus.NodeSecurityGroupID
 	}
 	if securityGroup == nil {
-		return fmt.Errorf("empty masterSecurityGroupID or nodeSecurityGroupID field. %#v", clusterStatus)
+		return &capierror.RequeueAfterError{RequeueAfter: time.Second}
 	}
 
 	exoClient, err := exoclient.Client()
@@ -230,7 +234,6 @@ func (a *Actuator) Update(ctx context.Context, cluster *clusterv1.Cluster, machi
 		if err := a.updateResources(machine, machineStatus); err != nil {
 			return fmt.Errorf("failed to update machine resources: %v", err)
 		}
-
 	}
 
 	exoClient, err := exoclient.Client()
@@ -263,7 +266,7 @@ func (a *Actuator) Update(ctx context.Context, cluster *clusterv1.Cluster, machi
 			}
 		}
 		if result.JobStatus == egoscale.Pending {
-			return fmt.Errorf("machine %q booting", machine.Name)
+			return &capierror.RequeueAfterError{RequeueAfter: time.Second}
 		}
 		if result.JobStatus == egoscale.Failure {
 			return a.Create(ctx, cluster, machine)
@@ -297,8 +300,16 @@ func (a *Actuator) Update(ctx context.Context, cluster *clusterv1.Cluster, machi
 			a.provisioningAsyncResult(err, machine, machineStatus)
 		}()
 	case "node":
+		//XXX work only with 1 master at the moment
+		controlPlaneMachine, err := a.getControlPlaneMachine(machine, cluster.Name)
+		if err != nil {
+			return err
+		}
+		if controlPlaneMachine.Status.Phase == nil || *controlPlaneMachine.Status.Phase != exoscalev1.MachinePhaseReady {
+			return &capierror.RequeueAfterError{RequeueAfter: time.Second}
+		}
 		klog.V(1).Infof("Provisioning Node %q", machine.Name)
-		bootstrapToken, err := a.getNodeJoinToken(cluster, machine)
+		bootstrapToken, err := a.getNodeJoinToken(cluster, controlPlaneMachine)
 		if err != nil {
 			return fmt.Errorf("failed to obtain token for node %q to join cluster %q: %v", machine.Name, cluster.Name, err)
 		}
@@ -450,7 +461,7 @@ func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machi
 			return nil
 		}
 		if result.JobStatus == egoscale.Pending {
-			return fmt.Errorf("machine %q already deleting", machine.Name)
+			return &capierror.RequeueAfterError{RequeueAfter: time.Second * 2}
 		}
 		if result.JobStatus == egoscale.Failure {
 			return a.Delete(ctx, cluster, machine)
@@ -504,7 +515,7 @@ func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return fmt.Errorf("failed to update machine resources: %s", err)
 	}
 
-	return fmt.Errorf("machine %q deleting", machine.Name)
+	return &capierror.RequeueAfterError{RequeueAfter: time.Second * 2}
 }
 
 // Exists test for the existance of a machine and is invoked by the Machine Controller

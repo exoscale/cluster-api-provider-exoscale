@@ -314,18 +314,7 @@ func (a *Actuator) getControlPlaneMachine(machine *clusterv1.Machine, clusterNam
 	return nil, fmt.Errorf("invalid master number expect 1 (XXX for the time being) got %d", len(controlPlaneList.Items))
 }
 
-func (a *Actuator) getNodeJoinToken(cluster *clusterv1.Cluster, machine *clusterv1.Machine) (string, error) {
-
-	//XXX work only with 1 master at the moment
-	controlPlaneMachine, err := a.getControlPlaneMachine(machine, cluster.Name)
-	if err != nil {
-		return "", err
-	}
-
-	if controlPlaneMachine.Status.Phase == nil || *controlPlaneMachine.Status.Phase != exoscalev1.MachinePhaseReady {
-		return "", fmt.Errorf("machine master %q not ready", controlPlaneMachine.Name)
-	}
-
+func (a *Actuator) getNodeJoinToken(cluster *clusterv1.Cluster, controlPlaneMachine *clusterv1.Machine) (string, error) {
 	controlPlaneIP, err := a.GetIP(cluster, controlPlaneMachine)
 	if err != nil {
 		return "", fmt.Errorf("failed to retrieve controlplane (GetIP): %v", err)

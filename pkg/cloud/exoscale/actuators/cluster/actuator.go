@@ -54,6 +54,11 @@ func NewActuator(params ActuatorParams) (*Actuator, error) {
 func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 	klog.Infof("Reconciling cluster %v.", cluster.Name)
 
+	exoClient, err := exoclient.Client()
+	if err != nil {
+		return err
+	}
+
 	clusterSpec, err := exoscalev1.ClusterSpecFromProviderSpec(cluster.Spec.ProviderSpec)
 	if err != nil {
 		return fmt.Errorf("error loading cluster provider config: %v", err)
@@ -66,38 +71,43 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 
 	masterSecurityGroup := clusterSpec.MasterSecurityGroup
 	if masterSecurityGroup == "" {
-		// XXX change with cluster.GenerateName -master when it will be valid
-		masterSecurityGroup = cluster.ObjectMeta.Name + "-master"
+		masterSecurityGroup = cluster.Name + "-master"
 	}
 	nodeSecurityGroup := clusterSpec.NodeSecurityGroup
 	if nodeSecurityGroup == "" {
-		// XXX change with cluster.GenerateName -node when it will be valid
-		nodeSecurityGroup = cluster.ObjectMeta.Name + "-node"
+		nodeSecurityGroup = cluster.Name + "-node"
 	}
 
 	//XXX can be possible to authorize sg in each other
-	masterRules := createMasterFirewallRules(masterSecurityGroup, nodeSecurityGroup)
-	nodeRules := createNodeFirewallRules(nodeSecurityGroup, masterSecurityGroup)
+	masterRules := buildMasterFirewallRules(masterSecurityGroup, nodeSecurityGroup)
+	nodeRules := buildNodeFirewallRules(nodeSecurityGroup, masterSecurityGroup)
 
 	masterSGID := clusterStatus.MasterSecurityGroupID
-	if clusterStatus.MasterSecurityGroupID == nil {
-		masterSGID, err = checkSecurityGroup(masterSecurityGroup, masterRules)
+	nodeSGID := clusterStatus.NodeSecurityGroupID
+	if masterSGID == nil {
+		resp, err := exoClient.Request(egoscale.CreateSecurityGroup{Name: masterSecurityGroup})
 		if err != nil {
-			//XXX if fail clean sg and delete it
-			return err
+			return fmt.Errorf("error creating network security group: %v", err)
 		}
+		masterSGID = resp.(*egoscale.SecurityGroup).ID
 	} else {
 		klog.Infof("using existing security group id %s", clusterStatus.MasterSecurityGroupID)
 	}
-	nodeSGID := clusterStatus.NodeSecurityGroupID
-	if clusterStatus.NodeSecurityGroupID == nil {
-		nodeSGID, err = checkSecurityGroup(nodeSecurityGroup, nodeRules)
+	if nodeSGID == nil {
+		resp, err := exoClient.Request(egoscale.CreateSecurityGroup{Name: nodeSecurityGroup})
 		if err != nil {
-			//XXX if fail clean sg and delete it
-			return err
+			return fmt.Errorf("error creating network security group: %v", err)
 		}
+		nodeSGID = resp.(*egoscale.SecurityGroup).ID
 	} else {
 		klog.Infof("using existing security group id %s", clusterStatus.NodeSecurityGroupID)
+	}
+
+	if err := checkSecurityGroup(masterSGID, masterRules); err != nil {
+		return err
+	}
+	if err := checkSecurityGroup(nodeSGID, nodeRules); err != nil {
+		return err
 	}
 
 	// Put the data into the "Status"
@@ -121,47 +131,34 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 	return nil
 }
 
-func checkSecurityGroup(sgName string, rules []egoscale.AuthorizeSecurityGroupIngress) (*egoscale.UUID, error) {
+func checkSecurityGroup(sgID *egoscale.UUID, rules []egoscale.AuthorizeSecurityGroupIngress) error {
 	exoClient, err := exoclient.Client()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	sgs, err := exoClient.List(&egoscale.SecurityGroup{Name: sgName})
+	resp, err := exoClient.Get(egoscale.SecurityGroup{ID: sgID})
 	if err != nil {
-		return nil, fmt.Errorf("error getting network security group: %v", err)
+		return err
+	}
+	sg := resp.(*egoscale.SecurityGroup)
+
+	if len(sg.IngressRule) > 0 {
+		return nil
 	}
 
-	var sgID *egoscale.UUID
-	if len(sgs) == 0 {
-		req := egoscale.CreateSecurityGroup{
-			Name: sgName,
-		}
-
-		klog.Infof("creating security group %q", sgName)
-
-		resp, err := exoClient.Request(req)
+	for _, rule := range rules {
+		rule.SecurityGroupID = sg.ID
+		_, err = exoClient.Request(rule)
 		if err != nil {
-			return nil, fmt.Errorf("error creating or updating network security group: %v", err)
+			return fmt.Errorf("error creating or updating security group rule: %v", err)
 		}
-		sgID = resp.(*egoscale.SecurityGroup).ID
-
-		for _, rule := range rules {
-			rule.SecurityGroupID = sgID
-			_, err = exoClient.Request(rule)
-			if err != nil {
-
-				return nil, fmt.Errorf("error creating or updating security group rule: %v", err)
-			}
-		}
-	} else {
-		sgID = sgs[0].(*egoscale.SecurityGroup).ID
 	}
-	return sgID, nil
 
+	return nil
 }
 
-func createMasterFirewallRules(self, nodeSG string) []egoscale.AuthorizeSecurityGroupIngress {
+func buildMasterFirewallRules(self, nodeSG string) []egoscale.AuthorizeSecurityGroupIngress {
 	return []egoscale.AuthorizeSecurityGroupIngress{
 		egoscale.AuthorizeSecurityGroupIngress{
 			Protocol:  "TCP",
@@ -228,7 +225,7 @@ func createMasterFirewallRules(self, nodeSG string) []egoscale.AuthorizeSecurity
 	}
 }
 
-func createNodeFirewallRules(self, masterSG string) []egoscale.AuthorizeSecurityGroupIngress {
+func buildNodeFirewallRules(self, masterSG string) []egoscale.AuthorizeSecurityGroupIngress {
 	return []egoscale.AuthorizeSecurityGroupIngress{
 		egoscale.AuthorizeSecurityGroupIngress{
 			Protocol:  "TCP",

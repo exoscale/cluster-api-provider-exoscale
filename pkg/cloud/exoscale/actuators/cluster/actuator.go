@@ -222,6 +222,14 @@ func buildMasterFirewallRules(self, nodeSG string) []egoscale.AuthorizeSecurityG
 			},
 			Description: "Calico etcd",
 		},
+		egoscale.AuthorizeSecurityGroupIngress{
+			Protocol: "ipip",
+			UserSecurityGroupList: []egoscale.UserSecurityGroup{
+				egoscale.UserSecurityGroup{Group: self},
+				egoscale.UserSecurityGroup{Group: nodeSG},
+			},
+			Description: "Calico IPIP",
+		},
 	}
 }
 
@@ -267,6 +275,14 @@ func buildNodeFirewallRules(self, masterSG string) []egoscale.AuthorizeSecurityG
 				egoscale.UserSecurityGroup{Group: masterSG},
 			},
 			Description: "Calico BGP",
+		},
+		egoscale.AuthorizeSecurityGroupIngress{
+			Protocol: "ipip",
+			UserSecurityGroupList: []egoscale.UserSecurityGroup{
+				egoscale.UserSecurityGroup{Group: self},
+				egoscale.UserSecurityGroup{Group: masterSG},
+			},
+			Description: "Calico IPIP",
 		},
 	}
 }

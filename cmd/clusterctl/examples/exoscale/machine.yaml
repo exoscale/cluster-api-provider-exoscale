@@ -25,7 +25,7 @@ items:
         cloudinit: |
           #cloud-config
           runcmd:
-            [ sh, -c, echo "=========hello world'=========" ]
+           - [ sh, -c, echo "=========hello world'=========" ]
     versions:
       kubelet: 1.14.0
       controlPlane: 1.14.0
@@ -53,6 +53,6 @@ items:
         cloudinit: |
           #cloud-config
           runcmd:
-            [ sh, -c, echo "=========hello world'=========" ]
+           - [ sh, -c, echo "=========hello world'=========" ]
     versions:
       kubelet: 1.14.0

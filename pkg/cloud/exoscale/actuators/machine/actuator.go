@@ -19,6 +19,7 @@ package machine
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -68,7 +69,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return fmt.Errorf("Cannot unmarshal cluster.Status field: %v", err)
 	}
 
-	machineConfig, err := exoscalev1.MachineSpecFromProviderSpec(machine.Spec.ProviderSpec)
+	machineProviderSpec, err := exoscalev1.MachineSpecFromProviderSpec(machine.Spec.ProviderSpec)
 	if err != nil {
 		return fmt.Errorf("Cannot unmarshal machine.Spec field: %v", err)
 	}
@@ -86,22 +87,22 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		return err
 	}
 
-	z, err := exoClient.GetWithContext(ctx, &egoscale.Zone{Name: machineConfig.Zone})
+	z, err := exoClient.GetWithContext(ctx, &egoscale.Zone{Name: machineProviderSpec.Zone})
 	if err != nil {
-		return fmt.Errorf("problem fetching the zone %q. %s", machineConfig.Zone, err)
+		return fmt.Errorf("problem fetching the zone %q. %s", machineProviderSpec.Zone, err)
 	}
 	zone := z.(*egoscale.Zone)
 
 	t, err := exoClient.GetWithContext(
 		ctx,
 		&egoscale.Template{
-			Name:       machineConfig.Template,
+			Name:       machineProviderSpec.Template,
 			ZoneID:     zone.ID,
 			IsFeatured: true,
 		},
 	)
 	if err != nil {
-		return fmt.Errorf("problem fetching the template %q. %s", machineConfig.Template, err)
+		return fmt.Errorf("problem fetching the template %q. %s", machineProviderSpec.Template, err)
 	}
 	template := t.(*egoscale.Template)
 	username, ok := template.Details["username"]
@@ -112,18 +113,18 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	so, err := exoClient.GetWithContext(
 		ctx,
 		&egoscale.ServiceOffering{
-			Name: machineConfig.Type,
+			Name: machineProviderSpec.Type,
 		},
 	)
 	if err != nil {
-		return fmt.Errorf("problem fetching service-offering %q. %s", machineConfig.Type, err)
+		return fmt.Errorf("problem fetching service-offering %q. %s", machineProviderSpec.Type, err)
 	}
 	serviceOffering := so.(*egoscale.ServiceOffering)
 
 	//sshKeyName := machine.Name + "_id_rsa"
 	sshKeyName := ""
-	if machineConfig.SSHKey != "" {
-		sshKeyName = machineConfig.SSHKey
+	if machineProviderSpec.SSHKey != "" {
+		sshKeyName = machineProviderSpec.SSHKey
 	}
 
 	/*
@@ -139,14 +140,20 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 
 	klog.V(4).Infof("MACHINESET.LABEL: %q", machine.ObjectMeta.Labels["set"])
 
+	var userData string
+	if machineProviderSpec.Cloudinit != "" {
+		userData = base64.StdEncoding.EncodeToString([]byte(machineProviderSpec.Cloudinit))
+	}
+
 	req := egoscale.DeployVirtualMachine{
 		Name:              machine.Name,
 		ZoneID:            zone.ID,
 		TemplateID:        template.ID,
-		RootDiskSize:      machineConfig.Disk,
+		RootDiskSize:      machineProviderSpec.Disk,
 		SecurityGroupIDs:  []egoscale.UUID{*securityGroup},
 		ServiceOfferingID: serviceOffering.ID,
 		KeyPair:           sshKeyName,
+		UserData:          userData,
 	}
 
 	result, err := exoClient.SyncRequestWithContext(ctx, req)

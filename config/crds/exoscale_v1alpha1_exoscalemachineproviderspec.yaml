@@ -21,7 +21,7 @@ spec:
             of an object. Servers should convert recognized schemas to the latest
             internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources'
           type: string
-        cloudInit:
+        cloudinit:
           type: string
         disk:
           format: int64
@@ -49,6 +49,7 @@ spec:
       - template
       - type
       - zone
+      - cloudinit
   version: v1alpha1
 status:
   acceptedNames:

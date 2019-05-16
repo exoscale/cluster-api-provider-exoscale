@@ -32,13 +32,13 @@ type ExoscaleMachineProviderSpec struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	AntiAffinityGroup string `json:"antiAffinityGroup,omitempty"`
-	CloudInit         string `json:"cloudInit,omitempty"`
 	Disk              int64  `json:"disk"`
 	IPv6              bool   `json:"ipv6,omitempty"`
 	SSHKey            string `json:"sshKey"`
 	Template          string `json:"template"`
 	Type              string `json:"type"`
 	Zone              string `json:"zone"`
+	Cloudinit         string `json:"cloudinit"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

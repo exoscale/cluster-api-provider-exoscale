@@ -3,7 +3,7 @@ kind: Cluster
 metadata:
   labels:
     controller-tools.k8s.io: "1.0"
-  name: my-exoscale-cluster
+  name: my-exoscale-cluster-pv
 spec:
   clusterNetwork:
     services:

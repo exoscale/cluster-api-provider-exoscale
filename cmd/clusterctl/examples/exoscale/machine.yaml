@@ -7,7 +7,7 @@ items:
   metadata:
     generateName: my-exoscale-master-
     labels:
-      cluster.k8s.io/cluster-name: my-exoscale-cluster
+      cluster.k8s.io/cluster-name: my-exoscale-cluster-pv
       set: master
   spec:
     providerID: Exoscale
@@ -18,14 +18,25 @@ items:
         zone: de-fra-1
         # if template not provisioned we recommend only ubuntu template
         # provisioned template example (docker, kubelet, kubeadm)
-        template: "Linux Ubuntu 18.04 LTS 64-bit"
+        template: "k8s-node"
         type: medium
-        disk: 50
+        disk: 200
         # Example of cloudinit
         cloudinit: |
           #cloud-config
+          growpart:
+          mode: off
+          devices: ['/']
           runcmd:
-           - [ sh, -c, echo "=========hello world'=========" ]
+           - sgdisk -e /dev/vda
+           - parted -a optimal -s /dev/vda -- mkpart LOCAL-PV ext4 30GB -1
+           - growpart /dev/vda 1
+           - resize2fs /dev/vda1
+           - modprobe dm_thin_pool
+           - mkdir /mtn/disks/vol1
+           - mount -t tmpfs /dev/vda2 /mnt/disks/vol1
+           - echo "/dev/vda2 /mnt/disks/vol1 ext4 defaults    0 0" >> /etc/fstab
+ 
     versions:
       kubelet: 1.14.0
       controlPlane: 1.14.0
@@ -35,7 +46,7 @@ items:
   metadata:
     generateName: my-exoscale-node-
     labels:
-      cluster.k8s.io/cluster-name: my-exoscale-cluster
+      cluster.k8s.io/cluster-name: my-exoscale-cluster-pv
       set: node
   spec:
     providerID: Exoscale
@@ -46,13 +57,23 @@ items:
         zone: de-fra-1
          # if template not provisioned we recommend only ubuntu
          # provisioned template example (docker, kubelet, kubeadm)
-        template: "Linux Ubuntu 18.04 LTS 64-bit"
+        template: "k8s-node"
         type: medium
-        disk: 50
+        disk: 200
         # Example of cloudinit
         cloudinit: |
           #cloud-config
+          growpart:
+          mode: off
+          devices: ['/']
           runcmd:
-           - [ sh, -c, echo "=========hello world'=========" ]
+           - sgdisk -e /dev/vda
+           - parted -a optimal -s /dev/vda -- mkpart LOCAL-PV ext4 30GB -1
+           - growpart /dev/vda 1
+           - resize2fs /dev/vda1
+           - modprobe dm_thin_pool
+           - mkdir /mtn/disks/vol1
+           - mount -t tmpfs /dev/vda2 /mnt/disks/vol1
+           - echo "/dev/vda2 /mnt/disks/vol1 ext4 defaults    0 0" >> /etc/fstab
     versions:
       kubelet: 1.14.0

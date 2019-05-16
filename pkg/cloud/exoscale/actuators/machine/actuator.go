@@ -19,6 +19,7 @@ package machine
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -139,6 +140,11 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 
 	klog.V(4).Infof("MACHINESET.LABEL: %q", machine.ObjectMeta.Labels["set"])
 
+	var userData string
+	if machineProviderSpec.Cloudinit != "" {
+		userData = base64.StdEncoding.EncodeToString([]byte(machineProviderSpec.Cloudinit))
+	}
+
 	req := egoscale.DeployVirtualMachine{
 		Name:              machine.Name,
 		ZoneID:            zone.ID,
@@ -147,7 +153,7 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 		SecurityGroupIDs:  []egoscale.UUID{*securityGroup},
 		ServiceOfferingID: serviceOffering.ID,
 		KeyPair:           sshKeyName,
-		UserData:          machineProviderSpec.CloudinitBase64Encoded,
+		UserData:          userData,
 	}
 
 	result, err := exoClient.SyncRequestWithContext(ctx, req)

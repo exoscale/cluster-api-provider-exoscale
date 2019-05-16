@@ -21,7 +21,11 @@ items:
         template: "Linux Ubuntu 18.04 LTS 64-bit"
         type: medium
         disk: 50
-        cloudinitBase64Encoded: ""
+        # Example of cloudinit
+        cloudinit: |
+          #cloud-config
+          runcmd:
+            [ sh, -c, echo "=========hello world'=========" ]
     versions:
       kubelet: 1.14.0
       controlPlane: 1.14.0
@@ -45,6 +49,10 @@ items:
         template: "Linux Ubuntu 18.04 LTS 64-bit"
         type: medium
         disk: 50
-        cloudinitBase64Encoded: ""
+        # Example of cloudinit
+        cloudinit: |
+          #cloud-config
+          runcmd:
+            [ sh, -c, echo "=========hello world'=========" ]
     versions:
       kubelet: 1.14.0

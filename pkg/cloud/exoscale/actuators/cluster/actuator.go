@@ -54,11 +54,6 @@ func NewActuator(params ActuatorParams) (*Actuator, error) {
 func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 	klog.Infof("Reconciling cluster %v.", cluster.Name)
 
-	exoClient, err := exoclient.Client()
-	if err != nil {
-		return err
-	}
-
 	clusterSpec, err := exoscalev1.ClusterSpecFromProviderSpec(cluster.Spec.ProviderSpec)
 	if err != nil {
 		return fmt.Errorf("error loading cluster provider config: %v", err)
@@ -85,20 +80,23 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 	masterSGID := clusterStatus.MasterSecurityGroupID
 	nodeSGID := clusterStatus.NodeSecurityGroupID
 	if masterSGID == nil {
-		resp, err := exoClient.Request(egoscale.CreateSecurityGroup{Name: masterSecurityGroup})
+		sg, err := getORCreateSecurityGroup(masterSecurityGroup)
 		if err != nil {
-			return fmt.Errorf("error creating network security group: %v", err)
+			return err
 		}
-		masterSGID = resp.(*egoscale.SecurityGroup).ID
+
+		masterSGID = sg.ID
+
 	} else {
 		klog.Infof("using existing security group id %s", clusterStatus.MasterSecurityGroupID)
 	}
 	if nodeSGID == nil {
-		resp, err := exoClient.Request(egoscale.CreateSecurityGroup{Name: nodeSecurityGroup})
+		sg, err := getORCreateSecurityGroup(nodeSecurityGroup)
 		if err != nil {
-			return fmt.Errorf("error creating network security group: %v", err)
+			return err
 		}
-		nodeSGID = resp.(*egoscale.SecurityGroup).ID
+
+		nodeSGID = sg.ID
 	} else {
 		klog.Infof("using existing security group id %s", clusterStatus.NodeSecurityGroupID)
 	}
@@ -129,6 +127,33 @@ func (a *Actuator) Reconcile(cluster *clusterv1.Cluster) error {
 	klog.Infof("reconcile cluster %q success", cluster.Name)
 
 	return nil
+}
+
+func getORCreateSecurityGroup(sgName string) (*egoscale.SecurityGroup, error) {
+	exoClient, err := exoclient.Client()
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := exoClient.Get(egoscale.SecurityGroup{Name: sgName})
+	if err != nil {
+		if e, ok := err.(*egoscale.ErrorResponse); ok {
+			if e.ErrorCode != egoscale.ParamError {
+				return nil, err
+			}
+		}
+	}
+
+	if err == nil {
+		return resp.(*egoscale.SecurityGroup), nil
+	}
+
+	resp, err = exoClient.Request(egoscale.CreateSecurityGroup{Name: sgName})
+	if err != nil {
+		return nil, fmt.Errorf("error creating network security group: %v", err)
+	}
+
+	return resp.(*egoscale.SecurityGroup), nil
 }
 
 func checkSecurityGroup(sgID *egoscale.UUID, rules []egoscale.AuthorizeSecurityGroupIngress) error {

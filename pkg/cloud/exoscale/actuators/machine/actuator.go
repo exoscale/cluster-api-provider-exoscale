@@ -482,23 +482,20 @@ func (a *Actuator) Delete(ctx context.Context, cluster *clusterv1.Cluster, machi
 		}
 	*/
 
-	vmID := machineStatus.ID
-	if vmID == nil {
-		resp, err := exoClient.GetWithContext(ctx, egoscale.VirtualMachine{Name: machine.Name})
-		if err != nil {
-			return err
-		}
-
+	resp, err := exoClient.GetWithContext(ctx, egoscale.VirtualMachine{Name: machine.Name})
+	if err != nil {
 		// It was already deleted externally
 		if e, ok := err.(*egoscale.ErrorResponse); ok {
 			if e.ErrorCode == egoscale.ParamError {
 				return nil
 			}
-		}
 
-		vm := resp.(*egoscale.VirtualMachine)
-		vmID = vm.ID
+			return err
+		}
 	}
+
+	vm := resp.(*egoscale.VirtualMachine)
+	vmID := vm.ID
 
 	result, err := exoClient.SyncRequestWithContext(ctx, egoscale.DestroyVirtualMachine{
 		ID: vmID,

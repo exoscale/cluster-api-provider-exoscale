@@ -34,7 +34,7 @@ items:
            - growpart /dev/vda 1
            - resize2fs /dev/vda1
            - modprobe dm_thin_pool
-           - mkdir -p /k8s-volumes/mtn/disks/vol1 && mount -t tmpfs /dev/vda2 /k8s-volumes/mnt/disks/vol1
+           - mkdir -p /k8s-volumes/mnt/disks/vol1 && mount -t tmpfs /dev/vda2 /k8s-volumes/mnt/disks/vol1
            - echo "/dev/vda2 /k8s-volumes/mnt/disks/vol1 ext4 defaults    0 0" >> /etc/fstab
  
     versions:
@@ -73,7 +73,7 @@ items:
            - growpart /dev/vda 1
            - resize2fs /dev/vda1
            - modprobe dm_thin_pool
-           - mkdir -p /k8s-volumes/mtn/disks/vol1 && mount -t tmpfs /dev/vda2 /k8s-volumes/mtn/disks/vol1/
-           - echo "/dev/vda2 /k8s-volumes/mtn/disks/vol1/ ext4 defaults    0 0" >> /etc/fstab
+           - mkdir -p /k8s-volumes/mnt/disks/vol1 && mount -t tmpfs /dev/vda2 /k8s-volumes/mnt/disks/vol1
+           - echo "/dev/vda2 /k8s-volumes/mnt/disks/vol1 ext4 defaults    0 0" >> /etc/fstab
     versions:
       kubelet: 1.14.0

@@ -62,10 +62,10 @@
   version = "v2.9.3"
 
 [[projects]]
-  branch = "deepcopy"
   name = "github.com/exoscale/egoscale"
   packages = ["."]
-  revision = "e07d409642a631a1f96a7aa9a49fc1c52a8f9822"
+  revision = "deb1074d231c79f03cdcbeed830eaaee8d5f0d5c"
+  version = "v0.18.0"
 
 [[projects]]
   name = "github.com/ghodss/yaml"
@@ -520,6 +520,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "31d67caa5d7a66c80d15a592e8d9d714ce72c92902d99b30a412c4c4de5f2cc4"
+  inputs-digest = "1645455482b153be3442823e14eff28b3b377018bc6a81fae70b478cf70c17b7"
   solver-name = "gps-cdcl"
   solver-version = 1

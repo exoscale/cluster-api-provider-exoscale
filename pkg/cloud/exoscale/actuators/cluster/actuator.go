@@ -187,6 +187,16 @@ func buildMasterFirewallRules(self, nodeSG string) []egoscale.AuthorizeSecurityG
 	return []egoscale.AuthorizeSecurityGroupIngress{
 		egoscale.AuthorizeSecurityGroupIngress{
 			Protocol:  "TCP",
+			StartPort: 80,
+			EndPort:   80,
+			CIDRList: []egoscale.CIDR{
+				*egoscale.MustParseCIDR("0.0.0.0/0"),
+				*egoscale.MustParseCIDR("::/0"),
+			},
+			Description: "HTTP",
+		},
+		egoscale.AuthorizeSecurityGroupIngress{
+			Protocol:  "TCP",
 			StartPort: 22,
 			EndPort:   22,
 			CIDRList: []egoscale.CIDR{
@@ -260,6 +270,16 @@ func buildMasterFirewallRules(self, nodeSG string) []egoscale.AuthorizeSecurityG
 
 func buildNodeFirewallRules(self, masterSG string) []egoscale.AuthorizeSecurityGroupIngress {
 	return []egoscale.AuthorizeSecurityGroupIngress{
+		egoscale.AuthorizeSecurityGroupIngress{
+			Protocol:  "TCP",
+			StartPort: 80,
+			EndPort:   80,
+			CIDRList: []egoscale.CIDR{
+				*egoscale.MustParseCIDR("0.0.0.0/0"),
+				*egoscale.MustParseCIDR("::/0"),
+			},
+			Description: "HTTP",
+		},
 		egoscale.AuthorizeSecurityGroupIngress{
 			Protocol:  "TCP",
 			StartPort: 22,

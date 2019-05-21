@@ -7,7 +7,7 @@ spec:
     spec:
       containers:
       - name: exoscale-controller
-        image: exoscale/cluster-api-provider-exoscale-controller:latest
+        image: exoscale/cluster-api-provider-exoscale-controller:zipops
         env:
         - name: EXOSCALE_API_KEY
           valueFrom:

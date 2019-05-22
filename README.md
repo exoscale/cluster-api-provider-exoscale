@@ -9,6 +9,7 @@
 
 - [kubectl 1.14+](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
 - deepcopy-gen `$ go get k8s.io/code-generator/cmd/deepcopy-gen`
+- clone into `$GOPATH/src/sigs.k8s.io/cluster-api-provider-exoscale`
 
 ## Docker side
 

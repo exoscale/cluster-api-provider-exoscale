@@ -13,6 +13,15 @@ With [kind](https://github.com/kubernetes-sigs/kind):
 ```
 
 ## Deploy custom resources
+
+Configuration is done via the following environement variables.
+
+```console
+export EXOSCALE_API_KEY=EXO...
+export EXOSCALE_SECRET_KEY=...
+export EXOSCALE_COMPUTE_ENDPOINT=https://api.exoscale.com/compute
+```
+
 run `make`
 
 ```

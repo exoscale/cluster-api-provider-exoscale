@@ -1,5 +1,9 @@
 # Use Exoscale ClusterAPI
 
+## Prerequisite
+
+- https://github.com/exoscale/cluster-api-provider-exoscale#prerequisite
+
 ## Create bootstrap cluster
 
 ### Use an existing k8s cluster or bootstrap it

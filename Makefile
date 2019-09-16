@@ -48,6 +48,18 @@ delete: bin/clusterctl provider-components.yaml
 # Generate manifests e.g. CRD, RBAC etc.
 .PHONY: provider-components.yaml
 provider-components.yaml:
+ifndef EXOSCALE_API_KEY
+$(error EXOSCALE_API_KEY empty)
+endif
+
+ifndef EXOSCALE_SECRET_KEY
+$(error EXOSCALE_SECRET_KEY empty)
+endif
+
+ifndef EXOSCALE_COMPUTE_ENDPOINT
+$(error EXOSCALE_COMPUTE_ENDPOINT empty)
+endif
+
 	kubectl kustomize config > $@
 	echo "---" >> $@
 	kubectl kustomize vendor/sigs.k8s.io/cluster-api/config/default >> $@

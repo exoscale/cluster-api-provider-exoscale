@@ -93,18 +93,14 @@ func (a *Actuator) Create(ctx context.Context, cluster *clusterv1.Cluster, machi
 	}
 	zone := z.(*egoscale.Zone)
 
-	t, err := exoClient.GetWithContext(
-		ctx,
-		&egoscale.Template{
-			Name:       machineProviderSpec.Template,
-			ZoneID:     zone.ID,
-			IsFeatured: true,
-		},
-	)
+	template, err := getTemplateByName(ctx, exoClient, zone.ID, machineProviderSpec.Template, "featured")
 	if err != nil {
-		return fmt.Errorf("problem fetching the template %q. %s", machineProviderSpec.Template, err)
+		template, err = getTemplateByName(ctx, exoClient, zone.ID, machineProviderSpec.Template, "self")
+		if err != nil {
+			return fmt.Errorf("problem fetching the template %q. %s", machineProviderSpec.Template, err)
+		}
 	}
-	template := t.(*egoscale.Template)
+
 	username, ok := template.Details["username"]
 	if !ok {
 		return fmt.Errorf("problem fetching username for template %q", template.Name)
@@ -588,4 +584,35 @@ func (*Actuator) GetKubeConfig(cluster *clusterv1.Cluster, master *clusterv1.Mac
 	}
 
 	return buf.String(), nil
+}
+
+func getTemplateByName(ctx context.Context,
+	cs *egoscale.Client,
+	zoneID *egoscale.UUID,
+	name string,
+	templateFilter string) (*egoscale.Template, error) {
+
+	req := &egoscale.ListTemplates{
+		TemplateFilter: templateFilter,
+		ZoneID:         zoneID,
+	}
+
+	id, errUUID := egoscale.ParseUUID(name)
+	if errUUID != nil {
+		req.Name = name
+	} else {
+		req.ID = id
+	}
+
+	resp, err := cs.ListWithContext(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if len(resp) == 0 {
+		return nil, fmt.Errorf("template %q not found", name)
+	}
+	if len(resp) == 1 {
+		return resp[0].(*egoscale.Template), nil
+	}
+	return nil, fmt.Errorf("multiple templates found for %q", name)
 }

@@ -48,8 +48,21 @@ delete: bin/clusterctl provider-components.yaml
 # Generate manifests e.g. CRD, RBAC etc.
 .PHONY: provider-components.yaml
 provider-components.yaml:
+
 	@echo "updating kustomize image patch file for manager resource (image: ${IMG})"
 	sed -i'' -e 's@image: .*@image: '"${IMG}"'@' ./config/patch/manager_image.yaml
+
+ifndef EXOSCALE_API_KEY
+$(error EXOSCALE_API_KEY empty)
+endif
+
+ifndef EXOSCALE_SECRET_KEY
+$(error EXOSCALE_SECRET_KEY empty)
+endif
+
+ifndef EXOSCALE_COMPUTE_ENDPOINT
+$(error EXOSCALE_COMPUTE_ENDPOINT empty)
+endif
 
 	kubectl kustomize config > $@
 	echo "---" >> $@

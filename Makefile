@@ -48,6 +48,10 @@ delete: bin/clusterctl provider-components.yaml
 # Generate manifests e.g. CRD, RBAC etc.
 .PHONY: provider-components.yaml
 provider-components.yaml:
+
+	@echo "updating kustomize image patch file for manager resource (image: ${IMG})"
+	sed -i'' -e 's@image: .*@image: '"${IMG}"'@' ./config/patch/manager_image.yaml
+
 ifndef EXOSCALE_API_KEY
 $(error EXOSCALE_API_KEY empty)
 endif
@@ -84,8 +88,6 @@ generate:
 # Build the docker image
 docker-build: fmt vet
 	docker build . -t ${IMG}
-	@echo "updating kustomize image patch file for manager resource"
-	sed -i'' -e 's@image: .*@image: '"${IMG}"'@' ./config/patch/manager_image.yaml
 
 # Push the docker image
 docker-push:

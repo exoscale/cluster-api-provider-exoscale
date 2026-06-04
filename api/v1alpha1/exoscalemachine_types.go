@@ -60,6 +60,7 @@ type ExoscaleMachineStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:resource:path=exoscalemachines,scope=Namespaced,categories=cluster-api
 
 // ExoscaleMachine is the Schema for the exoscalemachines API
 type ExoscaleMachine struct {

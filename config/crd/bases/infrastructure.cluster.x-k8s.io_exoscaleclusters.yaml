@@ -8,6 +8,8 @@ metadata:
 spec:
   group: infrastructure.cluster.x-k8s.io
   names:
+    categories:
+    - cluster-api
     kind: ExoscaleCluster
     listKind: ExoscaleClusterList
     plural: exoscaleclusters
@@ -39,10 +41,230 @@ spec:
           spec:
             description: spec defines the desired state of ExoscaleCluster
             properties:
-              foo:
-                description: foo is an example field of ExoscaleCluster. Edit exoscalecluster_types.go
-                  to remove/update
+              controlPlaneEndpoint:
+                default:
+                  port: 6443
+                description: |-
+                  controlPlaneEndpoint is the host and port through which the Kubernetes API server is reachable.
+                  You do not need to set this manually — the controller fills it in once the control plane is provisioned.
+                  See: https://cluster-api.sigs.k8s.io/developer/providers/contracts/infra-cluster#infracluster-control-plane-endpoint
+                minProperties: 1
+                properties:
+                  host:
+                    description: host is the hostname on which the API server is serving
+                      (will be setup by the controller).
+                    maxLength: 512
+                    minLength: 1
+                    type: string
+                  port:
+                    default: 6443
+                    description: port is the port on which the API server is serving.
+                    format: int32
+                    maximum: 65535
+                    minimum: 1
+                    type: integer
+                type: object
+              exoscaleSecret:
+                default:
+                  apiKey: apikey
+                  apiSecret: apisecret
+                  name: exoscale
+                description: |-
+                  exoscaleSecret references a Kubernetes Secret holding the Exoscale API key and secret
+                  that the controller uses to provision and manage cloud resources for this cluster.
+                  The referenced Secret must exist in the same namespace as this resource.
+                properties:
+                  apiKey:
+                    default: apikey
+                    description: apiKey is the key inside the Secret whose value is
+                      the Exoscale API key.
+                    type: string
+                  apiSecret:
+                    default: apisecret
+                    description: apiSecret is the key inside the Secret whose value
+                      is the Exoscale API secret.
+                    type: string
+                  name:
+                    default: exoscale
+                    description: name is the name of the Kubernetes Secret containing
+                      the Exoscale API credentials.
+                    type: string
+                required:
+                - apiKey
+                - apiSecret
+                - name
+                type: object
+              securityGroupControlPlane:
+                description: |-
+                  SecurityGroupControlPlane defines additional firewall rules applied to the cluster control plane.
+                  The controller automatically creates the base rules required for Kubernetes node
+                  and the control plane to communicate. Use this field to add extra rules on top,
+                  for example to allow ssh traffic on the control plane resource.
+                properties:
+                  rules:
+                    description: rules is the list of firewall rules that make up
+                      this security group.
+                    items:
+                      description: |-
+                        SecurityGroupRules defines a single firewall rule within a SecurityGroup.
+                        A rule matches traffic by protocol, port range, and source/destination network,
+                        and applies to either ingress or egress direction.
+                      properties:
+                        description:
+                          description: description is a human-readable explanation
+                            of what this rule does.
+                          maxLength: 255
+                          type: string
+                        endPort:
+                          description: |-
+                            endPort is the last port of the port range this rule applies to (inclusive).
+                            Must be greater than or equal to startPort.
+                          format: int64
+                          maximum: 65535
+                          minimum: 1
+                          type: integer
+                        flowDirection:
+                          default: ingress
+                          description: flowDirection defines whether this rule applies
+                            to incoming (ingress) or outgoing (egress) traffic.
+                          enum:
+                          - ingress
+                          - egress
+                          type: string
+                        network:
+                          description: network is the source (ingress) or destination
+                            (egress) network in CIDR notation (e.g. "0.0.0.0/0").
+                          pattern: ^([0-9]{1,3}\.){3}[0-9]{1,3}\/([0-9]|[1-2][0-9]|3[0-2])$|^([0-9a-fA-F:]+)\/([0-9]|[1-9][0-9]|1[0-1][0-9]|12[0-8])$
+                          type: string
+                        protocol:
+                          default: tcp
+                          description: protocol is the network protocol this rule
+                            applies to.
+                          enum:
+                          - tcp
+                          - udp
+                          - icmp
+                          - icmpv6
+                          - esp
+                          - ah
+                          - gre
+                          - ipip
+                          type: string
+                        securityGroup:
+                          description: |-
+                            securityGroup identifies a security group as the source (ingress) or destination (egress) for this rule,
+                            as an alternative to a CIDR network. Accepts either the UUID of an existing Exoscale security group,
+                            or the special value "itself" to refer to the security group that owns these rules.
+                          type: string
+                        startPort:
+                          description: startPort is the first port of the port range
+                            this rule applies to (inclusive).
+                          format: int64
+                          maximum: 65535
+                          minimum: 1
+                          type: integer
+                      required:
+                      - description
+                      - endPort
+                      - flowDirection
+                      - protocol
+                      - startPort
+                      type: object
+                    type: array
+                type: object
+              securityGroupNode:
+                description: |-
+                  SecurityGroupNode defines additional firewall rules applied to the cluster nodes.
+                  The controller automatically creates the basic rules required to operate a Kubernetes cluster.
+                  Use this field to add extra rules on top, for example to allow traffic for your CNI plugin.
+                properties:
+                  rules:
+                    description: rules is the list of firewall rules that make up
+                      this security group.
+                    items:
+                      description: |-
+                        SecurityGroupRules defines a single firewall rule within a SecurityGroup.
+                        A rule matches traffic by protocol, port range, and source/destination network,
+                        and applies to either ingress or egress direction.
+                      properties:
+                        description:
+                          description: description is a human-readable explanation
+                            of what this rule does.
+                          maxLength: 255
+                          type: string
+                        endPort:
+                          description: |-
+                            endPort is the last port of the port range this rule applies to (inclusive).
+                            Must be greater than or equal to startPort.
+                          format: int64
+                          maximum: 65535
+                          minimum: 1
+                          type: integer
+                        flowDirection:
+                          default: ingress
+                          description: flowDirection defines whether this rule applies
+                            to incoming (ingress) or outgoing (egress) traffic.
+                          enum:
+                          - ingress
+                          - egress
+                          type: string
+                        network:
+                          description: network is the source (ingress) or destination
+                            (egress) network in CIDR notation (e.g. "0.0.0.0/0").
+                          pattern: ^([0-9]{1,3}\.){3}[0-9]{1,3}\/([0-9]|[1-2][0-9]|3[0-2])$|^([0-9a-fA-F:]+)\/([0-9]|[1-9][0-9]|1[0-1][0-9]|12[0-8])$
+                          type: string
+                        protocol:
+                          default: tcp
+                          description: protocol is the network protocol this rule
+                            applies to.
+                          enum:
+                          - tcp
+                          - udp
+                          - icmp
+                          - icmpv6
+                          - esp
+                          - ah
+                          - gre
+                          - ipip
+                          type: string
+                        securityGroup:
+                          description: |-
+                            securityGroup identifies a security group as the source (ingress) or destination (egress) for this rule,
+                            as an alternative to a CIDR network. Accepts either the UUID of an existing Exoscale security group,
+                            or the special value "itself" to refer to the security group that owns these rules.
+                          type: string
+                        startPort:
+                          description: startPort is the first port of the port range
+                            this rule applies to (inclusive).
+                          format: int64
+                          maximum: 65535
+                          minimum: 1
+                          type: integer
+                      required:
+                      - description
+                      - endPort
+                      - flowDirection
+                      - protocol
+                      - startPort
+                      type: object
+                    type: array
+                type: object
+              zone:
+                description: |-
+                  zone is the Exoscale datacenter where the cluster will be provisioned.
+                  See https://www.exoscale.com/datacenters/ for the list of available datacenters.
+                enum:
+                - at-vie-1
+                - at-vie-2
+                - bg-sof-1
+                - ch-dk-2
+                - ch-gva-2
+                - de-fra-1
+                - de-muc-1
+                - hr-zag-1
                 type: string
+            required:
+            - zone
             type: object
           status:
             description: status defines the observed state of ExoscaleCluster
@@ -116,6 +338,214 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              controlPlaneEndpoint:
+                minProperties: 1
+                properties:
+                  description:
+                    type: string
+                  host:
+                    description: host is the hostname on which the API server is serving
+                      (will be setup by the controller).
+                    maxLength: 512
+                    minLength: 1
+                    type: string
+                  id:
+                    type: string
+                  port:
+                    default: 6443
+                    description: port is the port on which the API server is serving.
+                    format: int32
+                    maximum: 65535
+                    minimum: 1
+                    type: integer
+                type: object
+              id:
+                pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+                type: string
+              initialization:
+                description: |-
+                  initialization provides observations of the HetznerCluster initialization process.
+                  NOTE: Fields in this struct are part of the Cluster API contract and are used to orchestrate initial Cluster provisioning.
+                  see: https://cluster-api.sigs.k8s.io/developer/providers/contracts/infra-cluster#infracluster-initialization-completed
+                minProperties: 1
+                properties:
+                  provisioned:
+                    description: |-
+                      provisioned is true when the infrastructure provider reports that the Cluster's infrastructure is fully provisioned.
+                      NOTE: this field is part of the Cluster API contract, and it is used to orchestrate initial Cluster provisioning.
+                      see: https://cluster-api.sigs.k8s.io/developer/providers/contracts/infra-cluster#infracluster-initialization-completed
+                    type: boolean
+                type: object
+              securityGroupControlPlane:
+                properties:
+                  id:
+                    pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+                    type: string
+                  name:
+                    type: string
+                  rules:
+                    description: rules is the list of firewall rules that make up
+                      this security group.
+                    items:
+                      properties:
+                        description:
+                          description: description is a human-readable explanation
+                            of what this rule does.
+                          maxLength: 255
+                          type: string
+                        endPort:
+                          description: |-
+                            endPort is the last port of the port range this rule applies to (inclusive).
+                            Must be greater than or equal to startPort.
+                          format: int64
+                          maximum: 65535
+                          minimum: 1
+                          type: integer
+                        flowDirection:
+                          default: ingress
+                          description: flowDirection defines whether this rule applies
+                            to incoming (ingress) or outgoing (egress) traffic.
+                          enum:
+                          - ingress
+                          - egress
+                          type: string
+                        id:
+                          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+                          type: string
+                        network:
+                          description: network is the source (ingress) or destination
+                            (egress) network in CIDR notation (e.g. "0.0.0.0/0").
+                          pattern: ^([0-9]{1,3}\.){3}[0-9]{1,3}\/([0-9]|[1-2][0-9]|3[0-2])$|^([0-9a-fA-F:]+)\/([0-9]|[1-9][0-9]|1[0-1][0-9]|12[0-8])$
+                          type: string
+                        protocol:
+                          default: tcp
+                          description: protocol is the network protocol this rule
+                            applies to.
+                          enum:
+                          - tcp
+                          - udp
+                          - icmp
+                          - icmpv6
+                          - esp
+                          - ah
+                          - gre
+                          - ipip
+                          type: string
+                        securityGroup:
+                          description: |-
+                            securityGroup identifies a security group as the source (ingress) or destination (egress) for this rule,
+                            as an alternative to a CIDR network. Accepts either the UUID of an existing Exoscale security group,
+                            or the special value "itself" to refer to the security group that owns these rules.
+                          type: string
+                        securityGroupRef:
+                          description: Security Group
+                          properties:
+                            id:
+                              description: Security Group ID
+                              pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+                              type: string
+                          type: object
+                        startPort:
+                          description: startPort is the first port of the port range
+                            this rule applies to (inclusive).
+                          format: int64
+                          maximum: 65535
+                          minimum: 1
+                          type: integer
+                      required:
+                      - description
+                      - endPort
+                      - flowDirection
+                      - protocol
+                      - startPort
+                      type: object
+                    type: array
+                type: object
+              securityGroupNode:
+                properties:
+                  id:
+                    pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+                    type: string
+                  name:
+                    type: string
+                  rules:
+                    description: rules is the list of firewall rules that make up
+                      this security group.
+                    items:
+                      properties:
+                        description:
+                          description: description is a human-readable explanation
+                            of what this rule does.
+                          maxLength: 255
+                          type: string
+                        endPort:
+                          description: |-
+                            endPort is the last port of the port range this rule applies to (inclusive).
+                            Must be greater than or equal to startPort.
+                          format: int64
+                          maximum: 65535
+                          minimum: 1
+                          type: integer
+                        flowDirection:
+                          default: ingress
+                          description: flowDirection defines whether this rule applies
+                            to incoming (ingress) or outgoing (egress) traffic.
+                          enum:
+                          - ingress
+                          - egress
+                          type: string
+                        id:
+                          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+                          type: string
+                        network:
+                          description: network is the source (ingress) or destination
+                            (egress) network in CIDR notation (e.g. "0.0.0.0/0").
+                          pattern: ^([0-9]{1,3}\.){3}[0-9]{1,3}\/([0-9]|[1-2][0-9]|3[0-2])$|^([0-9a-fA-F:]+)\/([0-9]|[1-9][0-9]|1[0-1][0-9]|12[0-8])$
+                          type: string
+                        protocol:
+                          default: tcp
+                          description: protocol is the network protocol this rule
+                            applies to.
+                          enum:
+                          - tcp
+                          - udp
+                          - icmp
+                          - icmpv6
+                          - esp
+                          - ah
+                          - gre
+                          - ipip
+                          type: string
+                        securityGroup:
+                          description: |-
+                            securityGroup identifies a security group as the source (ingress) or destination (egress) for this rule,
+                            as an alternative to a CIDR network. Accepts either the UUID of an existing Exoscale security group,
+                            or the special value "itself" to refer to the security group that owns these rules.
+                          type: string
+                        securityGroupRef:
+                          description: Security Group
+                          properties:
+                            id:
+                              description: Security Group ID
+                              pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+                              type: string
+                          type: object
+                        startPort:
+                          description: startPort is the first port of the port range
+                            this rule applies to (inclusive).
+                          format: int64
+                          maximum: 65535
+                          minimum: 1
+                          type: integer
+                      required:
+                      - description
+                      - endPort
+                      - flowDirection
+                      - protocol
+                      - startPort
+                      type: object
+                    type: array
+                type: object
             type: object
         required:
         - spec

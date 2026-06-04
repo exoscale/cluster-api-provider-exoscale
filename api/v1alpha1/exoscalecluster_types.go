@@ -17,22 +17,51 @@ limitations under the License.
 package v1alpha1
 
 import (
+	egoscale "github.com/exoscale/egoscale/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+const ExoscaleClusterFinalizer string = "exoscalecluster.infrastructure.cluster.x-k8s.io/finalizer"
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // ExoscaleClusterSpec defines the desired state of ExoscaleCluster
+// this resources should meet the required specs described by the clusterAPI: https://cluster-api.sigs.k8s.io/developer/providers/contracts/infra-cluster
 type ExoscaleClusterSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	// The following markers will use OpenAPI v3 schema to validate the value
-	// More info: https://book.kubebuilder.io/reference/markers/crd-validation.html
 
-	// foo is an example field of ExoscaleCluster. Edit exoscalecluster_types.go to remove/update
+	// controlPlaneEndpoint is the host and port through which the Kubernetes API server is reachable.
+	// You do not need to set this manually — the controller fills it in once the control plane is provisioned.
+	// See: https://cluster-api.sigs.k8s.io/developer/providers/contracts/infra-cluster#infracluster-control-plane-endpoint
 	// +optional
-	Foo *string `json:"foo,omitempty"`
+	// +kubebuilder:default={port: 6443}
+	ControlPlaneEndpoint APIEndpoint `json:"controlPlaneEndpoint,omitempty,omitzero"`
+
+	// exoscaleSecret references a Kubernetes Secret holding the Exoscale API key and secret
+	// that the controller uses to provision and manage cloud resources for this cluster.
+	// The referenced Secret must exist in the same namespace as this resource.
+	// +optional
+	// +kubebuilder:default={name: "exoscale", apiKey: "apikey", apiSecret: "apisecret"}
+	ExoscaleSecret ExoscaleSecretRef `json:"exoscaleSecret"`
+
+	// zone is the Exoscale datacenter where the cluster will be provisioned.
+	// See https://www.exoscale.com/datacenters/ for the list of available datacenters.
+	// +required
+	// +kubebuilder:validation:Enum=at-vie-1;at-vie-2;bg-sof-1;ch-dk-2;ch-gva-2;de-fra-1;de-muc-1;hr-zag-1
+	Zone egoscale.ZoneName `json:"zone"`
+
+	// SecurityGroupControlPlane defines additional firewall rules applied to the cluster control plane.
+	// The controller automatically creates the base rules required for Kubernetes node
+	// and the control plane to communicate. Use this field to add extra rules on top,
+	// for example to allow ssh traffic on the control plane resource.
+	// +optional
+	SecurityGroupControlPlane SecurityGroup `json:"securityGroupControlPlane,omitempty"`
+
+	// SecurityGroupNode defines additional firewall rules applied to the cluster nodes.
+	// The controller automatically creates the basic rules required to operate a Kubernetes cluster.
+	// Use this field to add extra rules on top, for example to allow traffic for your CNI plugin.
+	// +optional
+	SecurityGroupNode SecurityGroup `json:"securityGroupNode,omitempty"`
 }
 
 // ExoscaleClusterStatus defines the observed state of ExoscaleCluster.
@@ -56,11 +85,29 @@ type ExoscaleClusterStatus struct {
 	// +listMapKey=type
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// initialization provides observations of the HetznerCluster initialization process.
+	// NOTE: Fields in this struct are part of the Cluster API contract and are used to orchestrate initial Cluster provisioning.
+	// see: https://cluster-api.sigs.k8s.io/developer/providers/contracts/infra-cluster#infracluster-initialization-completed
+	// +optional
+	Initialization ExoscaleClusterInitializationStatus `json:"initialization,omitempty,omitzero"`
+
+	// +optional
+	// +kubebuilder:validation:Pattern=`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
+	ID *string `json:"id,omitempty"`
+
+	// +optional
+	SecurityGroupControlPlan *SecurityGroupStatus `json:"securityGroupControlPlane,omitempty,omitzero"`
+	// +optional
+	SecurityGroupNode *SecurityGroupStatus `json:"securityGroupNode,omitempty,omitzero"`
+
+	// +optional
+	ControlPlaneEndpoint *APIEndpointStatus `json:"controlPlaneEndpoint,omitempty,omitzero"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-
+// +kubebuilder:resource:path=exoscaleclusters,scope=Namespaced,categories=cluster-api
 // ExoscaleCluster is the Schema for the exoscaleclusters API
 type ExoscaleCluster struct {
 	metav1.TypeMeta `json:",inline"`

@@ -22,9 +22,9 @@ func NewSecurityGroupService(client domain.ExoscaleClient, logger logr.Logger) *
 func (s securityGroupService) UpsertSecurityGroup(ctx context.Context, clusterID uuid.UUID, scID *uuid.UUID, name string) (domain.SecurityGroup, error) {
 	if scID != nil {
 		sc, err := s.cloud.GetSecurityGroup(ctx, *scID)
-		if err != nil && !errors.Is(err, domain.SecurityGroupNotFound) {
+		if err != nil && !errors.Is(err, domain.ErrSecurityGroupNotFound) {
 			return domain.SecurityGroup{}, fmt.Errorf("error while fetching security group: %w", err)
-		} else if errors.Is(err, domain.SecurityGroupNotFound) {
+		} else if errors.Is(err, domain.ErrSecurityGroupNotFound) {
 			s.logger.Info("Security group not found, will create a new one")
 
 			id, err := s.cloud.CreateSecurityGroup(ctx, name)
@@ -58,7 +58,7 @@ func (s securityGroupService) UpsertSecurityGroup(ctx context.Context, clusterID
 
 func (s *securityGroupService) DeleteSecurityGroup(ctx context.Context, id uuid.UUID) error {
 	if _, err := s.cloud.GetSecurityGroup(ctx, id); err != nil {
-		if errors.Is(err, domain.SecurityGroupNotFound) {
+		if errors.Is(err, domain.ErrSecurityGroupNotFound) {
 			return nil
 		}
 		return err

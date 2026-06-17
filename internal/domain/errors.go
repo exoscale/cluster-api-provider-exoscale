@@ -3,6 +3,6 @@ package domain
 import "errors"
 
 var (
-	ElasticIPNotFound     = errors.New("elastic ip not found")
-	SecurityGroupNotFound = errors.New("security group not found")
+	ErrElasticIPNotFound     = errors.New("elastic ip not found")
+	ErrSecurityGroupNotFound = errors.New("security group not found")
 )

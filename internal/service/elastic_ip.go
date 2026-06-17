@@ -26,9 +26,9 @@ func (s *elasticIPService) UpsertElasticIP(ctx context.Context, clusterID uuid.U
 
 	if eipID != nil {
 		eip, err := s.cloud.GetElasticIP(ctx, *eipID)
-		if err != nil && !errors.Is(err, domain.ElasticIPNotFound) {
+		if err != nil && !errors.Is(err, domain.ErrElasticIPNotFound) {
 			return domain.ElasticIP{}, fmt.Errorf("error while fetching eip: %w", err)
-		} else if errors.Is(err, domain.ElasticIPNotFound) {
+		} else if errors.Is(err, domain.ErrElasticIPNotFound) {
 			s.logger.Info("Elastic IP not found, will create a new one")
 
 			id, err := s.cloud.CreateElasticIP(ctx, port, eip.Description)
@@ -68,7 +68,7 @@ func (s *elasticIPService) UpsertElasticIP(ctx context.Context, clusterID uuid.U
 
 func (s elasticIPService) DeleteElasticIP(ctx context.Context, id uuid.UUID) error {
 	if _, err := s.cloud.GetElasticIP(ctx, id); err != nil {
-		if errors.Is(err, domain.ElasticIPNotFound) {
+		if errors.Is(err, domain.ErrElasticIPNotFound) {
 			return nil
 		}
 		return err

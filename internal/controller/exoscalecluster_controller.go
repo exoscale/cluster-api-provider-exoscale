@@ -126,7 +126,7 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	// fetch creds affiliated to this cluster.
 	var creds v1.Secret
-	if err := r.Client.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: exoCluster.Spec.ExoscaleSecret.Name}, &creds); err != nil {
+	if err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: exoCluster.Spec.ExoscaleSecret.Name}, &creds); err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to fetch exoscale secret %q: %w", exoCluster.Spec.ExoscaleSecret.Name, err)
 	}
 	apiKey, apiSecret, err := GetAPICreds(creds, exoCluster.Spec.ExoscaleSecret.ApiKey, exoCluster.Spec.ExoscaleSecret.APISecret)

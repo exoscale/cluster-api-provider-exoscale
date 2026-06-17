@@ -62,7 +62,7 @@ func (c *client) GetElasticIP(ctx context.Context, id uuid.UUID) (domain.Elastic
 	elasticIP, err := c.exoClient.GetElasticIP(ctx, egoscale.UUID(id.String()))
 	if err != nil {
 		if errors.Is(err, egoscale.ErrNotFound) {
-			err = domain.ElasticIPNotFound
+			err = domain.ErrElasticIPNotFound
 		}
 		return domain.ElasticIP{}, err
 	}
@@ -137,7 +137,7 @@ func (c *client) GetSecurityGroup(ctx context.Context, id uuid.UUID) (domain.Sec
 	sg, err := c.exoClient.GetSecurityGroup(ctx, egoscale.UUID(id.String()))
 	if err != nil {
 		if errors.Is(err, egoscale.ErrNotFound) {
-			err = domain.SecurityGroupNotFound
+			err = domain.ErrSecurityGroupNotFound
 		}
 		return domain.SecurityGroup{}, err
 	}
@@ -212,7 +212,7 @@ func (c *client) ListSecurityGroupRules(ctx context.Context, sgID uuid.UUID) ([]
 	sg, err := c.exoClient.GetSecurityGroup(ctx, egoscale.UUID(sgID.String()))
 	if err != nil {
 		if errors.Is(err, egoscale.ErrNotFound) {
-			err = domain.SecurityGroupNotFound
+			err = domain.ErrSecurityGroupNotFound
 		}
 		return nil, err
 	}

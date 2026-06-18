@@ -29,6 +29,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
@@ -64,9 +65,21 @@ func main() {
 	var secureMetrics bool
 	var enableHTTP2 bool
 	var tlsOpts []func(*tls.Config)
+	// watchNamespace restricts the operator to a single namespace. This enables running multiple
+	// instances of the operator in the same cluster, each responsible for a different namespace,
+	// so they do not conflict with each other. When empty, the operator watches all namespaces.
+	var watchNamespace string
+	// watchFilter is a label value (cluster.x-k8s.io/watch-filter=<value>) used to scope which
+	// resources this operator instance reconciles. When running more than one operator instance
+	// cluster-wide (i.e. without --namespace), set a distinct label on each managed ExoscaleCluster
+	// and pass the matching value here so each instance only processes its own resources.
+	var watchFilter string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	flag.StringVar(&watchNamespace, "namespace", "", "Namespace to watch (empty = all namespaces).")
+	flag.StringVar(&watchFilter, "watch-filter", "",
+		"Label value for cluster.x-k8s.io/watch-filter; only resources with this label are reconciled (empty means no filter).") //nolint:lll
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
@@ -156,6 +169,11 @@ func main() {
 		metricsServerOptions.KeyName = metricsCertKey
 	}
 
+	cacheOptions := cache.Options{}
+	if watchNamespace != "" {
+		cacheOptions.DefaultNamespaces = map[string]cache.Config{watchNamespace: {}}
+	}
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
@@ -163,6 +181,7 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "6fe5d943.cluster.x-k8s.io",
+		Cache:                  cacheOptions,
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
 		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
@@ -181,8 +200,9 @@ func main() {
 	}
 
 	if err := (&controller.ExoscaleClusterReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:      mgr.GetClient(),
+		Scheme:      mgr.GetScheme(),
+		WatchFilter: watchFilter,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "ExoscaleCluster")
 		os.Exit(1)

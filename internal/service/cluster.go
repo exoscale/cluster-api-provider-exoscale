@@ -130,6 +130,9 @@ func (s *clusterService) ReconcileCluster(ctx context.Context, cluster infrav1al
 	}
 	cluster.Status.SecurityGroupNode.Rules = domainRulesToStatus(nodeRules)
 
+	// TODO: cgeck if I need to set this value to false in case of error in update, 1. provisioned = true, 2. reconcile again with error, 3 do I need to update the provisioned = false ?
+	cluster.Status.Initialization.Provisioned = func() *bool { v := true; return &v }()
+
 	return cluster, nil
 }
 

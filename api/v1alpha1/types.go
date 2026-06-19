@@ -40,7 +40,7 @@ type ExoscaleSecretRef struct {
 
 	// apiKey is the key inside the Secret whose value is the Exoscale API key.
 	// +kubebuilder:default=apikey
-	ApiKey string `json:"apiKey"`
+	APIKey string `json:"apiKey"`
 
 	// apiSecret is the key inside the Secret whose value is the Exoscale API secret.
 	// +kubebuilder:default=apisecret
@@ -97,13 +97,15 @@ type SecurityGroupRule struct {
 
 	// description is a human-readable explanation of what this rule does.
 	// +required
+	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=255
 	Description string `json:"description,omitempty"`
 }
 
-// Security Group
+// SecurityGroupResource references an Exoscale Security Group by ID.
+// Used in rule status to record the source/destination SG of a rule.
 type SecurityGroupResource struct {
-	// Security Group ID
+	// id is the UUID of the referenced Exoscale Security Group.
 	// +optional
 	// +kubebuilder:validation:Pattern=`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
 	ID string `json:"id,omitempty"`

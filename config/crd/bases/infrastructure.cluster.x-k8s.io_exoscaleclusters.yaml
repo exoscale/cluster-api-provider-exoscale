@@ -114,6 +114,7 @@ spec:
                           description: description is a human-readable explanation
                             of what this rule does.
                           maxLength: 255
+                          minLength: 1
                           type: string
                         endPort:
                           description: |-
@@ -191,6 +192,7 @@ spec:
                           description: description is a human-readable explanation
                             of what this rule does.
                           maxLength: 255
+                          minLength: 1
                           type: string
                         endPort:
                           description: |-
@@ -392,6 +394,7 @@ spec:
                           description: description is a human-readable explanation
                             of what this rule does.
                           maxLength: 255
+                          minLength: 1
                           type: string
                         endPort:
                           description: |-
@@ -438,10 +441,13 @@ spec:
                             or the special value "itself" to refer to the security group that owns these rules.
                           type: string
                         securityGroupRef:
-                          description: Security Group
+                          description: |-
+                            SecurityGroupResource references an Exoscale Security Group by ID.
+                            Used in rule status to record the source/destination SG of a rule.
                           properties:
                             id:
-                              description: Security Group ID
+                              description: id is the UUID of the referenced Exoscale
+                                Security Group.
                               pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
                               type: string
                           type: object
@@ -477,6 +483,7 @@ spec:
                           description: description is a human-readable explanation
                             of what this rule does.
                           maxLength: 255
+                          minLength: 1
                           type: string
                         endPort:
                           description: |-
@@ -523,10 +530,13 @@ spec:
                             or the special value "itself" to refer to the security group that owns these rules.
                           type: string
                         securityGroupRef:
-                          description: Security Group
+                          description: |-
+                            SecurityGroupResource references an Exoscale Security Group by ID.
+                            Used in rule status to record the source/destination SG of a rule.
                           properties:
                             id:
-                              description: Security Group ID
+                              description: id is the UUID of the referenced Exoscale
+                                Security Group.
                               pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
                               type: string
                           type: object

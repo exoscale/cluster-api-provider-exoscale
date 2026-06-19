@@ -42,7 +42,7 @@ type ExoscaleClusterSpec struct {
 	// The referenced Secret must exist in the same namespace as this resource.
 	// +optional
 	// +kubebuilder:default={name: "exoscale", apiKey: "apikey", apiSecret: "apisecret"}
-	ExoscaleSecret ExoscaleSecretRef `json:"exoscaleSecret"`
+	ExoscaleSecret ExoscaleSecretRef `json:"exoscaleSecret,omitempty"`
 
 	// zone is the Exoscale datacenter where the cluster will be provisioned.
 	// See https://www.exoscale.com/datacenters/ for the list of available datacenters.
@@ -97,7 +97,7 @@ type ExoscaleClusterStatus struct {
 	ID *string `json:"id,omitempty"`
 
 	// +optional
-	SecurityGroupControlPlan *SecurityGroupStatus `json:"securityGroupControlPlane,omitempty,omitzero"`
+	SecurityGroupControlPlane *SecurityGroupStatus `json:"securityGroupControlPlane,omitempty,omitzero"`
 	// +optional
 	SecurityGroupNode *SecurityGroupStatus `json:"securityGroupNode,omitempty,omitzero"`
 

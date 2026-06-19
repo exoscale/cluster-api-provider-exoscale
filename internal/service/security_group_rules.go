@@ -9,9 +9,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// defaultControlPlaneRules returns the default rules required to operate a Kubernetes control plane.
-// cpSGID is needed for rules whose source is the control plane security group itself.
-// apiServerPort is taken from spec.controlPlaneEndpoint.port so the API server rule stays in sync.
 func defaultControlPlaneRules(cpSGID uuid.UUID, apiServerPort int32) []domain.SecurityGroupRule {
 	all := "0.0.0.0/0"
 	return []domain.SecurityGroupRule{
@@ -59,7 +56,7 @@ func defaultControlPlaneRules(cpSGID uuid.UUID, apiServerPort int32) []domain.Se
 }
 
 // defaultNodeRules returns the hardcoded rules required to operate Kubernetes worker nodes.
-// cpSGID and nodeSGID are needed to express inter-SG traffic sources.
+// ponytail: NodePort range (30000-32767) intentionally not opened by default.
 func defaultNodeRules(cpSGID, nodeSGID uuid.UUID) []domain.SecurityGroupRule {
 	return []domain.SecurityGroupRule{
 		{
@@ -78,19 +75,13 @@ func defaultNodeRules(cpSGID, nodeSGID uuid.UUID) []domain.SecurityGroupRule {
 			EndPort:       10250,
 			SecurityGroup: &nodeSGID,
 		},
-		// ponytail: NodePort range (30000-32767) is intentionally not opened by default.
-		// Users should add it explicitly via spec.securityGroupNode.rules when needed.
 	}
 }
 
-// desiredControlPlaneRules merges the default control plane rules with user-defined rules from the spec.
-// itselfID resolves the "itself" self-reference allowed in user rules.
-// apiServerPort is taken from spec.controlPlaneEndpoint.port.
 func desiredControlPlaneRules(cpSGID uuid.UUID, apiServerPort int32, userRules []infrav1alpha1.SecurityGroupRule) ([]domain.SecurityGroupRule, error) {
 	return mergeWithUserRules(defaultControlPlaneRules(cpSGID, apiServerPort), cpSGID, userRules)
 }
 
-// desiredNodeRules merges the default node rules with user-defined rules from the spec.
 func desiredNodeRules(cpSGID, nodeSGID uuid.UUID, userRules []infrav1alpha1.SecurityGroupRule) ([]domain.SecurityGroupRule, error) {
 	return mergeWithUserRules(defaultNodeRules(cpSGID, nodeSGID), nodeSGID, userRules)
 }
@@ -110,8 +101,8 @@ func mergeWithUserRules(defaults []domain.SecurityGroupRule, itselfID uuid.UUID,
 	return rules, nil
 }
 
-// specRuleToDomain converts an API spec rule to the domain representation.
-// itselfID resolves the "itself" special value, which refers to the owning security group.
+// specRuleToDomain resolves the "itself" sentinel in SecurityGroup.SecurityGroup
+// to the owning SG's UUID.
 func specRuleToDomain(rule infrav1alpha1.SecurityGroupRule, itselfID uuid.UUID) (domain.SecurityGroupRule, error) {
 	domainRule := domain.SecurityGroupRule{
 		FlowDirection: domain.SecurityGroupRuleFlowDirection(rule.FlowDirection),
@@ -137,7 +128,6 @@ func specRuleToDomain(rule infrav1alpha1.SecurityGroupRule, itselfID uuid.UUID) 
 	return domainRule, nil
 }
 
-// domainRulesToStatus converts domain rules to their API status representation.
 func domainRulesToStatus(rules []domain.SecurityGroupRule) []infrav1alpha1.SecurityGroupRuleStatus {
 	result := make([]infrav1alpha1.SecurityGroupRuleStatus, 0, len(rules))
 	for _, r := range rules {
@@ -168,8 +158,7 @@ func domainRuleToStatus(rule domain.SecurityGroupRule) infrav1alpha1.SecurityGro
 	return status
 }
 
-// rulesEqual returns true when two rules enforce the same firewall policy.
-// ID and Description are excluded
+// rulesEqual excludes ID and Description so drift detection doesn't fire on cosmetic changes.
 func rulesEqual(a, b domain.SecurityGroupRule) bool {
 	if a.FlowDirection != b.FlowDirection || a.Protocol != b.Protocol {
 		return false
@@ -189,8 +178,6 @@ func rulesEqual(a, b domain.SecurityGroupRule) bool {
 	return sgEqual
 }
 
-// diffRules returns which rules must be added and which must be deleted to
-// reconcile the existing cloud state toward the desired state.
 func diffRules(desired, existing []domain.SecurityGroupRule) (toAdd, toDelete []domain.SecurityGroupRule) {
 	for _, d := range desired {
 		if !ruleIn(existing, d) {

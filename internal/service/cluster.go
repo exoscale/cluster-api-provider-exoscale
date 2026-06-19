@@ -41,7 +41,6 @@ func (s *clusterService) ReconcileCluster(ctx context.Context, cluster infrav1al
 		return cluster, fmt.Errorf("unable to parse status.id: %w", err)
 	}
 
-	// Elastic IP for the control-plane endpoint.
 	var eipID *uuid.UUID
 	if cluster.Status.ControlPlaneEndpoint != nil && cluster.Status.ControlPlaneEndpoint.ID != "" {
 		id, err := uuid.Parse(cluster.Status.ControlPlaneEndpoint.ID)
@@ -64,7 +63,6 @@ func (s *clusterService) ReconcileCluster(ctx context.Context, cluster infrav1al
 		Description: eip.Description,
 	}
 
-	// Control-plane security group.
 	var securityGroupControlPlaneID *uuid.UUID
 	securityGroupControlPlaneName := fmt.Sprintf("capi - %s - control plane", clusterID)
 	if cluster.Status.SecurityGroupControlPlane != nil && cluster.Status.SecurityGroupControlPlane.ID != "" {
@@ -83,7 +81,6 @@ func (s *clusterService) ReconcileCluster(ctx context.Context, cluster infrav1al
 		Name: securityGroupControlPlane.Name,
 	}
 
-	// Node security group.
 	var securityGroupNodeID *uuid.UUID
 	securityGroupNodeName := fmt.Sprintf("capi - %s - node", clusterID)
 	if cluster.Status.SecurityGroupNode != nil && cluster.Status.SecurityGroupNode.ID != "" {
@@ -102,7 +99,6 @@ func (s *clusterService) ReconcileCluster(ctx context.Context, cluster infrav1al
 		Name: securityGroupNode.Name,
 	}
 
-	// Security group rules.
 	desiredCPRules, err := desiredControlPlaneRules(securityGroupControlPlane.ID, cluster.Spec.ControlPlaneEndpoint.Port, cluster.Spec.SecurityGroupControlPlane.Rules)
 	if err != nil {
 		return cluster, fmt.Errorf("unable to build control plane security group rules: %w", err)
@@ -140,10 +136,8 @@ func (s *clusterService) DeleteCluster(ctx context.Context, cluster infrav1alpha
 		}
 	}
 
-	// Rules must be purged from all security groups before deleting them. Security groups can
-	// reference each other in their rules (e.g. group A has a rule pointing to group B, and group B
-	// has a rule pointing to group A), creating a circular dependency that prevents deletion of either
-	// group until both are fully cleared of their rules.
+	// Purge rules before deleting SGs: cross-references between groups create circular dependencies
+	// that prevent deletion until both are cleared.
 	var securityGroupControlPlaneID *uuid.UUID
 	if cluster.Status.SecurityGroupControlPlane != nil && cluster.Status.SecurityGroupControlPlane.ID != "" {
 		id, err := uuid.Parse(cluster.Status.SecurityGroupControlPlane.ID)

@@ -44,22 +44,16 @@ import (
 	"github.com/google/uuid"
 )
 
-// ExoscaleClusterReconciler reconciles a ExoscaleCluster object
 type ExoscaleClusterReconciler struct {
 	client.Client
 	Scheme      *runtime.Scheme
 	WatchFilter string
 }
 
-// Read CAPI cluster resource
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters;clusters/status,verbs=get;list;watch
-
-// Manage infra exoscale cluster resources
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=exoscaleclusters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=exoscaleclusters/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=exoscaleclusters/finalizers,verbs=update
-
-// Read secrets for Exoscale API credentials
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
 // ReadyCondition is the CAPI-standard condition type reported on the ExoscaleCluster status.
@@ -171,13 +165,10 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	return ctrl.Result{}, nil
 }
 
-// SetupWithManager sets up the controller with the Manager.
 func (r *ExoscaleClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Watch Cluster objects and map them to the ExoscaleCluster they own.
-	// This is required so that lifecycle events on the CAPI Cluster (pause, unpause, owner-ref set)
-	// trigger reconciliation of the corresponding ExoscaleCluster. Without this watch the controller
-	// only reacts to direct changes on ExoscaleCluster resources and would, for example, never notice
-	// when a Cluster is paused or when the owner reference is initially set by the Cluster controller.
+	// Without this, lifecycle events on the CAPI Cluster (pause, unpause, owner-ref set)
+	// would never trigger reconciliation of the corresponding ExoscaleCluster.
 	clusterToExoscaleCluster := util.ClusterToInfrastructureMapFunc(
 		context.Background(),
 		infrav1alpha1.GroupVersion.WithKind("ExoscaleCluster"),

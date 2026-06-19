@@ -8,16 +8,36 @@ metadata:
 spec:
   group: infrastructure.cluster.x-k8s.io
   names:
+    categories:
+    - cluster-api
     kind: ExoscaleMachine
     listKind: ExoscaleMachineList
     plural: exoscalemachines
+    shortNames:
+    - exom
     singular: exoscalemachine
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .metadata.labels.cluster\.x-k8s\.io/cluster-name
+      name: Cluster
+      type: string
+    - jsonPath: .status.instanceState
+      name: State
+      type: string
+    - jsonPath: .status.ready
+      name: Ready
+      type: string
+    - jsonPath: .status.instanceID
+      name: InstanceID
+      type: string
+    - jsonPath: .metadata.ownerReferences[?(@.kind=="Machine")].name
+      name: Machine
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ExoscaleMachine is the Schema for the exoscalemachines API
+        description: ExoscaleMachine is the Schema for the exoscalemachines API.
         properties:
           apiVersion:
             description: |-
@@ -37,27 +57,128 @@ spec:
           metadata:
             type: object
           spec:
-            description: spec defines the desired state of ExoscaleMachine
+            description: |-
+              ExoscaleMachineSpec defines the desired state of an Exoscale compute instance
+              backing a Cluster API Machine.
             properties:
-              foo:
-                description: foo is an example field of ExoscaleMachine. Edit exoscalemachine_types.go
-                  to remove/update
+              instanceType:
+                description: |-
+                  instanceType is the Exoscale service offering (e.g. "small", "medium", "large",
+                  "gpu-plus", "dev").
+                enum:
+                - small
+                - medium
+                - large
+                - extra-large
+                - huge
+                - gpu-plus
+                - gpu-2plus
+                - dev
+                - startup-2
+                - startup-4
+                - startup-8
+                - startup-16
+                - standard
+                - standard-2
+                - standard-4
+                - standard-8
+                - standard-12
+                - standard-16
+                - standard-20
+                - standard-24
+                - standard-32
+                - memory
+                - memory-2
+                - memory-4
+                - memory-8
+                - memory-12
+                - memory-16
+                - memory-20
+                - memory-24
+                - compute
+                - compute-2
+                - compute-4
+                - compute-8
+                - compute-12
+                - compute-16
+                - compute-20
+                - compute-24
                 type: string
+              rootVolumeSizeGB:
+                description: |-
+                  rootVolumeSizeGB optionally overrides the disk size declared by the
+                  template. The instance is recreated if this changes.
+                format: int64
+                maximum: 10000
+                minimum: 10
+                type: integer
+              securityGroups:
+                description: |-
+                  securityGroups are the names or UUIDs of Exoscale Security Groups to attach
+                  to the instance. Reference the SGs the ExoscaleCluster controller creates,
+                  or any user-provided SG.
+                items:
+                  type: string
+                type: array
+              sshKey:
+                description: |-
+                  sshKey is the name of a pre-existing SSH key registered in the Exoscale
+                  project. The key is injected into the instance at boot.
+                type: string
+              templateID:
+                description: |-
+                  templateID is the UUID of an existing Exoscale instance template. Templates
+                  bundle image, disk size and snapshot recipe; pick one out-of-band.
+                pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+                type: string
+              zone:
+                description: zone is the Exoscale datacenter where the instance will
+                  be created.
+                enum:
+                - at-vie-1
+                - at-vie-2
+                - bg-sof-1
+                - ch-dk-2
+                - ch-gva-2
+                - de-fra-1
+                - de-muc-1
+                - hr-zag-1
+                type: string
+            required:
+            - instanceType
+            - sshKey
+            - templateID
+            - zone
             type: object
           status:
-            description: status defines the observed state of ExoscaleMachine
+            description: |-
+              ExoscaleMachineStatus defines the observed state of an ExoscaleMachine.
+              Fields follow the CAPI InfraMachine contract:
+              https://cluster-api.sigs.k8s.io/developer/providers/contracts/infra-machine
             properties:
+              addresses:
+                description: addresses are the network addresses of the instance (public
+                  and private IPs).
+                items:
+                  description: MachineAddress models a single network address (matching
+                    clusterv1.MachineAddress).
+                  properties:
+                    address:
+                      description: address is the value of the address.
+                      type: string
+                    type:
+                      description: type is the kind of address (e.g. "InternalIP",
+                        "ExternalIP", "Hostname").
+                      type: string
+                  required:
+                  - address
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-type: atomic
               conditions:
-                description: |-
-                  conditions represent the current state of the ExoscaleMachine resource.
-                  Each condition has a unique type and reflects the status of a specific aspect of the resource.
-
-                  Standard condition types include:
-                  - "Available": the resource is fully functional
-                  - "Progressing": the resource is being created or updated
-                  - "Degraded": the resource failed to reach or maintain its desired state
-
-                  The status of each condition is one of True, False, or Unknown.
+                description: conditions represents the observations of the current
+                  state of the ExoscaleMachine.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -116,6 +237,30 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              failureMessage:
+                description: failureMessage is a human-readable description of failureReason.
+                type: string
+              failureReason:
+                description: failureReason will be set on a terminal error that prevents
+                  reconciliation.
+                type: string
+              instanceID:
+                description: instanceID is the Exoscale instance UUID.
+                pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+                type: string
+              instanceState:
+                description: instanceState is the Exoscale instance state name (e.g.
+                  "running", "stopped").
+                type: string
+              providerID:
+                description: |-
+                  providerID is the cloud-provider identifier for this instance, in the form
+                  exoscale:///<instance-id>. CAPI uses this to associate the Machine with
+                  its Node.
+                type: string
+              ready:
+                description: ready is true when the instance is running and reachable.
+                type: boolean
             type: object
         required:
         - spec

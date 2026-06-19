@@ -51,7 +51,9 @@ var _ = Describe("ExoscaleCluster Controller", func() {
 						Name:      resourceName,
 						Namespace: "default",
 					},
-					// TODO(user): Specify other spec details if needed.
+					Spec: infrastructurev1alpha1.ExoscaleClusterSpec{
+						Zone: "ch-gva-2",
+					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
@@ -76,9 +78,10 @@ var _ = Describe("ExoscaleCluster Controller", func() {
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
+			// Reconcile returns nil when the owner Cluster has not yet set the
+			// OwnerRef; this scaffold test asserts the controller handles that
+			// path without error.
 			Expect(err).NotTo(HaveOccurred())
-			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
-			// Example: If you expect a certain status condition after reconciliation, verify it here.
 		})
 	})
 })

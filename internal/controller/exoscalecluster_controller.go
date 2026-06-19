@@ -22,13 +22,13 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
+	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/cluster-api/util/predicates"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -60,6 +60,10 @@ type ExoscaleClusterReconciler struct {
 // See: https://cluster-api.sigs.k8s.io/developer/providers/contracts/infra-cluster#infracluster-status-conditions
 const ReadyCondition = "Ready"
 
+// ownedConditions is the set of conditions this controller owns. Used by the patch helper
+// to detect concurrent updates from other controllers.
+var ownedConditions = []string{ReadyCondition, clusterv1.PausedCondition}
+
 func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
 	log := logf.FromContext(ctx)
 
@@ -77,15 +81,14 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 	defer func() {
 		if reterr != nil {
-			apimeta.SetStatusCondition(&exoCluster.Status.Conditions, metav1.Condition{
-				Type:               ReadyCondition,
-				Status:             metav1.ConditionFalse,
-				Reason:             "ReconcileError",
-				Message:            reterr.Error(),
-				ObservedGeneration: exoCluster.Generation,
+			conditions.Set(&exoCluster, metav1.Condition{
+				Type:    ReadyCondition,
+				Status:  metav1.ConditionFalse,
+				Reason:  "ReconcileError",
+				Message: reterr.Error(),
 			})
 		}
-		if err := patchHelper.Patch(ctx, &exoCluster); err != nil {
+		if err := patchHelper.Patch(ctx, &exoCluster, patch.WithOwnedConditions{Conditions: ownedConditions}); err != nil {
 			log.Error(err, "Unable to patch ExoscaleCluster",
 				"name", exoCluster.Name,
 				"id", exoCluster.Status.ID)
@@ -114,8 +117,16 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 	if annotations.IsPaused(cluster, &exoCluster) {
 		log.Info("ExoscaleCluster is paused, skipping reconciliation")
+		conditions.Set(&exoCluster, metav1.Condition{
+			Type:   clusterv1.PausedCondition,
+			Status: metav1.ConditionTrue,
+		})
 		return ctrl.Result{}, nil
 	}
+	conditions.Set(&exoCluster, metav1.Condition{
+		Type:   clusterv1.PausedCondition,
+		Status: metav1.ConditionFalse,
+	})
 
 	var creds v1.Secret
 	if err := r.Get(ctx, types.NamespacedName{
@@ -155,11 +166,10 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	// status.initialization.provisioned is true and the CAPI Cluster is ready. We already watch
 	// the owner Cluster (see SetupWithManager), so the reconcile loop will fire again.
 
-	apimeta.SetStatusCondition(&exoCluster.Status.Conditions, metav1.Condition{
-		Type:               ReadyCondition,
-		Status:             metav1.ConditionTrue,
-		Reason:             "ReconcileSuccess",
-		ObservedGeneration: exoCluster.Generation,
+	conditions.Set(&exoCluster, metav1.Condition{
+		Type:   ReadyCondition,
+		Status: metav1.ConditionTrue,
+		Reason: "ReconcileSuccess",
 	})
 
 	return ctrl.Result{}, nil

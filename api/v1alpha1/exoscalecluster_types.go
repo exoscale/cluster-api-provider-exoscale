@@ -134,6 +134,14 @@ type ExoscaleClusterList struct {
 	Items           []ExoscaleCluster `json:"items"`
 }
 
+func (in *ExoscaleCluster) GetConditions() []metav1.Condition {
+	return in.Status.Conditions
+}
+
+func (in *ExoscaleCluster) SetConditions(conditions []metav1.Condition) {
+	in.Status.Conditions = conditions
+}
+
 func init() {
 	SchemeBuilder.Register(&ExoscaleCluster{}, &ExoscaleClusterList{})
 }

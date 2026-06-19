@@ -57,6 +57,7 @@ func (s *clusterService) ReconcileCluster(ctx context.Context, cluster infrav1al
 
 	endpoint := cluster.Spec.ControlPlaneEndpoint
 	endpoint.Host = eip.IP
+	cluster.Spec.ControlPlaneEndpoint = endpoint
 	cluster.Status.ControlPlaneEndpoint = &infrav1alpha1.APIEndpointStatus{
 		APIEndpoint: endpoint,
 		ID:          eip.ID.String(),

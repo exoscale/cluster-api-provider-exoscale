@@ -13,6 +13,7 @@ import (
 // cpSGID is needed for rules whose source is the control plane security group itself.
 // apiServerPort is taken from spec.controlPlaneEndpoint.port so the API server rule stays in sync.
 func defaultControlPlaneRules(cpSGID uuid.UUID, apiServerPort int32) []domain.SecurityGroupRule {
+	all := "0.0.0.0/0"
 	return []domain.SecurityGroupRule{
 		{
 			Description:   "kubernetes API server",
@@ -20,7 +21,7 @@ func defaultControlPlaneRules(cpSGID uuid.UUID, apiServerPort int32) []domain.Se
 			Protocol:      domain.SecurityGroupRuleProtocolTCP,
 			StartPort:     int64(apiServerPort),
 			EndPort:       int64(apiServerPort),
-			Network:       func() *string { v := "0.0.0.0/0"; return &v }(),
+			Network:       &all,
 		},
 		{
 			Description:   "etcd client and peer communication",
@@ -77,15 +78,8 @@ func defaultNodeRules(cpSGID, nodeSGID uuid.UUID) []domain.SecurityGroupRule {
 			EndPort:       10250,
 			SecurityGroup: &nodeSGID,
 		},
-		// TODO: check if we want to allow these port by default
-		// {
-		// 	Description:   "NodePort services",
-		// 	FlowDirection: domain.SecurityGroupRuleFlowDirectionIngress,
-		// 	Protocol:      domain.SecurityGroupRuleProtocolTCP,
-		// 	StartPort:     30000,
-		// 	EndPort:       32767,
-		// 	Network:       &cidrAll,
-		// },
+		// ponytail: NodePort range (30000-32767) is intentionally not opened by default.
+		// Users should add it explicitly via spec.securityGroupNode.rules when needed.
 	}
 }
 

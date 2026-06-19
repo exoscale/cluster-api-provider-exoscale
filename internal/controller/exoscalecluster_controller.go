@@ -18,7 +18,6 @@ package controller
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	v1 "k8s.io/api/core/v1"
@@ -63,14 +62,13 @@ type ExoscaleClusterReconciler struct {
 // Read secrets for Exoscale API credentials
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
-// - implement condition cf. deprecated: "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions/v1beta2" might be replaced by "https://pkg.go.dev/sigs.k8s.io/cluster-api/util/conditions"
-// - find a way to start a reconciliation loop when cluster is ready in order to create and deploy a secret with an exoscale api key/secret + refresh (for csi and ccm)
+// ReadyCondition is the CAPI-standard condition type reported on the ExoscaleCluster status.
+// See: https://cluster-api.sigs.k8s.io/developer/providers/contracts/infra-cluster#infracluster-status-conditions
+const ReadyCondition = "Ready"
+
 func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
 	log := logf.FromContext(ctx)
 
-	log.Info("Reconcile cluster", "req", req)
-
-	// fetch exoscale cluster.
 	var exoCluster infrav1alpha1.ExoscaleCluster
 	if err := r.Get(ctx, req.NamespacedName, &exoCluster); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -84,10 +82,9 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 	defer func() {
-		// TODO: maybe create a real error management with custom type
 		if reterr != nil {
 			apimeta.SetStatusCondition(&exoCluster.Status.Conditions, metav1.Condition{
-				Type:               "Ready",
+				Type:               ReadyCondition,
 				Status:             metav1.ConditionFalse,
 				Reason:             "ReconcileError",
 				Message:            reterr.Error(),
@@ -95,17 +92,19 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			})
 		}
 		if err := patchHelper.Patch(ctx, &exoCluster); err != nil {
-			log.Error(err, "unable to patch cluster", "cluster name", exoCluster.Name, "cluster id", exoCluster.Status.ID)
+			log.Error(err, "Unable to patch ExoscaleCluster",
+				"name", exoCluster.Name,
+				"id", exoCluster.Status.ID)
 		}
 	}()
 
 	if exoCluster.Status.ID == nil {
-		exoCluster.Status.ID = func() *string { v := uuid.New().String(); return &v }()
+		id := uuid.New().String()
+		exoCluster.Status.ID = &id
 	}
 
 	log = log.WithValues("cluster_id", *exoCluster.Status.ID)
 
-	// Fetch the Cluster.
 	cluster, err := util.GetOwnerCluster(ctx, r.Client, exoCluster.ObjectMeta)
 	if err != nil {
 		return reconcile.Result{}, client.IgnoreNotFound(err)
@@ -115,31 +114,30 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return reconcile.Result{}, nil
 	}
 
-	// check if we need to continue the reconciliation.
 	if annotations.IsExternallyManaged(cluster) {
 		log.Info("Cluster is externally managed, skipping reconciliation")
 		return ctrl.Result{}, nil
 	}
 	if annotations.IsPaused(cluster, &exoCluster) {
-		log.Info("InfraCluster is paused, skipping reconciliation")
+		log.Info("ExoscaleCluster is paused, skipping reconciliation")
 		return ctrl.Result{}, nil
 	}
 
-	// fetch creds affiliated to this cluster.
 	var creds v1.Secret
-	if err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: exoCluster.Spec.ExoscaleSecret.Name}, &creds); err != nil {
+	if err := r.Get(ctx, types.NamespacedName{
+		Namespace: req.Namespace,
+		Name:      exoCluster.Spec.ExoscaleSecret.Name,
+	}, &creds); err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to fetch exoscale secret %q: %w", exoCluster.Spec.ExoscaleSecret.Name, err)
 	}
-	apiKey, apiSecret, err := GetAPICreds(creds, exoCluster.Spec.ExoscaleSecret.ApiKey, exoCluster.Spec.ExoscaleSecret.APISecret)
+	apiKey, apiSecret, err := GetAPICreds(creds, exoCluster.Spec.ExoscaleSecret.APIKey, exoCluster.Spec.ExoscaleSecret.APISecret)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	// reconcile cluster.
 	clusterSvc, err := service.NewClusterService(apiKey, apiSecret, exoCluster.Spec.Zone, log)
 	if err != nil {
-		log.Error(errors.New("invalid creds error"), "invalid creds", "apikey", apiKey, "apiSecret", apiSecret)
-		return ctrl.Result{}, err
+		return ctrl.Result{}, fmt.Errorf("unable to create cluster service: %w", err)
 	}
 
 	if !exoCluster.DeletionTimestamp.IsZero() {
@@ -148,24 +146,23 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			if err != nil {
 				return ctrl.Result{}, err
 			}
-			log.Info("DELETE FINALIZER")
 			controllerutil.RemoveFinalizer(&exoCluster, infrav1alpha1.ExoscaleClusterFinalizer)
 		}
 		return ctrl.Result{}, nil
-	} else {
-		controllerutil.AddFinalizer(&exoCluster, infrav1alpha1.ExoscaleClusterFinalizer)
 	}
+	controllerutil.AddFinalizer(&exoCluster, infrav1alpha1.ExoscaleClusterFinalizer)
 
 	exoCluster, err = clusterSvc.ReconcileCluster(ctx, exoCluster)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	// TODO: create role + api key/secret when exoscale.status.initialization.provisioned == true and capicluster is ready
-	// possible since we watch the capi cluster now (cf. SetupWithManager).
+	// TODO(sc-184544): provision a scoped Exoscale API key/secret into the workload cluster once
+	// status.initialization.provisioned is true and the CAPI Cluster is ready. We already watch
+	// the owner Cluster (see SetupWithManager), so the reconcile loop will fire again.
 
 	apimeta.SetStatusCondition(&exoCluster.Status.Conditions, metav1.Condition{
-		Type:               "Ready",
+		Type:               ReadyCondition,
 		Status:             metav1.ConditionTrue,
 		Reason:             "ReconcileSuccess",
 		ObservedGeneration: exoCluster.Generation,

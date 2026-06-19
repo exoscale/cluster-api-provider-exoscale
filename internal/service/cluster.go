@@ -33,25 +33,20 @@ func NewClusterService(apiKey, apisecret string, zone egoscale.ZoneName, logger 
 }
 
 func (s *clusterService) ReconcileCluster(ctx context.Context, cluster infrav1alpha1.ExoscaleCluster) (infrav1alpha1.ExoscaleCluster, error) {
-	var clusterID uuid.UUID
 	if cluster.Status.ID == nil {
-		return cluster, fmt.Errorf("cluster: %q has no id", cluster.Name)
-	} else {
-		id, err := uuid.Parse(*cluster.Status.ID)
-		if err != nil {
-			return cluster, fmt.Errorf("unable to parse \".status.ClusterID\": %w", err)
-		}
-		clusterID = id
+		return cluster, fmt.Errorf("cluster %q has no status.id", cluster.Name)
+	}
+	clusterID, err := uuid.Parse(*cluster.Status.ID)
+	if err != nil {
+		return cluster, fmt.Errorf("unable to parse status.id: %w", err)
 	}
 
-	/*
-	** Elastic IP
-	 */
+	// Elastic IP for the control-plane endpoint.
 	var eipID *uuid.UUID
-	if cluster.Status.ControlPlaneEndpoint != nil {
+	if cluster.Status.ControlPlaneEndpoint != nil && cluster.Status.ControlPlaneEndpoint.ID != "" {
 		id, err := uuid.Parse(cluster.Status.ControlPlaneEndpoint.ID)
 		if err != nil {
-			return cluster, fmt.Errorf("unable to parse %q: %w", ".status.controlPlaneEndpoint.id", err)
+			return cluster, fmt.Errorf("unable to parse status.controlPlaneEndpoint.id: %w", err)
 		}
 		eipID = &id
 	}
@@ -60,56 +55,54 @@ func (s *clusterService) ReconcileCluster(ctx context.Context, cluster infrav1al
 	if err != nil {
 		return cluster, err
 	}
-	cluster.Spec.ControlPlaneEndpoint.Host = eip.IP
+
+	endpoint := cluster.Spec.ControlPlaneEndpoint
+	endpoint.Host = eip.IP
 	cluster.Status.ControlPlaneEndpoint = &infrav1alpha1.APIEndpointStatus{
-		APIEndpoint: cluster.Spec.ControlPlaneEndpoint,
+		APIEndpoint: endpoint,
 		ID:          eip.ID.String(),
 		Description: eip.Description,
 	}
 
-	/*
-	** Security Group
-	 */
+	// Control-plane security group.
 	var securityGroupControlPlaneID *uuid.UUID
-	var securityGroupControlPlaneName = fmt.Sprintf("capi - %s - control plane", clusterID.String())
-	if cluster.Status.SecurityGroupControlPlan != nil {
-		id, err := uuid.Parse(cluster.Status.SecurityGroupControlPlan.ID)
+	securityGroupControlPlaneName := fmt.Sprintf("capi - %s - control plane", clusterID)
+	if cluster.Status.SecurityGroupControlPlane != nil && cluster.Status.SecurityGroupControlPlane.ID != "" {
+		id, err := uuid.Parse(cluster.Status.SecurityGroupControlPlane.ID)
 		if err != nil {
-			return cluster, fmt.Errorf("unable to parse %q: %w", ".status.securityGroupControlPlane.id", err)
+			return cluster, fmt.Errorf("unable to parse status.securityGroupControlPlane.id: %w", err)
 		}
 		securityGroupControlPlaneID = &id
 	}
 	securityGroupControlPlane, err := s.securityGroupSvc.UpsertSecurityGroup(ctx, clusterID, securityGroupControlPlaneID, securityGroupControlPlaneName)
 	if err != nil {
-		return cluster, fmt.Errorf("unable to upsert security group for control plane: %w", err)
+		return cluster, fmt.Errorf("unable to upsert control plane security group: %w", err)
 	}
-	cluster.Status.SecurityGroupControlPlan = &infrav1alpha1.SecurityGroupStatus{
+	cluster.Status.SecurityGroupControlPlane = &infrav1alpha1.SecurityGroupStatus{
 		ID:   securityGroupControlPlane.ID.String(),
 		Name: securityGroupControlPlane.Name,
 	}
 
+	// Node security group.
 	var securityGroupNodeID *uuid.UUID
-	var securityGroupNodeName = fmt.Sprintf("capi - %s - node", clusterID.String())
-
-	if cluster.Status.SecurityGroupNode != nil {
+	securityGroupNodeName := fmt.Sprintf("capi - %s - node", clusterID)
+	if cluster.Status.SecurityGroupNode != nil && cluster.Status.SecurityGroupNode.ID != "" {
 		id, err := uuid.Parse(cluster.Status.SecurityGroupNode.ID)
 		if err != nil {
-			return cluster, fmt.Errorf("unable to parse %q: %w", ".status.SecurityGroupNode.id", err)
+			return cluster, fmt.Errorf("unable to parse status.securityGroupNode.id: %w", err)
 		}
 		securityGroupNodeID = &id
 	}
 	securityGroupNode, err := s.securityGroupSvc.UpsertSecurityGroup(ctx, clusterID, securityGroupNodeID, securityGroupNodeName)
 	if err != nil {
-		return cluster, fmt.Errorf("unable to upsert security group for node: %w", err)
+		return cluster, fmt.Errorf("unable to upsert node security group: %w", err)
 	}
 	cluster.Status.SecurityGroupNode = &infrav1alpha1.SecurityGroupStatus{
 		ID:   securityGroupNode.ID.String(),
 		Name: securityGroupNode.Name,
 	}
 
-	/*
-	** Security Group Rules
-	 */
+	// Security group rules.
 	desiredCPRules, err := desiredControlPlaneRules(securityGroupControlPlane.ID, cluster.Spec.ControlPlaneEndpoint.Port, cluster.Spec.SecurityGroupControlPlane.Rules)
 	if err != nil {
 		return cluster, fmt.Errorf("unable to build control plane security group rules: %w", err)
@@ -118,7 +111,7 @@ func (s *clusterService) ReconcileCluster(ctx context.Context, cluster infrav1al
 	if err != nil {
 		return cluster, fmt.Errorf("unable to upsert control plane security group rules: %w", err)
 	}
-	cluster.Status.SecurityGroupControlPlan.Rules = domainRulesToStatus(cpRules)
+	cluster.Status.SecurityGroupControlPlane.Rules = domainRulesToStatus(cpRules)
 
 	desiredNodeRulesList, err := desiredNodeRules(securityGroupControlPlane.ID, securityGroupNode.ID, cluster.Spec.SecurityGroupNode.Rules)
 	if err != nil {
@@ -130,17 +123,17 @@ func (s *clusterService) ReconcileCluster(ctx context.Context, cluster infrav1al
 	}
 	cluster.Status.SecurityGroupNode.Rules = domainRulesToStatus(nodeRules)
 
-	// TODO: cgeck if I need to set this value to false in case of error in update, 1. provisioned = true, 2. reconcile again with error, 3 do I need to update the provisioned = false ?
-	cluster.Status.Initialization.Provisioned = func() *bool { v := true; return &v }()
+	provisioned := true
+	cluster.Status.Initialization.Provisioned = &provisioned
 
 	return cluster, nil
 }
 
 func (s *clusterService) DeleteCluster(ctx context.Context, cluster infrav1alpha1.ExoscaleCluster) (infrav1alpha1.ExoscaleCluster, error) {
-	if cluster.Status.ControlPlaneEndpoint != nil {
+	if cluster.Status.ControlPlaneEndpoint != nil && cluster.Status.ControlPlaneEndpoint.ID != "" {
 		id, err := uuid.Parse(cluster.Status.ControlPlaneEndpoint.ID)
 		if err != nil {
-			return cluster, fmt.Errorf("unable to parse %q: %w", ".status.controlPlaneEndpoint.id", err)
+			return cluster, fmt.Errorf("unable to parse status.controlPlaneEndpoint.id: %w", err)
 		}
 		if err := s.elasticIPSvc.DeleteElasticIP(ctx, id); err != nil {
 			return cluster, err
@@ -152,10 +145,10 @@ func (s *clusterService) DeleteCluster(ctx context.Context, cluster infrav1alpha
 	// has a rule pointing to group A), creating a circular dependency that prevents deletion of either
 	// group until both are fully cleared of their rules.
 	var securityGroupControlPlaneID *uuid.UUID
-	if cluster.Status.SecurityGroupControlPlan != nil {
-		id, err := uuid.Parse(cluster.Status.SecurityGroupControlPlan.ID)
+	if cluster.Status.SecurityGroupControlPlane != nil && cluster.Status.SecurityGroupControlPlane.ID != "" {
+		id, err := uuid.Parse(cluster.Status.SecurityGroupControlPlane.ID)
 		if err != nil {
-			return cluster, fmt.Errorf("unable to parse %q: %w", ".status.securityGroupControlPlane.id", err)
+			return cluster, fmt.Errorf("unable to parse status.securityGroupControlPlane.id: %w", err)
 		}
 		securityGroupControlPlaneID = &id
 		if err := s.securityGroupSvc.PurgeSecurityGroup(ctx, id); err != nil {
@@ -163,10 +156,10 @@ func (s *clusterService) DeleteCluster(ctx context.Context, cluster infrav1alpha
 		}
 	}
 	var securityGroupNodeID *uuid.UUID
-	if cluster.Status.SecurityGroupNode != nil {
+	if cluster.Status.SecurityGroupNode != nil && cluster.Status.SecurityGroupNode.ID != "" {
 		id, err := uuid.Parse(cluster.Status.SecurityGroupNode.ID)
 		if err != nil {
-			return cluster, fmt.Errorf("unable to parse %q: %w", ".status.securityGroupNode.id", err)
+			return cluster, fmt.Errorf("unable to parse status.securityGroupNode.id: %w", err)
 		}
 		securityGroupNodeID = &id
 		if err := s.securityGroupSvc.PurgeSecurityGroup(ctx, id); err != nil {

@@ -11,11 +11,11 @@ import (
 )
 
 type securityGroupService struct {
-	cloud  domain.ExoscaleClient
+	cloud  domain.Cloud
 	logger logr.Logger
 }
 
-func NewSecurityGroupService(client domain.ExoscaleClient, logger logr.Logger) *securityGroupService {
+func NewSecurityGroupService(client domain.Cloud, logger logr.Logger) *securityGroupService {
 	return &securityGroupService{cloud: client, logger: logger}
 }
 

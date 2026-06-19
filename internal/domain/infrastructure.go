@@ -3,10 +3,26 @@ package domain
 import (
 	"context"
 
+	egoscale "github.com/exoscale/egoscale/v3"
 	"github.com/google/uuid"
 )
 
 type ExoscaleClient interface {
+	Wait(ctx context.Context, op *egoscale.Operation, states ...egoscale.OperationState) (*egoscale.Operation, error)
+
+	CreateElasticIP(ctx context.Context, req egoscale.CreateElasticIPRequest) (*egoscale.Operation, error)
+	GetElasticIP(ctx context.Context, id egoscale.UUID) (*egoscale.ElasticIP, error)
+	UpdateElasticIP(ctx context.Context, id egoscale.UUID, req egoscale.UpdateElasticIPRequest) (*egoscale.Operation, error)
+	DeleteElasticIP(ctx context.Context, id egoscale.UUID) (*egoscale.Operation, error)
+
+	CreateSecurityGroup(ctx context.Context, req egoscale.CreateSecurityGroupRequest) (*egoscale.Operation, error)
+	GetSecurityGroup(ctx context.Context, id egoscale.UUID) (*egoscale.SecurityGroup, error)
+	DeleteSecurityGroup(ctx context.Context, id egoscale.UUID) (*egoscale.Operation, error)
+	AddRuleToSecurityGroup(ctx context.Context, id egoscale.UUID, req egoscale.AddRuleToSecurityGroupRequest) (*egoscale.Operation, error)
+	DeleteRuleFromSecurityGroup(ctx context.Context, id egoscale.UUID, ruleID egoscale.UUID) (*egoscale.Operation, error)
+}
+
+type Cloud interface {
 	CreateElasticIP(ctx context.Context, healthCheckPort int32, description string) (uuid.UUID, error)
 	GetElasticIP(ctx context.Context, id uuid.UUID) (ElasticIP, error)
 	UpdateElasticIP(ctx context.Context, eip ElasticIP) error

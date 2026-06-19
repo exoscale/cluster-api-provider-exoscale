@@ -13,11 +13,11 @@ import (
 var _ domain.ElasticIPService = (*elasticIPService)(nil)
 
 type elasticIPService struct {
-	cloud  domain.ExoscaleClient
+	cloud  domain.Cloud
 	logger logr.Logger
 }
 
-func NewElasticIPService(client domain.ExoscaleClient, logger logr.Logger) *elasticIPService {
+func NewElasticIPService(client domain.Cloud, logger logr.Logger) *elasticIPService {
 	return &elasticIPService{cloud: client, logger: logger}
 }
 

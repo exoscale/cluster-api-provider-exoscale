@@ -21,10 +21,18 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const ExoscaleClusterFinalizer string = "exoscalecluster.infrastructure.cluster.x-k8s.io/finalizer"
+const (
+	// ReadyCondition reports the overall readiness of the ExoscaleCluster.
+	ReadyCondition = "Ready"
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+	// ReconcileSuccessReason surfaces when the last reconciliation completed without errors.
+	ReconcileSuccessReason = "ReconcileSuccess"
+
+	// ReconcileErrorReason surfaces when the last reconciliation returned an error.
+	ReconcileErrorReason = "ReconcileError"
+
+	ExoscaleClusterFinalizer string = "exoscalecluster.infrastructure.cluster.x-k8s.io/finalizer"
+)
 
 // ExoscaleClusterSpec defines the desired state of ExoscaleCluster
 // this resources should meet the required specs described by the clusterAPI: https://cluster-api.sigs.k8s.io/developer/providers/contracts/infra-cluster
@@ -136,4 +144,14 @@ type ExoscaleClusterList struct {
 
 func init() {
 	SchemeBuilder.Register(&ExoscaleCluster{}, &ExoscaleClusterList{})
+}
+
+// GetConditions returns the conditions for ExoscaleCluster, implementing the conditions.Getter interface.
+func (e *ExoscaleCluster) GetConditions() []metav1.Condition {
+	return e.Status.Conditions
+}
+
+// SetConditions sets the conditions for ExoscaleCluster, implementing the conditions.Setter interface.
+func (e *ExoscaleCluster) SetConditions(conditions []metav1.Condition) {
+	e.Status.Conditions = conditions
 }

@@ -23,13 +23,13 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
+	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/cluster-api/util/predicates"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -86,12 +86,11 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	defer func() {
 		// TODO: maybe create a real error management with custom type
 		if reterr != nil {
-			apimeta.SetStatusCondition(&exoCluster.Status.Conditions, metav1.Condition{
-				Type:               "Ready",
-				Status:             metav1.ConditionFalse,
-				Reason:             "ReconcileError",
-				Message:            reterr.Error(),
-				ObservedGeneration: exoCluster.Generation,
+			conditions.Set(&exoCluster, metav1.Condition{
+				Type:    infrav1alpha1.ReadyCondition,
+				Status:  metav1.ConditionFalse,
+				Reason:  infrav1alpha1.ReconcileErrorReason,
+				Message: reterr.Error(),
 			})
 		}
 		if err := patchHelper.Patch(ctx, &exoCluster); err != nil {
@@ -122,8 +121,15 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 	if annotations.IsPaused(cluster, &exoCluster) {
 		log.Info("InfraCluster is paused, skipping reconciliation")
+		conditions.Set(&exoCluster, metav1.Condition{
+			Type:    clusterv1.PausedCondition,
+			Status:  metav1.ConditionTrue,
+			Reason:  clusterv1.PausedReason,
+			Message: "Reconciliation is paused",
+		})
 		return ctrl.Result{}, nil
 	}
+	conditions.Delete(&exoCluster, clusterv1.PausedCondition)
 
 	// fetch creds affiliated to this cluster.
 	var creds v1.Secret
@@ -164,11 +170,10 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	// TODO: create role + api key/secret when exoscale.status.initialization.provisioned == true and capicluster is ready
 	// possible since we watch the capi cluster now (cf. SetupWithManager).
 
-	apimeta.SetStatusCondition(&exoCluster.Status.Conditions, metav1.Condition{
-		Type:               "Ready",
-		Status:             metav1.ConditionTrue,
-		Reason:             "ReconcileSuccess",
-		ObservedGeneration: exoCluster.Generation,
+	conditions.Set(&exoCluster, metav1.Condition{
+		Type:   infrav1alpha1.ReadyCondition,
+		Status: metav1.ConditionTrue,
+		Reason: infrav1alpha1.ReconcileSuccessReason,
 	})
 
 	return ctrl.Result{}, nil

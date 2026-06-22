@@ -20,7 +20,7 @@ type clusterService struct {
 }
 
 func NewClusterService(apiKey, apisecret string, zone egoscale.ZoneName, logger logr.Logger) (*clusterService, error) {
-	cloudClient, err := exoscale.NewClient(apiKey, apisecret, zone)
+	cloudClient, err := exoscale.NewCloud(apiKey, apisecret, zone)
 	if err != nil {
 		return nil, err
 	}

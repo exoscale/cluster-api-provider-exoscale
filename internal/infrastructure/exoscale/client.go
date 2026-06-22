@@ -6,18 +6,19 @@ import (
 	"fmt"
 
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/domain"
+
 	egoscale "github.com/exoscale/egoscale/v3"
 	"github.com/exoscale/egoscale/v3/credentials"
 	"github.com/google/uuid"
 )
 
-var _ domain.ExoscaleClient = (*client)(nil)
+var _ domain.Cloud = (*cloud)(nil)
 
-type client struct {
-	exoClient egoscale.Client
+type cloud struct {
+	exoClient domain.ExoscaleClient
 }
 
-func NewClient(apiKey, apisecret string, zone egoscale.ZoneName) (*client, error) {
+func NewCloud(apiKey, apisecret string, zone egoscale.ZoneName) (*cloud, error) {
 	exoClient, err := egoscale.NewClient(credentials.NewStaticCredentials(apiKey, apisecret))
 	if err != nil {
 		return nil, fmt.Errorf("unable to create exoscale client: %w", err)
@@ -30,11 +31,11 @@ func NewClient(apiKey, apisecret string, zone egoscale.ZoneName) (*client, error
 
 	exoClient = exoClient.WithEndpoint(endpoint)
 
-	return &client{exoClient: *exoClient}, nil
+	return &cloud{exoClient: exoClient}, nil
 }
 
 // CreateElasticIP create a managed elastic IP.
-func (c *client) CreateElasticIP(ctx context.Context, healthCheckPort int32, description string) (uuid.UUID, error) {
+func (c *cloud) CreateElasticIP(ctx context.Context, healthCheckPort int32, description string) (uuid.UUID, error) {
 	op, err := c.exoClient.CreateElasticIP(ctx, egoscale.CreateElasticIPRequest{
 		Description: description,
 		Healthcheck: &egoscale.ElasticIPHealthcheck{
@@ -58,7 +59,7 @@ func (c *client) CreateElasticIP(ctx context.Context, healthCheckPort int32, des
 	return id, nil
 }
 
-func (c *client) GetElasticIP(ctx context.Context, id uuid.UUID) (domain.ElasticIP, error) {
+func (c *cloud) GetElasticIP(ctx context.Context, id uuid.UUID) (domain.ElasticIP, error) {
 	elasticIP, err := c.exoClient.GetElasticIP(ctx, egoscale.UUID(id.String()))
 	if err != nil {
 		if errors.Is(err, egoscale.ErrNotFound) {
@@ -80,7 +81,7 @@ func (c *client) GetElasticIP(ctx context.Context, id uuid.UUID) (domain.Elastic
 	}, nil
 }
 
-func (c *client) UpdateElasticIP(ctx context.Context, eip domain.ElasticIP) error {
+func (c *cloud) UpdateElasticIP(ctx context.Context, eip domain.ElasticIP) error {
 	op, err := c.exoClient.UpdateElasticIP(ctx, egoscale.UUID(eip.ID.String()), egoscale.UpdateElasticIPRequest{
 		Description: eip.Description,
 		Healthcheck: &egoscale.ElasticIPHealthcheck{
@@ -100,7 +101,7 @@ func (c *client) UpdateElasticIP(ctx context.Context, eip domain.ElasticIP) erro
 	return nil
 }
 
-func (c *client) DeleteElasticIP(ctx context.Context, id uuid.UUID) error {
+func (c *cloud) DeleteElasticIP(ctx context.Context, id uuid.UUID) error {
 	op, err := c.exoClient.DeleteElasticIP(ctx, egoscale.UUID(id.String()))
 	if err != nil {
 		return fmt.Errorf("unable to delete elastic ip: %w", err)
@@ -113,7 +114,7 @@ func (c *client) DeleteElasticIP(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (c *client) CreateSecurityGroup(ctx context.Context, name string) (uuid.UUID, error) {
+func (c *cloud) CreateSecurityGroup(ctx context.Context, name string) (uuid.UUID, error) {
 	op, err := c.exoClient.CreateSecurityGroup(ctx, egoscale.CreateSecurityGroupRequest{
 		Name: name,
 	})
@@ -133,7 +134,7 @@ func (c *client) CreateSecurityGroup(ctx context.Context, name string) (uuid.UUI
 	return id, nil
 }
 
-func (c *client) GetSecurityGroup(ctx context.Context, id uuid.UUID) (domain.SecurityGroup, error) {
+func (c *cloud) GetSecurityGroup(ctx context.Context, id uuid.UUID) (domain.SecurityGroup, error) {
 	sg, err := c.exoClient.GetSecurityGroup(ctx, egoscale.UUID(id.String()))
 	if err != nil {
 		if errors.Is(err, egoscale.ErrNotFound) {
@@ -148,7 +149,7 @@ func (c *client) GetSecurityGroup(ctx context.Context, id uuid.UUID) (domain.Sec
 	}, nil
 }
 
-func (c *client) DeleteSecurityGroup(ctx context.Context, id uuid.UUID) error {
+func (c *cloud) DeleteSecurityGroup(ctx context.Context, id uuid.UUID) error {
 	op, err := c.exoClient.DeleteSecurityGroup(ctx, egoscale.UUID(id.String()))
 	if err != nil {
 		return fmt.Errorf("unable to delete security group: %w", err)
@@ -161,7 +162,7 @@ func (c *client) DeleteSecurityGroup(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (c *client) CreateSecurityGroupRule(ctx context.Context, sgID uuid.UUID, rule domain.SecurityGroupRule) (uuid.UUID, error) {
+func (c *cloud) CreateSecurityGroupRule(ctx context.Context, sgID uuid.UUID, rule domain.SecurityGroupRule) (uuid.UUID, error) {
 	req := egoscale.AddRuleToSecurityGroupRequest{
 		Description:   rule.Description,
 		FlowDirection: egoscale.AddRuleToSecurityGroupRequestFlowDirection(rule.FlowDirection),
@@ -195,7 +196,7 @@ func (c *client) CreateSecurityGroupRule(ctx context.Context, sgID uuid.UUID, ru
 	return id, nil
 }
 
-func (c *client) DeleteSecurityGroupRule(ctx context.Context, sgID uuid.UUID, ruleID uuid.UUID) error {
+func (c *cloud) DeleteSecurityGroupRule(ctx context.Context, sgID uuid.UUID, ruleID uuid.UUID) error {
 	op, err := c.exoClient.DeleteRuleFromSecurityGroup(ctx, egoscale.UUID(sgID.String()), egoscale.UUID(ruleID.String()))
 	if err != nil {
 		return fmt.Errorf("unable to delete security group rule: %w", err)
@@ -208,7 +209,7 @@ func (c *client) DeleteSecurityGroupRule(ctx context.Context, sgID uuid.UUID, ru
 	return nil
 }
 
-func (c *client) ListSecurityGroupRules(ctx context.Context, sgID uuid.UUID) ([]domain.SecurityGroupRule, error) {
+func (c *cloud) ListSecurityGroupRules(ctx context.Context, sgID uuid.UUID) ([]domain.SecurityGroupRule, error) {
 	sg, err := c.exoClient.GetSecurityGroup(ctx, egoscale.UUID(sgID.String()))
 	if err != nil {
 		if errors.Is(err, egoscale.ErrNotFound) {

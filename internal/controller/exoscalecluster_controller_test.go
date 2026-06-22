@@ -51,6 +51,9 @@ var _ = Describe("ExoscaleCluster Controller", func() {
 						Name:      resourceName,
 						Namespace: "default",
 					},
+					Spec: infrastructurev1alpha1.ExoscaleClusterSpec{
+						Zone: "ch-gva-2",
+					},
 					// TODO(user): Specify other spec details if needed.
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())

@@ -26,3 +26,4 @@ packages:
   github.com/exoscale/cluster-api-provider-exoscale/internal/domain:
     interfaces:
       ExoscaleClient:
+      Cloud:

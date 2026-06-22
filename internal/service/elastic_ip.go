@@ -31,7 +31,7 @@ func (s *elasticIPService) UpsertElasticIP(ctx context.Context, clusterID uuid.U
 		} else if errors.Is(err, domain.ErrElasticIPNotFound) {
 			s.logger.Info("Elastic IP not found, will create a new one")
 
-			id, err := s.cloud.CreateElasticIP(ctx, port, eip.Description)
+			id, err := s.cloud.CreateElasticIP(ctx, port, eipDescription)
 			if err != nil {
 				return domain.ElasticIP{}, fmt.Errorf("error while creating eip: %w", err)
 			}

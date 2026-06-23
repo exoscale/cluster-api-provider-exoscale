@@ -165,6 +165,79 @@ func Test_cloud_GetElasticIP(t *testing.T) {
 	}
 }
 
+func Test_cloud_ListElasticIPs(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	id1 := uuid.New()
+	id2 := uuid.New()
+
+	tests := []struct {
+		name      string
+		exoClient func(m *mocks.ExoscaleClient)
+		output    []domain.ElasticIP
+		err       error
+	}{
+		{
+			name: "nominal - empty list",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().ListElasticIPS(ctx).
+					Return(&egoscale.ListElasticIPSResponse{ElasticIPS: []egoscale.ElasticIP{}}, nil)
+			},
+			output: []domain.ElasticIP{},
+		},
+		{
+			name: "nominal - maps fields correctly",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().ListElasticIPS(ctx).
+					Return(&egoscale.ListElasticIPSResponse{
+						ElasticIPS: []egoscale.ElasticIP{
+							{
+								ID:          egoscale.UUID(id1.String()),
+								IP:          "1.2.3.4",
+								Description: "capi - clusterID - abc",
+								Healthcheck: &egoscale.ElasticIPHealthcheck{Port: 6443},
+							},
+							{
+								ID:          egoscale.UUID(id2.String()),
+								IP:          "5.6.7.8",
+								Description: "other",
+								Healthcheck: &egoscale.ElasticIPHealthcheck{Port: 12345},
+							},
+						},
+					}, nil)
+			},
+			output: []domain.ElasticIP{
+				{ID: id1, IP: "1.2.3.4", Description: "capi - clusterID - abc", HealthCheckPort: 6443},
+				{ID: id2, IP: "5.6.7.8", Description: "other", HealthCheckPort: 12345},
+			},
+		},
+		{
+			name: "list eips returned an error",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().ListElasticIPS(ctx).Return(nil, assert.AnError)
+			},
+			err: assert.AnError,
+		},
+	}
+
+	for _, ut := range tests {
+		t.Run(ut.name, func(t *testing.T) {
+			exoClient := mocks.NewExoscaleClient(t)
+			if ut.exoClient != nil {
+				ut.exoClient(exoClient)
+			}
+
+			client := cloud{exoClient: exoClient}
+
+			output, err := client.ListElasticIPs(ctx)
+
+			assert.ErrorIs(t, err, ut.err)
+			assert.Equal(t, ut.output, output)
+		})
+	}
+}
+
 func Test_cloud_UpdateElasticIP(t *testing.T) {
 	t.Parallel()
 

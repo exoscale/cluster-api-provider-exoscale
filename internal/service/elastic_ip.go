@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/domain"
 	"github.com/go-logr/logr"
@@ -52,6 +53,16 @@ func (s *elasticIPService) UpsertElasticIP(ctx context.Context, clusterID uuid.U
 		}
 		return eip, nil
 	} else {
+		// No ID in status: search for an existing EIP by cluster ID before creating to
+		// avoid duplicates when two reconciles race during initial provisioning.
+		existing, err := s.findElasticIPByClusterID(ctx, clusterID)
+		if err != nil && !errors.Is(err, domain.ErrElasticIPNotFound) {
+			return domain.ElasticIP{}, fmt.Errorf("error while searching for existing eip: %w", err)
+		} else if err == nil {
+			s.logger.Info("Found an existing elastic IP by cluster ID, reusing it")
+			return existing, nil
+		}
+
 		s.logger.Info("Create elastic IP")
 
 		id, err := s.cloud.CreateElasticIP(ctx, port, eipDescription)
@@ -64,6 +75,19 @@ func (s *elasticIPService) UpsertElasticIP(ctx context.Context, clusterID uuid.U
 		}
 		return eip, nil
 	}
+}
+
+func (s *elasticIPService) findElasticIPByClusterID(ctx context.Context, clusterID uuid.UUID) (domain.ElasticIP, error) {
+	eips, err := s.cloud.ListElasticIPs(ctx)
+	if err != nil {
+		return domain.ElasticIP{}, err
+	}
+	for i := range eips {
+		if strings.Contains(eips[i].Description, clusterID.String()) {
+			return eips[i], nil
+		}
+	}
+	return domain.ElasticIP{}, domain.ErrElasticIPNotFound
 }
 
 func (s elasticIPService) DeleteElasticIP(ctx context.Context, id uuid.UUID) error {

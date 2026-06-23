@@ -12,6 +12,7 @@ type ExoscaleClient interface {
 
 	CreateElasticIP(ctx context.Context, req egoscale.CreateElasticIPRequest) (*egoscale.Operation, error)
 	GetElasticIP(ctx context.Context, id egoscale.UUID) (*egoscale.ElasticIP, error)
+	ListElasticIPS(ctx context.Context) (*egoscale.ListElasticIPSResponse, error)
 	UpdateElasticIP(ctx context.Context, id egoscale.UUID, req egoscale.UpdateElasticIPRequest) (*egoscale.Operation, error)
 	DeleteElasticIP(ctx context.Context, id egoscale.UUID) (*egoscale.Operation, error)
 
@@ -25,6 +26,7 @@ type ExoscaleClient interface {
 type Cloud interface {
 	CreateElasticIP(ctx context.Context, healthCheckPort int32, description string) (uuid.UUID, error)
 	GetElasticIP(ctx context.Context, id uuid.UUID) (ElasticIP, error)
+	ListElasticIPs(ctx context.Context) ([]ElasticIP, error)
 	UpdateElasticIP(ctx context.Context, eip ElasticIP) error
 	DeleteElasticIP(ctx context.Context, id uuid.UUID) error
 

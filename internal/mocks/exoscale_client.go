@@ -594,6 +594,68 @@ func (_c *ExoscaleClient_GetSecurityGroup_Call) RunAndReturn(run func(ctx contex
 	return _c
 }
 
+// ListElasticIPS provides a mock function for the type ExoscaleClient
+func (_mock *ExoscaleClient) ListElasticIPS(ctx context.Context) (*v3.ListElasticIPSResponse, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListElasticIPS")
+	}
+
+	var r0 *v3.ListElasticIPSResponse
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (*v3.ListElasticIPSResponse, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) *v3.ListElasticIPSResponse); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*v3.ListElasticIPSResponse)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// ExoscaleClient_ListElasticIPS_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListElasticIPS'
+type ExoscaleClient_ListElasticIPS_Call struct {
+	*mock.Call
+}
+
+// ListElasticIPS is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *ExoscaleClient_Expecter) ListElasticIPS(ctx any) *ExoscaleClient_ListElasticIPS_Call {
+	return &ExoscaleClient_ListElasticIPS_Call{Call: _e.mock.On("ListElasticIPS", ctx)}
+}
+
+func (_c *ExoscaleClient_ListElasticIPS_Call) Run(run func(ctx context.Context)) *ExoscaleClient_ListElasticIPS_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *ExoscaleClient_ListElasticIPS_Call) Return(listElasticIPSResponse *v3.ListElasticIPSResponse, err error) *ExoscaleClient_ListElasticIPS_Call {
+	_c.Call.Return(listElasticIPSResponse, err)
+	return _c
+}
+
+func (_c *ExoscaleClient_ListElasticIPS_Call) RunAndReturn(run func(ctx context.Context) (*v3.ListElasticIPSResponse, error)) *ExoscaleClient_ListElasticIPS_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // UpdateElasticIP provides a mock function for the type ExoscaleClient
 func (_mock *ExoscaleClient) UpdateElasticIP(ctx context.Context, id v3.UUID, req v3.UpdateElasticIPRequest) (*v3.Operation, error) {
 	ret := _mock.Called(ctx, id, req)

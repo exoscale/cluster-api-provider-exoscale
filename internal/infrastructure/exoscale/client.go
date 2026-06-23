@@ -81,6 +81,35 @@ func (c *cloud) GetElasticIP(ctx context.Context, id uuid.UUID) (domain.ElasticI
 	}, nil
 }
 
+func (c *cloud) ListElasticIPs(ctx context.Context) ([]domain.ElasticIP, error) {
+	resp, err := c.exoClient.ListElasticIPS(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to list elastic IPs: %w", err)
+	}
+
+	eips := make([]domain.ElasticIP, 0, len(resp.ElasticIPS))
+	for _, e := range resp.ElasticIPS {
+		id, err := uuid.Parse(e.ID.String())
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse elastic IP ID: %w", err)
+		}
+
+		var healthcheckPort int32
+		if e.Healthcheck != nil {
+			healthcheckPort = int32(e.Healthcheck.Port)
+		}
+
+		eips = append(eips, domain.ElasticIP{
+			ID:              id,
+			IP:              e.IP,
+			Description:     e.Description,
+			HealthCheckPort: healthcheckPort,
+		})
+	}
+
+	return eips, nil
+}
+
 func (c *cloud) UpdateElasticIP(ctx context.Context, eip domain.ElasticIP) error {
 	op, err := c.exoClient.UpdateElasticIP(ctx, egoscale.UUID(eip.ID.String()), egoscale.UpdateElasticIPRequest{
 		Description: eip.Description,

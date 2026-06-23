@@ -41,15 +41,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	infrav1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
-	"github.com/exoscale/cluster-api-provider-exoscale/internal/service"
+	"github.com/exoscale/cluster-api-provider-exoscale/internal/domain"
 	"github.com/google/uuid"
 )
 
 // ExoscaleClusterReconciler reconciles a ExoscaleCluster object
 type ExoscaleClusterReconciler struct {
 	client.Client
-	Scheme      *runtime.Scheme
-	WatchFilter string
+	Scheme            *runtime.Scheme
+	WatchFilter       string
+	NewClusterService domain.ClusterServiceFactory
 }
 
 // Read CAPI cluster resource
@@ -142,7 +143,7 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	// reconcile cluster.
-	clusterSvc, err := service.NewClusterService(apiKey, apiSecret, exoCluster.Spec.Zone, log)
+	clusterSvc, err := r.NewClusterService(apiKey, apiSecret, exoCluster.Spec.Zone, log)
 	if err != nil {
 		log.Error(errors.New("invalid creds error"), "invalid creds", "apikey", apiKey, "apiSecret", apiSecret)
 		return ctrl.Result{}, err

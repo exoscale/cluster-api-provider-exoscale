@@ -19,7 +19,9 @@ type clusterService struct {
 	logger           logr.Logger
 }
 
-func NewClusterService(apiKey, apisecret string, zone egoscale.ZoneName, logger logr.Logger) (*clusterService, error) {
+var _ domain.ClusterService = (*clusterService)(nil)
+
+func NewClusterService(apiKey, apisecret string, zone egoscale.ZoneName, logger logr.Logger) (domain.ClusterService, error) {
 	cloudClient, err := exoscale.NewCloud(apiKey, apisecret, zone)
 	if err != nil {
 		return nil, err

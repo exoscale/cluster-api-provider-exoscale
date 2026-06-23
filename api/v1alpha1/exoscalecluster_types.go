@@ -113,6 +113,12 @@ type ExoscaleClusterStatus struct {
 	ControlPlaneEndpoint *APIEndpointStatus `json:"controlPlaneEndpoint,omitempty,omitzero"`
 }
 
+// +kubebuilder:printcolumn:name="Zone",type="string",JSONPath=".spec.zone",description="Zone used to deploy the cluster"
+// +kubebuilder:printcolumn:name="Endpoint",type="string",JSONPath=".status.controlPlaneEndpoint.host",description="API Endpoint"
+// +kubebuilder:printcolumn:name="Port",type="string",JSONPath=".status.controlPlaneEndpoint.port",description="API Endpoint"
+// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status",description="Cluster infrastructure is ready for Nodes"
+// +kubebuilder:printcolumn:name="Reason",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].reason",priority=1
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Time duration since creation of HetznerCluster"
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=exoscaleclusters,scope=Namespaced,categories=cluster-api

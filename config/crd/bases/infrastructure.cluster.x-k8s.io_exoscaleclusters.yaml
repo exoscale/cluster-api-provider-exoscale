@@ -16,7 +16,32 @@ spec:
     singular: exoscalecluster
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: Zone used to deploy the cluster
+      jsonPath: .spec.zone
+      name: Zone
+      type: string
+    - description: API Endpoint
+      jsonPath: .status.controlPlaneEndpoint.host
+      name: Endpoint
+      type: string
+    - description: API Endpoint
+      jsonPath: .status.controlPlaneEndpoint.port
+      name: Port
+      type: string
+    - description: Cluster infrastructure is ready for Nodes
+      jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: Ready
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].reason
+      name: Reason
+      priority: 1
+      type: string
+    - description: Time duration since creation of HetznerCluster
+      jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: ExoscaleCluster is the Schema for the exoscaleclusters API

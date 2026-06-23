@@ -1,0 +1,282 @@
+package exoscale
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/exoscale/cluster-api-provider-exoscale/internal/domain"
+
+	egoscale "github.com/exoscale/egoscale/v3"
+	"github.com/exoscale/egoscale/v3/credentials"
+	"github.com/google/uuid"
+)
+
+var _ domain.Cloud = (*cloud)(nil)
+
+type cloud struct {
+	exoClient domain.ExoscaleClient
+}
+
+func NewCloud(apiKey, apisecret string, zone egoscale.ZoneName) (*cloud, error) {
+	exoClient, err := egoscale.NewClient(credentials.NewStaticCredentials(apiKey, apisecret))
+	if err != nil {
+		return nil, fmt.Errorf("unable to create exoscale client: %w", err)
+	}
+
+	endpoint, err := exoClient.GetZoneAPIEndpoint(context.Background(), zone)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get endpoint for zone %q: %w", string(zone), err)
+	}
+
+	exoClient = exoClient.WithEndpoint(endpoint)
+
+	return &cloud{exoClient: exoClient}, nil
+}
+
+// CreateElasticIP create a managed elastic IP.
+func (c *cloud) CreateElasticIP(ctx context.Context, healthCheckPort int32, description string) (uuid.UUID, error) {
+	op, err := c.exoClient.CreateElasticIP(ctx, egoscale.CreateElasticIPRequest{
+		Description: description,
+		Healthcheck: &egoscale.ElasticIPHealthcheck{
+			Mode: egoscale.ElasticIPHealthcheckModeTCP,
+			Port: int64(healthCheckPort),
+		},
+	})
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("unable to create elastic ip: %w", err)
+	}
+
+	if _, err := c.exoClient.Wait(ctx, op); err != nil {
+		return uuid.Nil, fmt.Errorf("error while waiting for the elastic IP creation: %w", err)
+	}
+
+	id, err := uuid.Parse(op.Reference.ID.String())
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("unable to parse response from create elastic ip: %w", err)
+	}
+
+	return id, nil
+}
+
+func (c *cloud) GetElasticIP(ctx context.Context, id uuid.UUID) (domain.ElasticIP, error) {
+	elasticIP, err := c.exoClient.GetElasticIP(ctx, egoscale.UUID(id.String()))
+	if err != nil {
+		if errors.Is(err, egoscale.ErrNotFound) {
+			err = domain.ErrElasticIPNotFound
+		}
+		return domain.ElasticIP{}, err
+	}
+
+	var healthcheckPort int32
+	if elasticIP.Healthcheck != nil {
+		healthcheckPort = int32(elasticIP.Healthcheck.Port)
+	}
+
+	return domain.ElasticIP{
+		ID:              id,
+		IP:              elasticIP.IP,
+		Description:     elasticIP.Description,
+		HealthCheckPort: healthcheckPort,
+	}, nil
+}
+
+func (c *cloud) ListElasticIPs(ctx context.Context) ([]domain.ElasticIP, error) {
+	resp, err := c.exoClient.ListElasticIPS(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to list elastic IPs: %w", err)
+	}
+
+	eips := make([]domain.ElasticIP, 0, len(resp.ElasticIPS))
+	for _, e := range resp.ElasticIPS {
+		id, err := uuid.Parse(e.ID.String())
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse elastic IP ID: %w", err)
+		}
+
+		var healthcheckPort int32
+		if e.Healthcheck != nil {
+			healthcheckPort = int32(e.Healthcheck.Port)
+		}
+
+		eips = append(eips, domain.ElasticIP{
+			ID:              id,
+			IP:              e.IP,
+			Description:     e.Description,
+			HealthCheckPort: healthcheckPort,
+		})
+	}
+
+	return eips, nil
+}
+
+func (c *cloud) UpdateElasticIP(ctx context.Context, eip domain.ElasticIP) error {
+	op, err := c.exoClient.UpdateElasticIP(ctx, egoscale.UUID(eip.ID.String()), egoscale.UpdateElasticIPRequest{
+		Description: eip.Description,
+		Healthcheck: &egoscale.ElasticIPHealthcheck{
+			Port: int64(eip.HealthCheckPort),
+			Mode: egoscale.ElasticIPHealthcheckModeTCP,
+		},
+	})
+
+	if err != nil {
+		return fmt.Errorf("unable to update elastic ip: %w", err)
+	}
+
+	if _, err := c.exoClient.Wait(ctx, op); err != nil {
+		return fmt.Errorf("error while waiting for the elastic IP update: %w", err)
+	}
+
+	return nil
+}
+
+func (c *cloud) DeleteElasticIP(ctx context.Context, id uuid.UUID) error {
+	op, err := c.exoClient.DeleteElasticIP(ctx, egoscale.UUID(id.String()))
+	if err != nil {
+		return fmt.Errorf("unable to delete elastic ip: %w", err)
+	}
+
+	if _, err := c.exoClient.Wait(ctx, op); err != nil {
+		return fmt.Errorf("error while waiting for the elastic IP deletion: %w", err)
+	}
+
+	return nil
+}
+
+func (c *cloud) CreateSecurityGroup(ctx context.Context, name string) (uuid.UUID, error) {
+	op, err := c.exoClient.CreateSecurityGroup(ctx, egoscale.CreateSecurityGroupRequest{
+		Name: name,
+	})
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("unable to create security group: %w", err)
+	}
+
+	if _, err := c.exoClient.Wait(ctx, op); err != nil {
+		return uuid.Nil, fmt.Errorf("error while waiting for the security group creation: %w", err)
+	}
+
+	id, err := uuid.Parse(op.Reference.ID.String())
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("unable to parse response from create security group: %w", err)
+	}
+
+	return id, nil
+}
+
+func (c *cloud) GetSecurityGroup(ctx context.Context, id uuid.UUID) (domain.SecurityGroup, error) {
+	sg, err := c.exoClient.GetSecurityGroup(ctx, egoscale.UUID(id.String()))
+	if err != nil {
+		if errors.Is(err, egoscale.ErrNotFound) {
+			err = domain.ErrSecurityGroupNotFound
+		}
+		return domain.SecurityGroup{}, err
+	}
+
+	return domain.SecurityGroup{
+		ID:   id,
+		Name: sg.Name,
+	}, nil
+}
+
+func (c *cloud) DeleteSecurityGroup(ctx context.Context, id uuid.UUID) error {
+	op, err := c.exoClient.DeleteSecurityGroup(ctx, egoscale.UUID(id.String()))
+	if err != nil {
+		return fmt.Errorf("unable to delete security group: %w", err)
+	}
+
+	if _, err := c.exoClient.Wait(ctx, op); err != nil {
+		return fmt.Errorf("error while waiting for the security group deletion: %w", err)
+	}
+
+	return nil
+}
+
+func (c *cloud) CreateSecurityGroupRule(ctx context.Context, sgID uuid.UUID, rule domain.SecurityGroupRule) (uuid.UUID, error) {
+	req := egoscale.AddRuleToSecurityGroupRequest{
+		Description:   rule.Description,
+		FlowDirection: egoscale.AddRuleToSecurityGroupRequestFlowDirection(rule.FlowDirection),
+		Protocol:      egoscale.AddRuleToSecurityGroupRequestProtocol(rule.Protocol),
+		StartPort:     rule.StartPort,
+		EndPort:       rule.EndPort,
+	}
+
+	if rule.Network != nil {
+		req.Network = *rule.Network
+	}
+
+	if rule.SecurityGroup != nil {
+		req.SecurityGroup = &egoscale.SecurityGroupResource{ID: egoscale.UUID(rule.SecurityGroup.String())}
+	}
+
+	op, err := c.exoClient.AddRuleToSecurityGroup(ctx, egoscale.UUID(sgID.String()), req)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("unable to create security group rule: %w", err)
+	}
+
+	if _, err := c.exoClient.Wait(ctx, op); err != nil {
+		return uuid.Nil, fmt.Errorf("error while waiting for security group rule creation: %w", err)
+	}
+
+	id, err := uuid.Parse(op.Reference.ID.String())
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("unable to parse response from create security group rule: %w", err)
+	}
+
+	return id, nil
+}
+
+func (c *cloud) DeleteSecurityGroupRule(ctx context.Context, sgID uuid.UUID, ruleID uuid.UUID) error {
+	op, err := c.exoClient.DeleteRuleFromSecurityGroup(ctx, egoscale.UUID(sgID.String()), egoscale.UUID(ruleID.String()))
+	if err != nil {
+		return fmt.Errorf("unable to delete security group rule: %w", err)
+	}
+
+	if _, err := c.exoClient.Wait(ctx, op); err != nil {
+		return fmt.Errorf("error while waiting for security group rule deletion: %w", err)
+	}
+
+	return nil
+}
+
+func (c *cloud) ListSecurityGroupRules(ctx context.Context, sgID uuid.UUID) ([]domain.SecurityGroupRule, error) {
+	sg, err := c.exoClient.GetSecurityGroup(ctx, egoscale.UUID(sgID.String()))
+	if err != nil {
+		if errors.Is(err, egoscale.ErrNotFound) {
+			err = domain.ErrSecurityGroupNotFound
+		}
+		return nil, err
+	}
+
+	rules := make([]domain.SecurityGroupRule, 0, len(sg.Rules))
+	for _, r := range sg.Rules {
+		id, err := uuid.Parse(r.ID.String())
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse security group rule ID: %w", err)
+		}
+
+		rule := domain.SecurityGroupRule{
+			ID:            id,
+			Description:   r.Description,
+			FlowDirection: domain.SecurityGroupRuleFlowDirection(r.FlowDirection),
+			Protocol:      domain.SecurityGroupRuleProtocol(r.Protocol),
+			StartPort:     r.StartPort,
+			EndPort:       r.EndPort,
+		}
+
+		if r.Network != "" {
+			rule.Network = &r.Network
+		}
+
+		if r.SecurityGroup != nil {
+			sgID, err := uuid.Parse(r.SecurityGroup.ID.String())
+			if err != nil {
+				return nil, fmt.Errorf("unable to parse security group rule source ID: %w", err)
+			}
+			rule.SecurityGroup = &sgID
+		}
+
+		rules = append(rules, rule)
+	}
+
+	return rules, nil
+}

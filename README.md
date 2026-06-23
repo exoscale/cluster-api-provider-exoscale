@@ -4,6 +4,75 @@
 ## Description
 // TODO(user): An in-depth paragraph about your project and overview of use
 
+## Run locally
+
+### Deploy cluster api components
+```Bash
+$> kind create cluster --name capi-test
+$> clusterctl init --infrastructure - # installs only CAPI core components
+```
+
+### Deploy cluster-api-provider-exoscale
+```Bash
+$> make generate manifests
+$> make install run
+```
+
+### Deploy a simple cluster
+```Bash
+$> export EXOSCALE_API_KEY=<api-key>
+$> export EXOSCALE_API_SECRET=<api-secret>
+$> kubectl create secret generic exoscale --from-literal=apikey=$EXOSCALE_API_KEY --from-literal=apisecret=$EXOSCALE_API_SECRET
+
+$> cat <<EOF | kubectl apply -f -
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: ExoscaleCluster
+metadata:
+  name: my-cluster
+  namespace: default
+spec:
+  zone: ch-gva-2
+  securityGroupControlPlane:
+    rules:
+      - description: allow ssh
+        network: "0.0.0.0/0"
+        endPort: 22
+        startPort: 22
+        protocol: tcp
+        flowDirection: ingress
+  securityGroupNode:
+    rules:
+      - description: allow ssh
+        network: "0.0.0.0/0"
+        endPort: 22
+        startPort: 22
+        protocol: tcp
+        flowDirection: ingress
+EOF
+
+$> cat <<EOF | kubectl apply -f -
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: my-cluster
+  namespace: default
+spec:
+  infrastructureRef:
+    apiGroup: infrastructure.cluster.x-k8s.io
+    kind: ExoscaleCluster
+    name: my-cluster
+EOF
+
+## wait 1-2 min
+
+$> kubectl get exoscaleclusters/my-cluster -o yaml | yq
+```
+
+### Delete simple cluster
+```Bash
+$> kubectl delete cluster/my-cluster ## it will also delete `exoscaleclusters/my-cluster`
+```
+
 ## Getting Started
 
 ### Prerequisites
@@ -132,4 +201,3 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-

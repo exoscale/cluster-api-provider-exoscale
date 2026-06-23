@@ -18,46 +18,192 @@ package controller
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
+	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	"sigs.k8s.io/cluster-api/util"
+	"sigs.k8s.io/cluster-api/util/annotations"
+	"sigs.k8s.io/cluster-api/util/conditions"
+	"sigs.k8s.io/cluster-api/util/patch"
+	"sigs.k8s.io/cluster-api/util/predicates"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	infrastructurev1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
+	infrav1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
+	"github.com/exoscale/cluster-api-provider-exoscale/internal/service"
+	"github.com/google/uuid"
 )
 
 // ExoscaleClusterReconciler reconciles a ExoscaleCluster object
 type ExoscaleClusterReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme      *runtime.Scheme
+	WatchFilter string
 }
 
+// Read CAPI cluster resource
+// +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters;clusters/status,verbs=get;list;watch
+
+// Manage infra exoscale cluster resources
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=exoscaleclusters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=exoscaleclusters/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=exoscaleclusters/finalizers,verbs=update
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the ExoscaleCluster object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.23.3/pkg/reconcile
-func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = logf.FromContext(ctx)
+// Read secrets for Exoscale API credentials
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
-	// TODO(user): your logic here
+// - implement condition cf. deprecated: "sigs.k8s.io/cluster-api/util/deprecated/v1beta1/conditions/v1beta2" might be replaced by "https://pkg.go.dev/sigs.k8s.io/cluster-api/util/conditions"
+// - find a way to start a reconciliation loop when cluster is ready in order to create and deploy a secret with an exoscale api key/secret + refresh (for csi and ccm)
+func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
+	log := logf.FromContext(ctx)
+
+	log.Info("Reconcile cluster", "req", req)
+
+	// fetch exoscale cluster.
+	var exoCluster infrav1alpha1.ExoscaleCluster
+	if err := r.Get(ctx, req.NamespacedName, &exoCluster); err != nil {
+		if apierrors.IsNotFound(err) {
+			return reconcile.Result{}, nil
+		}
+		return reconcile.Result{}, err
+	}
+
+	patchHelper, err := patch.NewHelper(&exoCluster, r.Client)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	defer func() {
+		// TODO: maybe create a real error management with custom type
+		if reterr != nil {
+			conditions.Set(&exoCluster, metav1.Condition{
+				Type:    infrav1alpha1.ReadyCondition,
+				Status:  metav1.ConditionFalse,
+				Reason:  infrav1alpha1.ReconcileErrorReason,
+				Message: reterr.Error(),
+			})
+		}
+		if err := patchHelper.Patch(ctx, &exoCluster); err != nil {
+			log.Error(err, "unable to patch cluster", "cluster name", exoCluster.Name, "cluster id", exoCluster.Status.ID)
+		}
+	}()
+
+	if exoCluster.Status.ID == nil {
+		exoCluster.Status.ID = func() *string { v := uuid.New().String(); return &v }()
+	}
+
+	log = log.WithValues("cluster_id", *exoCluster.Status.ID)
+
+	// Fetch the Cluster.
+	cluster, err := util.GetOwnerCluster(ctx, r.Client, exoCluster.ObjectMeta)
+	if err != nil {
+		return reconcile.Result{}, client.IgnoreNotFound(err)
+	}
+	if cluster == nil {
+		log.Info("Cluster Controller has not yet set OwnerRef")
+		return reconcile.Result{}, nil
+	}
+
+	// check if we need to continue the reconciliation.
+	if annotations.IsExternallyManaged(cluster) {
+		log.Info("Cluster is externally managed, skipping reconciliation")
+		return ctrl.Result{}, nil
+	}
+	if annotations.IsPaused(cluster, &exoCluster) {
+		log.Info("InfraCluster is paused, skipping reconciliation")
+		conditions.Set(&exoCluster, metav1.Condition{
+			Type:    clusterv1.PausedCondition,
+			Status:  metav1.ConditionTrue,
+			Reason:  clusterv1.PausedReason,
+			Message: "Reconciliation is paused",
+		})
+		return ctrl.Result{}, nil
+	}
+	conditions.Delete(&exoCluster, clusterv1.PausedCondition)
+
+	// fetch creds affiliated to this cluster.
+	var creds v1.Secret
+	if err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: exoCluster.Spec.ExoscaleSecret.Name}, &creds); err != nil {
+		return ctrl.Result{}, fmt.Errorf("unable to fetch exoscale secret %q: %w", exoCluster.Spec.ExoscaleSecret.Name, err)
+	}
+	apiKey, apiSecret, err := GetAPICreds(creds, exoCluster.Spec.ExoscaleSecret.ApiKey, exoCluster.Spec.ExoscaleSecret.APISecret)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// reconcile cluster.
+	clusterSvc, err := service.NewClusterService(apiKey, apiSecret, exoCluster.Spec.Zone, log)
+	if err != nil {
+		log.Error(errors.New("invalid creds error"), "invalid creds", "apikey", apiKey, "apiSecret", apiSecret)
+		return ctrl.Result{}, err
+	}
+
+	if !exoCluster.DeletionTimestamp.IsZero() {
+		if controllerutil.ContainsFinalizer(&exoCluster, infrav1alpha1.ExoscaleClusterFinalizer) {
+			exoCluster, err = clusterSvc.DeleteCluster(ctx, exoCluster)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			log.Info("DELETE FINALIZER")
+			controllerutil.RemoveFinalizer(&exoCluster, infrav1alpha1.ExoscaleClusterFinalizer)
+		}
+		return ctrl.Result{}, nil
+	} else {
+		controllerutil.AddFinalizer(&exoCluster, infrav1alpha1.ExoscaleClusterFinalizer)
+	}
+
+	exoCluster, err = clusterSvc.ReconcileCluster(ctx, exoCluster)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// TODO: create role + api key/secret when exoscale.status.initialization.provisioned == true and capicluster is ready
+	// possible since we watch the capi cluster now (cf. SetupWithManager).
+
+	conditions.Set(&exoCluster, metav1.Condition{
+		Type:   infrav1alpha1.ReadyCondition,
+		Status: metav1.ConditionTrue,
+		Reason: infrav1alpha1.ReconcileSuccessReason,
+	})
 
 	return ctrl.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ExoscaleClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&infrastructurev1alpha1.ExoscaleCluster{}).
-		Named("exoscalecluster").
+	// Watch Cluster objects and map them to the ExoscaleCluster they own.
+	// This is required so that lifecycle events on the CAPI Cluster (pause, unpause, owner-ref set)
+	// trigger reconciliation of the corresponding ExoscaleCluster. Without this watch the controller
+	// only reacts to direct changes on ExoscaleCluster resources and would, for example, never notice
+	// when a Cluster is paused or when the owner reference is initially set by the Cluster controller.
+	clusterToExoscaleCluster := util.ClusterToInfrastructureMapFunc(
+		context.Background(),
+		infrav1alpha1.GroupVersion.WithKind("ExoscaleCluster"),
+		mgr.GetClient(),
+		&infrav1alpha1.ExoscaleCluster{},
+	)
+
+	blder := ctrl.NewControllerManagedBy(mgr).Named("exoscalecluster")
+
+	if r.WatchFilter != "" {
+		blder = blder.For(&infrav1alpha1.ExoscaleCluster{}, builder.WithPredicates(
+			predicates.ResourceHasFilterLabel(r.Scheme, logf.Log, r.WatchFilter),
+		))
+	} else {
+		blder = blder.For(&infrav1alpha1.ExoscaleCluster{})
+	}
+
+	return blder.
+		Watches(&clusterv1.Cluster{}, handler.EnqueueRequestsFromMapFunc(clusterToExoscaleCluster)).
 		Complete(r)
 }

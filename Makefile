@@ -86,6 +86,33 @@ test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expect
 	KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v
 	$(MAKE) cleanup-test-e2e
 
+.PHONY: chainsaw-test-e2e
+chainsaw-test-e2e: setup-test-e2e-chainsaw chainsaw ## Run the e2e tests. Expected an isolated environment using Kind.
+	$(CHAINSAW) test test/chainsaw/deploy-cluster/
+
+setup-test-e2e-chainsaw: setup-test-e2e docker-build manifests generate kustomize clusterctl ## Set up a Kind, CAPI,  cluster for e2e tests if it does not exist
+	## Load docker image into kind cluster.
+	$(KIND) load docker-image --name $(KIND_CLUSTER) $(IMG)
+
+	## Install CAPI.
+	$(CLUSTERCTL) init --infrastructure -
+
+	## Deploy exoscale infrastructure provider.
+	## We need to create a simple temporary kustomize file to set image name and tag
+	mkdir -p dist
+	$(eval E2E_TMP := $(shell mktemp -d))
+	ln -s $(CURDIR)/config/e2e-chainsaw $(E2E_TMP)/base
+	printf 'apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n  - base\n' \
+		> $(E2E_TMP)/kustomization.yaml
+	cd $(E2E_TMP) && "$(KUSTOMIZE)" edit set image controller=$(IMG)
+	"$(KUSTOMIZE)" build --load-restrictor LoadRestrictionsNone $(E2E_TMP) | $(KUBECTL) apply -f -
+	rm -rf $(E2E_TMP)
+
+	$(KUBECTL) create secret generic exoscale \
+		--from-literal=apikey=$(EXOSCALE_API_KEY) \
+		--from-literal=apisecret=$(EXOSCALE_API_SECRET) \
+		--dry-run=client -o yaml | $(KUBECTL) apply -f -
+
 .PHONY: cleanup-test-e2e
 cleanup-test-e2e: ## Tear down the Kind cluster used for e2e tests
 	@$(KIND) delete cluster --name $(KIND_CLUSTER)
@@ -185,10 +212,15 @@ KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
+CLUSTERCTL = $(LOCALBIN)/clusterctl
+CHAINSAW = $(LOCALBIN)/chainsaw
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.8.1
 CONTROLLER_TOOLS_VERSION ?= v0.20.1
+GOLANGCI_LINT_VERSION ?= v2.8.0
+CLUSTERCTL_VERSION ?= v1.13.2
+CHAINSAW_VERSION ?= v0.2.15
 
 #ENVTEST_VERSION is the version of controller-runtime release branch to fetch the envtest setup script (i.e. release-0.20)
 ENVTEST_VERSION ?= $(shell v='$(call gomodver,sigs.k8s.io/controller-runtime)'; \
@@ -200,7 +232,6 @@ ENVTEST_K8S_VERSION ?= $(shell v='$(call gomodver,k8s.io/api)'; \
   [ -n "$$v" ] || { echo "Set ENVTEST_K8S_VERSION manually (k8s.io/api replace has no tag)" >&2; exit 1; }; \
   printf '%s\n' "$$v" | sed -E 's/^v?[0-9]+\.([0-9]+).*/1.\1/')
 
-GOLANGCI_LINT_VERSION ?= v2.8.0
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
 $(KUSTOMIZE): $(LOCALBIN)
@@ -210,6 +241,16 @@ $(KUSTOMIZE): $(LOCALBIN)
 controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
 $(CONTROLLER_GEN): $(LOCALBIN)
 	$(call go-install-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen,$(CONTROLLER_TOOLS_VERSION))
+
+.PHONY: clusterctl
+clusterctl: $(CLUSTERCTL) ## Download clusterctl locally if necessary.
+$(CLUSTERCTL): $(LOCALBIN)
+	$(call go-install-tool,$(CLUSTERCTL),sigs.k8s.io/cluster-api/cmd/clusterctl,$(CLUSTERCTL_VERSION))
+
+.PHONY: chainsaw
+chainsaw: $(CHAINSAW) ## Download chainsaw locally if necessary.
+$(CHAINSAW): $(LOCALBIN)
+	$(call go-install-tool,$(CHAINSAW),github.com/kyverno/chainsaw,$(CHAINSAW_VERSION))
 
 .PHONY: setup-envtest
 setup-envtest: envtest ## Download the binaries required for ENVTEST in the local bin directory.

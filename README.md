@@ -73,6 +73,14 @@ $> kubectl get exoscaleclusters/my-cluster -o yaml | yq
 $> kubectl delete cluster/my-cluster ## it will also delete `exoscaleclusters/my-cluster`
 ```
 
+## End-to-End testing
+```Bash
+$> export EXOSCALE_API_KEY=<api-key>
+$> export EXOSCALE_API_SECRET=<api-secret>
+
+$> make chainsaw-test-e2e
+```
+
 ## Getting Started
 
 ### Prerequisites

@@ -26,7 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-func TestExoscaleClusterReconciler_Reconcile(t *testing.T) {
+func TestExoscaleClusterReconciler_Reconcile_nominal(t *testing.T) {
 	t.Parallel()
 
 	const (
@@ -51,7 +51,7 @@ func TestExoscaleClusterReconciler_Reconcile(t *testing.T) {
 		output         reconcile.Result
 	}{
 		{
-			name: "nominal - reconcile succeeds",
+			name: "reconcile succeeds",
 			k8sClient: func(b *fake.ClientBuilder) {
 				b.WithObjects(
 					&clusterv1.Cluster{
@@ -120,7 +120,7 @@ func TestExoscaleClusterReconciler_Reconcile(t *testing.T) {
 			output: reconcile.Result{},
 		},
 		{
-			name: "nominal - no capi cluster",
+			name: "no capi cluster",
 			k8sClient: func(b *fake.ClientBuilder) {
 				b.WithObjects(
 					&infrav1alpha1.ExoscaleCluster{
@@ -159,7 +159,7 @@ func TestExoscaleClusterReconciler_Reconcile(t *testing.T) {
 			output: reconcile.Result{},
 		},
 		{
-			name: "nominal - externally managed",
+			name: "externally managed",
 			k8sClient: func(b *fake.ClientBuilder) {
 				b.WithObjects(
 					&clusterv1.Cluster{
@@ -207,7 +207,7 @@ func TestExoscaleClusterReconciler_Reconcile(t *testing.T) {
 			output: reconcile.Result{},
 		},
 		{
-			name: "nominal - paused",
+			name: "paused",
 			k8sClient: func(b *fake.ClientBuilder) {
 				b.WithObjects(
 					&clusterv1.Cluster{
@@ -261,138 +261,7 @@ func TestExoscaleClusterReconciler_Reconcile(t *testing.T) {
 			output: reconcile.Result{},
 		},
 		{
-			name: "error - get ExoscaleCluster returns error",
-			k8sClient: func(b *fake.ClientBuilder) {
-				b.WithInterceptorFuncs(interceptor.Funcs{
-					Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-						if _, ok := obj.(*infrav1alpha1.ExoscaleCluster); ok {
-							return assert.AnError
-						}
-						return c.Get(ctx, key, obj, opts...)
-					},
-				})
-			},
-			err:    assert.AnError,
-			output: reconcile.Result{},
-		},
-		{
-			name: "error - get secret returns error",
-			k8sClient: func(b *fake.ClientBuilder) {
-				b.WithObjects(
-					&clusterv1.Cluster{
-						ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: ns},
-					},
-					&infrav1alpha1.ExoscaleCluster{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      clusterName,
-							Namespace: ns,
-							OwnerReferences: []metav1.OwnerReference{{
-								APIVersion: clusterv1.GroupVersion.String(),
-								Kind:       "Cluster",
-								Name:       clusterName,
-							}},
-						},
-						Spec: infrav1alpha1.ExoscaleClusterSpec{
-							Zone: "ch-gva-2",
-							ExoscaleSecret: infrav1alpha1.ExoscaleSecretRef{
-								Name:      secretName,
-								ApiKey:    "apikey",
-								APISecret: "apisecret",
-							},
-						},
-					},
-				).WithInterceptorFuncs(interceptor.Funcs{
-					Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-						if _, ok := obj.(*v1.Secret); ok {
-							return assert.AnError
-						}
-						return c.Get(ctx, key, obj, opts...)
-					},
-				})
-			},
-			err:    assert.AnError,
-			output: reconcile.Result{},
-		},
-		{
-			name: "error - getAPICreds returns error",
-			k8sClient: func(b *fake.ClientBuilder) {
-				b.WithObjects(
-					&clusterv1.Cluster{
-						ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: ns},
-					},
-					&infrav1alpha1.ExoscaleCluster{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      clusterName,
-							Namespace: ns,
-							OwnerReferences: []metav1.OwnerReference{{
-								APIVersion: clusterv1.GroupVersion.String(),
-								Kind:       "Cluster",
-								Name:       clusterName,
-							}},
-						},
-						Spec: infrav1alpha1.ExoscaleClusterSpec{
-							Zone: "ch-gva-2",
-							ExoscaleSecret: infrav1alpha1.ExoscaleSecretRef{
-								Name:      secretName,
-								ApiKey:    "apikey",
-								APISecret: "apisecret",
-							},
-						},
-					},
-					&v1.Secret{
-						ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: ns},
-						Data:       map[string][]byte{},
-					},
-				)
-			},
-			err:    errInvalidCreds,
-			output: reconcile.Result{},
-		},
-		{
-			name: "error - ReconcileCluster returns error",
-			k8sClient: func(b *fake.ClientBuilder) {
-				b.WithObjects(
-					&clusterv1.Cluster{
-						ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: ns},
-					},
-					&infrav1alpha1.ExoscaleCluster{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      clusterName,
-							Namespace: ns,
-							OwnerReferences: []metav1.OwnerReference{{
-								APIVersion: clusterv1.GroupVersion.String(),
-								Kind:       "Cluster",
-								Name:       clusterName,
-							}},
-						},
-						Spec: infrav1alpha1.ExoscaleClusterSpec{
-							Zone: "ch-gva-2",
-							ExoscaleSecret: infrav1alpha1.ExoscaleSecretRef{
-								Name:      secretName,
-								ApiKey:    "apikey",
-								APISecret: "apisecret",
-							},
-						},
-					},
-					&v1.Secret{
-						ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: ns},
-						Data: map[string][]byte{
-							"apikey":    []byte("my-api-key"),
-							"apisecret": []byte("my-api-secret"),
-						},
-					},
-				)
-			},
-			clusterService: func(m *mocks.ClusterService) {
-				m.EXPECT().
-					ReconcileCluster(mock.Anything, mock.Anything).
-					Return(infrav1alpha1.ExoscaleCluster{}, assert.AnError)
-			},
-			err:    assert.AnError,
-			output: reconcile.Result{},
-		},
-		{
-			name: "nominal - reconcile succeeds - delete",
+			name: "reconcile succeeds - delete",
 			k8sClient: func(b *fake.ClientBuilder) {
 				b.WithObjects(
 					&clusterv1.Cluster{
@@ -453,6 +322,259 @@ func TestExoscaleClusterReconciler_Reconcile(t *testing.T) {
 				assert.True(t, apierrors.IsNotFound(err), "Should be a not found error, got: %s", err.Error())
 			},
 			output: reconcile.Result{},
+		},
+	}
+
+	for _, ut := range tests {
+		t.Run(ut.name, func(t *testing.T) {
+			builder := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithStatusSubresource(&infrav1alpha1.ExoscaleCluster{})
+			if ut.k8sClient != nil {
+				ut.k8sClient(builder)
+			}
+
+			svc := mocks.NewClusterService(t)
+			if ut.clusterService != nil {
+				ut.clusterService(svc)
+			}
+
+			r := &ExoscaleClusterReconciler{
+				Client: builder.Build(),
+				Scheme: scheme,
+				NewClusterService: func(apikey, apiSecret string, _ egoscale.ZoneName, _ logr.Logger) (domain.ClusterService, error) {
+					assert.Equal(t, apikey, "my-api-key")
+					assert.Equal(t, apiSecret, "my-api-secret")
+					return svc, nil
+				},
+			}
+
+			result, err := r.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{Name: clusterName, Namespace: ns},
+			})
+
+			assert.ErrorIs(t, err, ut.err)
+			assert.Equal(t, ut.output, result)
+
+			if ut.check != nil {
+				ut.check(t, r.Client)
+			}
+		})
+	}
+}
+
+func TestExoscaleClusterReconciler_Reconcile_error(t *testing.T) {
+	t.Parallel()
+
+	const (
+		ns          = "default"
+		clusterName = "test-cluster"
+		secretName  = "exoscale-creds"
+	)
+
+	ctx := context.Background()
+
+	scheme := runtime.NewScheme()
+	_ = clientgoscheme.AddToScheme(scheme)
+	_ = clusterv1.AddToScheme(scheme)
+	_ = infrav1alpha1.AddToScheme(scheme)
+
+	tests := []struct {
+		name           string
+		k8sClient      func(b *fake.ClientBuilder)
+		clusterService func(m *mocks.ClusterService)
+		check          func(t *testing.T, c client.Client)
+		err            error
+		output         reconcile.Result
+	}{
+		{
+			name: "get ExoscaleCluster returns error",
+			k8sClient: func(b *fake.ClientBuilder) {
+				b.WithInterceptorFuncs(interceptor.Funcs{
+					Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+						if _, ok := obj.(*infrav1alpha1.ExoscaleCluster); ok {
+							return assert.AnError
+						}
+						return c.Get(ctx, key, obj, opts...)
+					},
+				})
+			},
+			err:    assert.AnError,
+			output: reconcile.Result{},
+		},
+		{
+			name: "get secret returns error",
+			k8sClient: func(b *fake.ClientBuilder) {
+				b.WithObjects(
+					&clusterv1.Cluster{
+						ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: ns},
+					},
+					&infrav1alpha1.ExoscaleCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      clusterName,
+							Namespace: ns,
+							OwnerReferences: []metav1.OwnerReference{{
+								APIVersion: clusterv1.GroupVersion.String(),
+								Kind:       "Cluster",
+								Name:       clusterName,
+							}},
+						},
+						Spec: infrav1alpha1.ExoscaleClusterSpec{
+							Zone: "ch-gva-2",
+							ExoscaleSecret: infrav1alpha1.ExoscaleSecretRef{
+								Name:      secretName,
+								ApiKey:    "apikey",
+								APISecret: "apisecret",
+							},
+						},
+					},
+				).WithInterceptorFuncs(interceptor.Funcs{
+					Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+						if _, ok := obj.(*v1.Secret); ok {
+							return assert.AnError
+						}
+						return c.Get(ctx, key, obj, opts...)
+					},
+				})
+			},
+			err:    assert.AnError,
+			output: reconcile.Result{},
+		},
+		{
+			name: "getAPICreds returns error",
+			k8sClient: func(b *fake.ClientBuilder) {
+				b.WithObjects(
+					&clusterv1.Cluster{
+						ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: ns},
+					},
+					&infrav1alpha1.ExoscaleCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      clusterName,
+							Namespace: ns,
+							OwnerReferences: []metav1.OwnerReference{{
+								APIVersion: clusterv1.GroupVersion.String(),
+								Kind:       "Cluster",
+								Name:       clusterName,
+							}},
+						},
+						Spec: infrav1alpha1.ExoscaleClusterSpec{
+							Zone: "ch-gva-2",
+							ExoscaleSecret: infrav1alpha1.ExoscaleSecretRef{
+								Name:      secretName,
+								ApiKey:    "apikey",
+								APISecret: "apisecret",
+							},
+						},
+					},
+					&v1.Secret{
+						ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: ns},
+						Data:       map[string][]byte{},
+					},
+				)
+			},
+			err:    errInvalidCreds,
+			output: reconcile.Result{},
+		},
+		{
+			name: "reconcileCluster returns error",
+			k8sClient: func(b *fake.ClientBuilder) {
+				b.WithObjects(
+					&clusterv1.Cluster{
+						ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: ns},
+					},
+					&infrav1alpha1.ExoscaleCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      clusterName,
+							Namespace: ns,
+							OwnerReferences: []metav1.OwnerReference{{
+								APIVersion: clusterv1.GroupVersion.String(),
+								Kind:       "Cluster",
+								Name:       clusterName,
+							}},
+						},
+						Spec: infrav1alpha1.ExoscaleClusterSpec{
+							Zone: "ch-gva-2",
+							ExoscaleSecret: infrav1alpha1.ExoscaleSecretRef{
+								Name:      secretName,
+								ApiKey:    "apikey",
+								APISecret: "apisecret",
+							},
+						},
+					},
+					&v1.Secret{
+						ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: ns},
+						Data: map[string][]byte{
+							"apikey":    []byte("my-api-key"),
+							"apisecret": []byte("my-api-secret"),
+						},
+					},
+				)
+			},
+			clusterService: func(m *mocks.ClusterService) {
+				m.EXPECT().
+					ReconcileCluster(mock.Anything, mock.Anything).
+					Return(infrav1alpha1.ExoscaleCluster{}, assert.AnError)
+			},
+			err:    assert.AnError,
+			output: reconcile.Result{},
+		},
+		{
+			name: "deleteCluster cluster returned an error",
+			k8sClient: func(b *fake.ClientBuilder) {
+				b.WithObjects(
+					&clusterv1.Cluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      clusterName,
+							Namespace: ns,
+						},
+					},
+					&infrav1alpha1.ExoscaleCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      clusterName,
+							Namespace: ns,
+							OwnerReferences: []metav1.OwnerReference{
+								{
+									APIVersion: clusterv1.GroupVersion.String(),
+									Kind:       "Cluster",
+									Name:       clusterName,
+								},
+							},
+							DeletionTimestamp: func() *metav1.Time { v := metav1.NewTime(time.Now()); return &v }(),
+							Finalizers:        []string{infrav1alpha1.ExoscaleClusterFinalizer},
+						},
+						Spec: infrav1alpha1.ExoscaleClusterSpec{
+							Zone: "ch-gva-2",
+							ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{
+								Port: 6443,
+							},
+							ExoscaleSecret: infrav1alpha1.ExoscaleSecretRef{
+								Name:      secretName,
+								ApiKey:    "apikey",
+								APISecret: "apisecret",
+							},
+						},
+					},
+					&v1.Secret{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      secretName,
+							Namespace: ns,
+						},
+						Data: map[string][]byte{
+							"apikey":    []byte("my-api-key"),
+							"apisecret": []byte("my-api-secret"),
+						},
+					},
+				)
+			},
+			clusterService: func(m *mocks.ClusterService) {
+				m.EXPECT().
+					DeleteCluster(mock.Anything, mock.Anything).
+					RunAndReturn(func(_ context.Context, cluster infrav1alpha1.ExoscaleCluster) (infrav1alpha1.ExoscaleCluster, error) {
+						return cluster, assert.AnError
+					})
+			},
+			output: reconcile.Result{},
+			err:    assert.AnError,
 		},
 	}
 

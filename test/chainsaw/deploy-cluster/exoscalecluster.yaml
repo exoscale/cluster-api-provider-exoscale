@@ -1,10 +1,10 @@
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
 kind: ExoscaleCluster
 metadata:
-  name: my-cluster
-  namespace: default
+  name: ($clusterName)
+  namespace: ($namespace)
 spec:
-  zone: ch-gva-2
+  zone: ($zone)
   securityGroupControlPlane:
     rules:
       - description: allow ssh

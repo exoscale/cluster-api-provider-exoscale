@@ -6,6 +6,13 @@ spec:
   timeouts:
     delete: 5m
     cleanup: 5m
+  bindings:
+  - name: zone
+    value: ($values.zone || 'bg-sof-1')
+  - name: clusterName
+    value: (join('-', ['capi-cluster', ($values.suffix || 'local')]))
+  - name: namespace
+    value: default
   steps:
     - name: apply resources
       try:
@@ -22,8 +29,8 @@ spec:
               apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
               kind: ExoscaleCluster
               metadata:
-                name: my-cluster
-                namespace: default
+                name: ($clusterName)
+                namespace: ($namespace)
               status:
                 initialization:
                   provisioned: true
@@ -40,8 +47,8 @@ spec:
               apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
               kind: ExoscaleCluster
               metadata:
-                name: my-cluster
-                namespace: default
+                name: ($clusterName)
+                namespace: ($namespace)
               (spec.controlPlaneEndpoint.host == status.controlPlaneEndpoint.host): true
               (spec.controlPlaneEndpoint.port == status.controlPlaneEndpoint.port): true
 
@@ -53,8 +60,8 @@ spec:
               apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
               kind: ExoscaleCluster
               metadata:
-                name: my-cluster
-                namespace: default
+                name: ($clusterName)
+                namespace: ($namespace)
               status:
                 securityGroupNode:
                   (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
@@ -89,8 +96,8 @@ spec:
               apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
               kind: ExoscaleCluster
               metadata:
-                name: my-cluster
-                namespace: default
+                name: ($clusterName)
+                namespace: ($namespace)
               status:
                 securityGroupControlPlane:
                   (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
@@ -137,12 +144,15 @@ spec:
                       startPort: 22
               (length(status.securityGroupControlPlane.rules)): 6
 
-    - name: assert-cluster-endpoint-consistency
+    - name: assert cluster endpoint consistency
       try:
         - script:
             timeout: 10s
+            env:
+              - name: CLUSTER_NAME
+                value: ($clusterName)
             content: |
-              kubectl get exoscalecluster my-cluster -n default \
+              kubectl get exoscalecluster "$CLUSTER_NAME" -n default \
                 -o jsonpath='{.spec.controlPlaneEndpoint.host} {.spec.controlPlaneEndpoint.port}'
             outputs:
               - name: cpHost
@@ -155,7 +165,7 @@ spec:
               apiVersion: cluster.x-k8s.io/v1beta2
               kind: Cluster
               metadata:
-                name: my-cluster
-                namespace: default
+                name: ($clusterName)
+                namespace: ($namespace)
               (spec.controlPlaneEndpoint.host == $cpHost): true
               (to_string(spec.controlPlaneEndpoint.port) == $cpPort): true

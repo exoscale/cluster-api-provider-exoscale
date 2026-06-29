@@ -42,6 +42,8 @@ import (
 
 	infrav1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/domain"
+	egoscale "github.com/exoscale/egoscale/v3"
+	"github.com/go-logr/logr"
 	"github.com/google/uuid"
 )
 
@@ -50,7 +52,7 @@ type ExoscaleClusterReconciler struct {
 	client.Client
 	Scheme            *runtime.Scheme
 	WatchFilter       string
-	NewClusterService domain.ClusterServiceFactory
+	NewClusterService func(apiKey, apiSecret string, zone egoscale.ZoneName, logger logr.Logger) (domain.ClusterService, error)
 }
 
 // Read CAPI cluster resource

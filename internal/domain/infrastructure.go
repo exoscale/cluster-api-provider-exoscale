@@ -5,7 +5,6 @@ import (
 
 	infrav1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
 	egoscale "github.com/exoscale/egoscale/v3"
-	"github.com/go-logr/logr"
 	"github.com/google/uuid"
 )
 
@@ -100,8 +99,6 @@ type ClusterService interface {
 	ReconcileCluster(ctx context.Context, cluster infrav1alpha1.ExoscaleCluster) (infrav1alpha1.ExoscaleCluster, error)
 	DeleteCluster(ctx context.Context, cluster infrav1alpha1.ExoscaleCluster) (infrav1alpha1.ExoscaleCluster, error)
 }
-
-type ClusterServiceFactory func(apiKey, apiSecret string, zone egoscale.ZoneName, logger logr.Logger) (ClusterService, error)
 
 type Cluster struct {
 	ID       *uuid.UUID

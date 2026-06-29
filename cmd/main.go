@@ -38,6 +38,7 @@ import (
 
 	infrastructurev1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/controller"
+	"github.com/exoscale/cluster-api-provider-exoscale/internal/service"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	// +kubebuilder:scaffold:imports
 )
@@ -200,9 +201,10 @@ func main() {
 	}
 
 	if err := (&controller.ExoscaleClusterReconciler{
-		Client:      mgr.GetClient(),
-		Scheme:      mgr.GetScheme(),
-		WatchFilter: watchFilter,
+		Client:            mgr.GetClient(),
+		Scheme:            mgr.GetScheme(),
+		WatchFilter:       watchFilter,
+		NewClusterService: service.NewClusterService,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "ExoscaleCluster")
 		os.Exit(1)

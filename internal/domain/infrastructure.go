@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 
+	infrav1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
 	egoscale "github.com/exoscale/egoscale/v3"
 	"github.com/google/uuid"
 )
@@ -92,6 +93,11 @@ type SecurityGroupRule struct {
 	EndPort       int64
 	Network       *string
 	SecurityGroup *uuid.UUID
+}
+
+type ClusterService interface {
+	ReconcileCluster(ctx context.Context, cluster infrav1alpha1.ExoscaleCluster) (infrav1alpha1.ExoscaleCluster, error)
+	DeleteCluster(ctx context.Context, cluster infrav1alpha1.ExoscaleCluster) (infrav1alpha1.ExoscaleCluster, error)
 }
 
 type Cluster struct {

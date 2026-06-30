@@ -20,7 +20,7 @@ func defaultControlPlaneRules(cpSGID uuid.UUID, apiServerPort int32) []domain.Se
 			Protocol:      domain.SecurityGroupRuleProtocolTCP,
 			StartPort:     int64(apiServerPort),
 			EndPort:       int64(apiServerPort),
-			Network:       func() *string { v := "0.0.0.0/0"; return &v }(),
+			Network:       new("0.0.0.0/0"),
 		},
 		{
 			Description:   "etcd client and peer communication",

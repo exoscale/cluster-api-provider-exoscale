@@ -35,6 +35,8 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+
 	infrastructurev1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/controller"
 	// +kubebuilder:scaffold:imports
@@ -47,7 +49,7 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-
+	utilruntime.Must(clusterv1.AddToScheme(scheme))
 	utilruntime.Must(infrastructurev1alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
@@ -188,6 +190,8 @@ func main() {
 	if err := (&controller.ExoscaleMachineReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		// TODO: wire InstanceService with an ExoscaleClient adapter once
+		// the Exoscale SDK integration is implemented.
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "ExoscaleMachine")
 		os.Exit(1)

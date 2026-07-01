@@ -91,6 +91,7 @@ type InstanceService interface {
 }
 
 type InstanceSpec struct {
+	Name             string
 	Zone             string
 	TemplateID       uuid.UUID
 	InstanceType     string

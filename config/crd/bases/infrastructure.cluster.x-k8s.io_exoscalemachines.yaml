@@ -28,8 +28,8 @@ spec:
     - jsonPath: .status.ready
       name: Ready
       type: string
-    - jsonPath: .status.instanceID
-      name: InstanceID
+    - jsonPath: .spec.providerID
+      name: ProviderID
       type: string
     - jsonPath: .metadata.ownerReferences[?(@.kind=="Machine")].name
       name: Machine
@@ -62,9 +62,8 @@ spec:
               backing a Cluster API Machine.
             properties:
               instanceType:
-                description: |-
-                  instanceType is the Exoscale service offering (e.g. "small", "medium", "large",
-                  "gpu-plus", "dev").
+                description: instanceType is the Exoscale service offering (e.g. "standard-2",
+                  "gpu-plus").
                 enum:
                 - small
                 - medium
@@ -104,31 +103,32 @@ spec:
                 - compute-20
                 - compute-24
                 type: string
-              rootVolumeSizeGB:
+              providerID:
                 description: |-
-                  rootVolumeSizeGB optionally overrides the disk size declared by the
-                  template. The instance is recreated if this changes.
+                  providerID is the cloud-provider identifier for this instance in the form
+                  exoscale:///<instance-uuid>. Set by the controller after the instance is created.
+                  CAPI uses this field to match the InfraMachine to the Node object.
+                type: string
+              rootVolumeSizeGB:
+                description: rootVolumeSizeGB overrides the disk size declared by
+                  the template.
                 format: int64
                 maximum: 10000
                 minimum: 10
                 type: integer
               securityGroups:
-                description: |-
-                  securityGroups are the names or UUIDs of Exoscale Security Groups to attach
-                  to the instance. Reference the SGs the ExoscaleCluster controller creates,
-                  or any user-provided SG.
+                description: securityGroups lists names or UUIDs of Exoscale Security
+                  Groups to attach.
                 items:
                   type: string
                 type: array
               sshKey:
-                description: |-
-                  sshKey is the name of a pre-existing SSH key registered in the Exoscale
-                  project. The key is injected into the instance at boot.
+                description: sshKey is the name of a pre-existing SSH key registered
+                  in the Exoscale project.
                 type: string
               templateID:
-                description: |-
-                  templateID is the UUID of an existing Exoscale instance template. Templates
-                  bundle image, disk size and snapshot recipe; pick one out-of-band.
+                description: templateID is the UUID of an existing Exoscale instance
+                  template.
                 pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
                 type: string
               zone:
@@ -160,15 +160,15 @@ spec:
                 description: addresses are the network addresses of the instance (public
                   and private IPs).
                 items:
-                  description: MachineAddress models a single network address (matching
-                    clusterv1.MachineAddress).
+                  description: MachineAddress contains information for the node's
+                    address.
                   properties:
                     address:
                       description: address is the value of the address.
                       type: string
                     type:
-                      description: type is the kind of address (e.g. "InternalIP",
-                        "ExternalIP", "Hostname").
+                      description: type of address (e.g. "InternalIP", "ExternalIP",
+                        "Hostname").
                       type: string
                   required:
                   - address
@@ -238,28 +238,24 @@ spec:
                 - type
                 x-kubernetes-list-type: map
               failureMessage:
-                description: failureMessage is a human-readable description of failureReason.
+                description: failureMessage is a human-readable elaboration of failureReason.
                 type: string
               failureReason:
-                description: failureReason will be set on a terminal error that prevents
-                  reconciliation.
+                description: failureReason is a short machine-readable token set on
+                  terminal errors.
                 type: string
               instanceID:
-                description: instanceID is the Exoscale instance UUID.
+                description: instanceID is the Exoscale instance UUID assigned after
+                  creation.
                 pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
                 type: string
               instanceState:
-                description: instanceState is the Exoscale instance state name (e.g.
-                  "running", "stopped").
-                type: string
-              providerID:
-                description: |-
-                  providerID is the cloud-provider identifier for this instance, in the form
-                  exoscale:///<instance-id>. CAPI uses this to associate the Machine with
-                  its Node.
+                description: instanceState is the Exoscale instance state (e.g. "running",
+                  "stopped").
                 type: string
               ready:
-                description: ready is true when the instance is running and reachable.
+                description: ready is true when the Exoscale instance is running and
+                  reachable.
                 type: boolean
             type: object
         required:

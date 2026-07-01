@@ -1,6 +1,6 @@
 module github.com/exoscale/cluster-api-provider-exoscale
 
-go 1.25.3
+go 1.26
 
 require (
 	github.com/exoscale/egoscale/v3 v3.1.37

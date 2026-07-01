@@ -10,8 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func strPtr(s string) *string { return &s }
-
 var rootSubnet string = "0.0.0.0/0"
 
 func Test_defaultControlPlaneRules(t *testing.T) {
@@ -134,7 +132,7 @@ func Test_specRuleToDomain(t *testing.T) {
 				Protocol:      egoscale.SecurityGroupRuleProtocol("tcp"),
 				StartPort:     10250,
 				EndPort:       10250,
-				SecurityGroup: strPtr("itself"),
+				SecurityGroup: new("itself"),
 			},
 			want: domain.SecurityGroupRule{
 				FlowDirection: domain.SecurityGroupRuleFlowDirectionIngress,
@@ -151,7 +149,7 @@ func Test_specRuleToDomain(t *testing.T) {
 				Protocol:      egoscale.SecurityGroupRuleProtocol("tcp"),
 				StartPort:     443,
 				EndPort:       443,
-				SecurityGroup: strPtr(otherSGID.String()),
+				SecurityGroup: new(otherSGID.String()),
 			},
 			want: domain.SecurityGroupRule{
 				FlowDirection: domain.SecurityGroupRuleFlowDirectionEgress,
@@ -163,7 +161,7 @@ func Test_specRuleToDomain(t *testing.T) {
 		},
 		{
 			name: "invalid security group UUID",
-			rule: infrav1alpha1.SecurityGroupRule{SecurityGroup: strPtr("not-a-uuid")},
+			rule: infrav1alpha1.SecurityGroupRule{SecurityGroup: new("not-a-uuid")},
 			err:  "invalid UUID",
 		},
 	}
@@ -230,7 +228,7 @@ func Test_mergeWithUserRules(t *testing.T) {
 		{
 			name:      "invalid user rule returns error",
 			defaults:  []domain.SecurityGroupRule{defaultRule},
-			userRules: []infrav1alpha1.SecurityGroupRule{{SecurityGroup: strPtr("not-a-uuid")}},
+			userRules: []infrav1alpha1.SecurityGroupRule{{SecurityGroup: new("not-a-uuid")}},
 			err:       "invalid UUID",
 		},
 	}

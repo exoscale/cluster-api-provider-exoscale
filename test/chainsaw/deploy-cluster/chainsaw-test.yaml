@@ -1,0 +1,171 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: deploy-cluster
+spec:
+  timeouts:
+    delete: 5m
+    cleanup: 5m
+  bindings:
+  - name: zone
+    value: ($values.zone || 'bg-sof-1')
+  - name: clusterName
+    value: (join('-', ['capi-cluster', ($values.suffix || 'local')]))
+  - name: namespace
+    value: default
+  steps:
+    - name: apply resources
+      try:
+        - apply:
+            file: exoscalecluster.yaml
+        - apply:
+            file: cluster.yaml
+
+    - name: assert cluster ready
+      try:
+        - assert:
+            timeout: 5m
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleCluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+              status:
+                initialization:
+                  provisioned: true
+                conditions:
+                  - type: Ready
+                    reason: ReconcileSuccess
+                    status: "True"
+
+    - name: assert exoscale cluster endpoint consistency
+      try:
+        - assert:
+            timeout: 10s
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleCluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+              (spec.controlPlaneEndpoint.host == status.controlPlaneEndpoint.host): true
+              (spec.controlPlaneEndpoint.port == status.controlPlaneEndpoint.port): true
+
+    - name: assert security group rule node
+      try:
+        - assert:
+            timeout: 10s
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleCluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+              status:
+                securityGroupNode:
+                  (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
+                  rules:
+                    - description: Kubelet API from control plane
+                      endPort: 10250
+                      flowDirection: ingress
+                      protocol: tcp
+                      securityGroupRef:
+                        (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
+                      startPort: 10250
+                    - description: Kubelet API node-to-node
+                      endPort: 10250
+                      flowDirection: ingress
+                      protocol: tcp
+                      securityGroupRef:
+                        (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
+                      startPort: 10250
+                    - description: allow ssh
+                      endPort: 22
+                      flowDirection: ingress
+                      network: 0.0.0.0/0
+                      protocol: tcp
+                      startPort: 22
+              (length(status.securityGroupNode.rules)): 3
+
+    - name: assert security group rule control plane
+      try:
+        - assert:
+            timeout: 10s
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleCluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+              status:
+                securityGroupControlPlane:
+                  (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
+                  rules:
+                    - description: kubernetes API server
+                      endPort: 6443
+                      flowDirection: ingress
+                      network: 0.0.0.0/0
+                      protocol: tcp
+                      startPort: 6443
+                    - description: etcd client and peer communication
+                      endPort: 2380
+                      flowDirection: ingress
+                      protocol: tcp
+                      securityGroupRef:
+                        (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
+                      startPort: 2379
+                    - description: kubelet API
+                      endPort: 10250
+                      flowDirection: ingress
+                      protocol: tcp
+                      securityGroupRef:
+                        (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
+                      startPort: 10250
+                    - description: kube-controller-manager
+                      endPort: 10257
+                      flowDirection: ingress
+                      protocol: tcp
+                      securityGroupRef:
+                        (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
+                      startPort: 10257
+                    - description: kube-scheduler
+                      endPort: 10259
+                      flowDirection: ingress
+                      protocol: tcp
+                      securityGroupRef:
+                        (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
+                      startPort: 10259
+                    - description: allow ssh
+                      endPort: 22
+                      flowDirection: ingress
+                      network: 0.0.0.0/0
+                      protocol: tcp
+                      startPort: 22
+              (length(status.securityGroupControlPlane.rules)): 6
+
+    - name: assert cluster endpoint consistency
+      try:
+        - script:
+            timeout: 10s
+            env:
+              - name: CLUSTER_NAME
+                value: ($clusterName)
+            content: |
+              kubectl get exoscalecluster "$CLUSTER_NAME" -n default \
+                -o jsonpath='{.spec.controlPlaneEndpoint.host} {.spec.controlPlaneEndpoint.port}'
+            outputs:
+              - name: cpHost
+                value: (split($stdout, ' ')[0])
+              - name: cpPort
+                value: (split($stdout, ' ')[1])
+        - assert:
+            timeout: 10s
+            resource:
+              apiVersion: cluster.x-k8s.io/v1beta2
+              kind: Cluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+              (spec.controlPlaneEndpoint.host == $cpHost): true
+              (to_string(spec.controlPlaneEndpoint.port) == $cpPort): true

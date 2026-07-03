@@ -1,0 +1,72 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: deploy-cluster-paused
+spec:
+  timeouts:
+    delete: 5m
+    cleanup: 5m
+  bindings:
+  - name: zone
+    value: ($values.zone || 'bg-sof-1')
+  - name: clusterName
+    value: (join('-', ['capi-cluster-paused', ($values.suffix || 'local')]))
+  - name: namespace
+    value: default
+  steps:
+    - name: apply resources
+      try:
+        - apply:
+            file: exoscalecluster_paused.yaml
+        - apply:
+            file: cluster.yaml
+
+    - name: assert exoscale cluster is paused
+      try:
+        - assert:
+            timeout: 10s
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleCluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+              status:
+                conditions:
+                  - type: Paused
+                    reason: Paused
+                    status: "True"
+                (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
+                (securityGroupControlPlane == null): true
+                (securityGroupNode == null): true
+
+    - name: unpause exoscale cluster
+      try:
+        - patch:
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleCluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+                annotations:
+                  cluster.x-k8s.io/paused: null
+
+    - name: assert cluster not paused
+      try:
+        - assert:
+            timeout: 5m
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleCluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+              status:
+                initialization:
+                  provisioned: true
+                conditions:
+                  - type: Ready
+                    reason: ReconcileSuccess
+                    status: "True"
+                (length(conditions[?type == 'Paused'])): 0

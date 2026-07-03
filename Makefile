@@ -94,7 +94,7 @@ CHAINSAW_VALUES_ZONE ?=
 
 .PHONY: chainsaw-test-e2e
 chainsaw-test-e2e: setup-test-e2e-chainsaw chainsaw ## Run the e2e tests. Expected an isolated environment using Kind.
-	$(CHAINSAW) test --set='suffix=$(CHAINSAW_VALUES_SUFFIX),zone=$(CHAINSAW_VALUES_ZONE)' test/chainsaw/deploy-cluster/ 
+	$(CHAINSAW) test --set='suffix=$(CHAINSAW_VALUES_SUFFIX),zone=$(CHAINSAW_VALUES_ZONE)' `ls -d -1 test/chainsaw/*`
 
 setup-test-e2e-chainsaw: setup-test-e2e docker-build manifests generate kustomize clusterctl ## Set up a Kind, CAPI,  cluster for e2e tests if it does not exist
 	## Load docker image into kind cluster.

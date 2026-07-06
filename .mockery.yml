@@ -27,3 +27,6 @@ packages:
     interfaces:
       ExoscaleClient:
       Cloud:
+      ElasticIPService:
+      SecurityGroupService:
+      ClusterService:

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	infrav1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
@@ -20,6 +21,7 @@ type clusterService struct {
 }
 
 var _ domain.ClusterService = (*clusterService)(nil)
+var errInvalidID = errors.New("invalid id")
 
 func NewClusterService(apiKey, apisecret string, zone egoscale.ZoneName, logger logr.Logger) (domain.ClusterService, error) {
 	cloudClient, err := exoscale.NewCloud(apiKey, apisecret, zone)
@@ -41,7 +43,7 @@ func (s *clusterService) ReconcileCluster(ctx context.Context, cluster infrav1al
 	} else {
 		id, err := uuid.Parse(*cluster.Status.ID)
 		if err != nil {
-			return cluster, fmt.Errorf("unable to parse \".status.ClusterID\": %w", err)
+			return cluster, fmt.Errorf("unable to parse \".status.ClusterID\": %w: %w", errInvalidID, err)
 		}
 		clusterID = id
 	}
@@ -53,7 +55,7 @@ func (s *clusterService) ReconcileCluster(ctx context.Context, cluster infrav1al
 	if cluster.Status.ControlPlaneEndpoint != nil {
 		id, err := uuid.Parse(cluster.Status.ControlPlaneEndpoint.ID)
 		if err != nil {
-			return cluster, fmt.Errorf("unable to parse %q: %w", ".status.controlPlaneEndpoint.id", err)
+			return cluster, fmt.Errorf("unable to parse %q: %w: %w", ".status.controlPlaneEndpoint.id", errInvalidID, err)
 		}
 		eipID = &id
 	}
@@ -77,7 +79,7 @@ func (s *clusterService) ReconcileCluster(ctx context.Context, cluster infrav1al
 	if cluster.Status.SecurityGroupControlPlan != nil {
 		id, err := uuid.Parse(cluster.Status.SecurityGroupControlPlan.ID)
 		if err != nil {
-			return cluster, fmt.Errorf("unable to parse %q: %w", ".status.securityGroupControlPlane.id", err)
+			return cluster, fmt.Errorf("unable to parse %q: %w: %w", ".status.securityGroupControlPlane.id", errInvalidID, err)
 		}
 		securityGroupControlPlaneID = &id
 	}
@@ -96,7 +98,7 @@ func (s *clusterService) ReconcileCluster(ctx context.Context, cluster infrav1al
 	if cluster.Status.SecurityGroupNode != nil {
 		id, err := uuid.Parse(cluster.Status.SecurityGroupNode.ID)
 		if err != nil {
-			return cluster, fmt.Errorf("unable to parse %q: %w", ".status.SecurityGroupNode.id", err)
+			return cluster, fmt.Errorf("unable to parse %q: %w: %w", ".status.SecurityGroupNode.id", errInvalidID, err)
 		}
 		securityGroupNodeID = &id
 	}
@@ -133,7 +135,7 @@ func (s *clusterService) ReconcileCluster(ctx context.Context, cluster infrav1al
 	cluster.Status.SecurityGroupNode.Rules = domainRulesToStatus(nodeRules)
 
 	// TODO: cgeck if I need to set this value to false in case of error in update, 1. provisioned = true, 2. reconcile again with error, 3 do I need to update the provisioned = false ?
-	cluster.Status.Initialization.Provisioned = func() *bool { v := true; return &v }()
+	cluster.Status.Initialization.Provisioned = new(true)
 
 	return cluster, nil
 }
@@ -142,7 +144,7 @@ func (s *clusterService) DeleteCluster(ctx context.Context, cluster infrav1alpha
 	if cluster.Status.ControlPlaneEndpoint != nil {
 		id, err := uuid.Parse(cluster.Status.ControlPlaneEndpoint.ID)
 		if err != nil {
-			return cluster, fmt.Errorf("unable to parse %q: %w", ".status.controlPlaneEndpoint.id", err)
+			return cluster, fmt.Errorf("unable to parse %q: %w: %w", ".status.controlPlaneEndpoint.id", errInvalidID, err)
 		}
 		if err := s.elasticIPSvc.DeleteElasticIP(ctx, id); err != nil {
 			return cluster, err
@@ -157,7 +159,7 @@ func (s *clusterService) DeleteCluster(ctx context.Context, cluster infrav1alpha
 	if cluster.Status.SecurityGroupControlPlan != nil {
 		id, err := uuid.Parse(cluster.Status.SecurityGroupControlPlan.ID)
 		if err != nil {
-			return cluster, fmt.Errorf("unable to parse %q: %w", ".status.securityGroupControlPlane.id", err)
+			return cluster, fmt.Errorf("unable to parse %q: %w: %w", ".status.securityGroupControlPlane.id", errInvalidID, err)
 		}
 		securityGroupControlPlaneID = &id
 		if err := s.securityGroupSvc.PurgeSecurityGroup(ctx, id); err != nil {
@@ -168,7 +170,7 @@ func (s *clusterService) DeleteCluster(ctx context.Context, cluster infrav1alpha
 	if cluster.Status.SecurityGroupNode != nil {
 		id, err := uuid.Parse(cluster.Status.SecurityGroupNode.ID)
 		if err != nil {
-			return cluster, fmt.Errorf("unable to parse %q: %w", ".status.securityGroupNode.id", err)
+			return cluster, fmt.Errorf("unable to parse %q: %w: %w", ".status.securityGroupNode.id", errInvalidID, err)
 		}
 		securityGroupNodeID = &id
 		if err := s.securityGroupSvc.PurgeSecurityGroup(ctx, id); err != nil {

@@ -7,7 +7,7 @@ package mocks
 import (
 	"context"
 
-	infrav1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
+	"github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
 	mock "github.com/stretchr/testify/mock"
 )
 
@@ -38,88 +38,25 @@ func (_m *ClusterService) EXPECT() *ClusterService_Expecter {
 	return &ClusterService_Expecter{mock: &_m.Mock}
 }
 
-// ReconcileCluster provides a mock function for the type ClusterService
-func (_mock *ClusterService) ReconcileCluster(ctx context.Context, cluster infrav1alpha1.ExoscaleCluster) (infrav1alpha1.ExoscaleCluster, error) {
-	ret := _mock.Called(ctx, cluster)
-
-	if len(ret) == 0 {
-		panic("no return value specified for ReconcileCluster")
-	}
-
-	var r0 infrav1alpha1.ExoscaleCluster
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, infrav1alpha1.ExoscaleCluster) (infrav1alpha1.ExoscaleCluster, error)); ok {
-		return returnFunc(ctx, cluster)
-	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, infrav1alpha1.ExoscaleCluster) infrav1alpha1.ExoscaleCluster); ok {
-		r0 = returnFunc(ctx, cluster)
-	} else {
-		r0 = ret.Get(0).(infrav1alpha1.ExoscaleCluster)
-	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, infrav1alpha1.ExoscaleCluster) error); ok {
-		r1 = returnFunc(ctx, cluster)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// ClusterService_ReconcileCluster_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ReconcileCluster'
-type ClusterService_ReconcileCluster_Call struct {
-	*mock.Call
-}
-
-// ReconcileCluster is a helper method to define mock.On call
-//   - ctx context.Context
-//   - cluster infrav1alpha1.ExoscaleCluster
-func (_e *ClusterService_Expecter) ReconcileCluster(ctx any, cluster any) *ClusterService_ReconcileCluster_Call {
-	return &ClusterService_ReconcileCluster_Call{Call: _e.mock.On("ReconcileCluster", ctx, cluster)}
-}
-
-func (_c *ClusterService_ReconcileCluster_Call) Run(run func(ctx context.Context, cluster infrav1alpha1.ExoscaleCluster)) *ClusterService_ReconcileCluster_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 infrav1alpha1.ExoscaleCluster
-		if args[1] != nil {
-			arg1 = args[1].(infrav1alpha1.ExoscaleCluster)
-		}
-		run(arg0, arg1)
-	})
-	return _c
-}
-
-func (_c *ClusterService_ReconcileCluster_Call) Return(cluster infrav1alpha1.ExoscaleCluster, err error) *ClusterService_ReconcileCluster_Call {
-	_c.Call.Return(cluster, err)
-	return _c
-}
-
-func (_c *ClusterService_ReconcileCluster_Call) RunAndReturn(run func(ctx context.Context, cluster infrav1alpha1.ExoscaleCluster) (infrav1alpha1.ExoscaleCluster, error)) *ClusterService_ReconcileCluster_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // DeleteCluster provides a mock function for the type ClusterService
-func (_mock *ClusterService) DeleteCluster(ctx context.Context, cluster infrav1alpha1.ExoscaleCluster) (infrav1alpha1.ExoscaleCluster, error) {
+func (_mock *ClusterService) DeleteCluster(ctx context.Context, cluster v1alpha1.ExoscaleCluster) (v1alpha1.ExoscaleCluster, error) {
 	ret := _mock.Called(ctx, cluster)
 
 	if len(ret) == 0 {
 		panic("no return value specified for DeleteCluster")
 	}
 
-	var r0 infrav1alpha1.ExoscaleCluster
+	var r0 v1alpha1.ExoscaleCluster
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, infrav1alpha1.ExoscaleCluster) (infrav1alpha1.ExoscaleCluster, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v1alpha1.ExoscaleCluster) (v1alpha1.ExoscaleCluster, error)); ok {
 		return returnFunc(ctx, cluster)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, infrav1alpha1.ExoscaleCluster) infrav1alpha1.ExoscaleCluster); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v1alpha1.ExoscaleCluster) v1alpha1.ExoscaleCluster); ok {
 		r0 = returnFunc(ctx, cluster)
 	} else {
-		r0 = ret.Get(0).(infrav1alpha1.ExoscaleCluster)
+		r0 = ret.Get(0).(v1alpha1.ExoscaleCluster)
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, infrav1alpha1.ExoscaleCluster) error); ok {
+	if returnFunc, ok := ret.Get(1).(func(context.Context, v1alpha1.ExoscaleCluster) error); ok {
 		r1 = returnFunc(ctx, cluster)
 	} else {
 		r1 = ret.Error(1)
@@ -134,32 +71,101 @@ type ClusterService_DeleteCluster_Call struct {
 
 // DeleteCluster is a helper method to define mock.On call
 //   - ctx context.Context
-//   - cluster infrav1alpha1.ExoscaleCluster
+//   - cluster v1alpha1.ExoscaleCluster
 func (_e *ClusterService_Expecter) DeleteCluster(ctx any, cluster any) *ClusterService_DeleteCluster_Call {
 	return &ClusterService_DeleteCluster_Call{Call: _e.mock.On("DeleteCluster", ctx, cluster)}
 }
 
-func (_c *ClusterService_DeleteCluster_Call) Run(run func(ctx context.Context, cluster infrav1alpha1.ExoscaleCluster)) *ClusterService_DeleteCluster_Call {
+func (_c *ClusterService_DeleteCluster_Call) Run(run func(ctx context.Context, cluster v1alpha1.ExoscaleCluster)) *ClusterService_DeleteCluster_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 infrav1alpha1.ExoscaleCluster
+		var arg1 v1alpha1.ExoscaleCluster
 		if args[1] != nil {
-			arg1 = args[1].(infrav1alpha1.ExoscaleCluster)
+			arg1 = args[1].(v1alpha1.ExoscaleCluster)
 		}
-		run(arg0, arg1)
+		run(
+			arg0,
+			arg1,
+		)
 	})
 	return _c
 }
 
-func (_c *ClusterService_DeleteCluster_Call) Return(cluster infrav1alpha1.ExoscaleCluster, err error) *ClusterService_DeleteCluster_Call {
-	_c.Call.Return(cluster, err)
+func (_c *ClusterService_DeleteCluster_Call) Return(exoscaleCluster v1alpha1.ExoscaleCluster, err error) *ClusterService_DeleteCluster_Call {
+	_c.Call.Return(exoscaleCluster, err)
 	return _c
 }
 
-func (_c *ClusterService_DeleteCluster_Call) RunAndReturn(run func(ctx context.Context, cluster infrav1alpha1.ExoscaleCluster) (infrav1alpha1.ExoscaleCluster, error)) *ClusterService_DeleteCluster_Call {
+func (_c *ClusterService_DeleteCluster_Call) RunAndReturn(run func(ctx context.Context, cluster v1alpha1.ExoscaleCluster) (v1alpha1.ExoscaleCluster, error)) *ClusterService_DeleteCluster_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ReconcileCluster provides a mock function for the type ClusterService
+func (_mock *ClusterService) ReconcileCluster(ctx context.Context, cluster v1alpha1.ExoscaleCluster) (v1alpha1.ExoscaleCluster, error) {
+	ret := _mock.Called(ctx, cluster)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ReconcileCluster")
+	}
+
+	var r0 v1alpha1.ExoscaleCluster
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v1alpha1.ExoscaleCluster) (v1alpha1.ExoscaleCluster, error)); ok {
+		return returnFunc(ctx, cluster)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v1alpha1.ExoscaleCluster) v1alpha1.ExoscaleCluster); ok {
+		r0 = returnFunc(ctx, cluster)
+	} else {
+		r0 = ret.Get(0).(v1alpha1.ExoscaleCluster)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, v1alpha1.ExoscaleCluster) error); ok {
+		r1 = returnFunc(ctx, cluster)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// ClusterService_ReconcileCluster_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ReconcileCluster'
+type ClusterService_ReconcileCluster_Call struct {
+	*mock.Call
+}
+
+// ReconcileCluster is a helper method to define mock.On call
+//   - ctx context.Context
+//   - cluster v1alpha1.ExoscaleCluster
+func (_e *ClusterService_Expecter) ReconcileCluster(ctx any, cluster any) *ClusterService_ReconcileCluster_Call {
+	return &ClusterService_ReconcileCluster_Call{Call: _e.mock.On("ReconcileCluster", ctx, cluster)}
+}
+
+func (_c *ClusterService_ReconcileCluster_Call) Run(run func(ctx context.Context, cluster v1alpha1.ExoscaleCluster)) *ClusterService_ReconcileCluster_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 v1alpha1.ExoscaleCluster
+		if args[1] != nil {
+			arg1 = args[1].(v1alpha1.ExoscaleCluster)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *ClusterService_ReconcileCluster_Call) Return(exoscaleCluster v1alpha1.ExoscaleCluster, err error) *ClusterService_ReconcileCluster_Call {
+	_c.Call.Return(exoscaleCluster, err)
+	return _c
+}
+
+func (_c *ClusterService_ReconcileCluster_Call) RunAndReturn(run func(ctx context.Context, cluster v1alpha1.ExoscaleCluster) (v1alpha1.ExoscaleCluster, error)) *ClusterService_ReconcileCluster_Call {
 	_c.Call.Return(run)
 	return _c
 }

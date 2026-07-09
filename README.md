@@ -75,8 +75,8 @@ $> kubectl delete cluster/my-cluster ## it will also delete `exoscaleclusters/my
 
 ## End-to-End testing
 ```Bash
-$> export EXOSCALE_API_KEY=<api-key>
-$> export EXOSCALE_API_SECRET=<api-secret>
+$> export EXOSCALE_API_KEY=<api-key>       ## Optional if exocli is not configured
+$> export EXOSCALE_API_SECRET=<api-secret> ## Optional if exocli is not configured
 
 $> make chainsaw-test-e2e
 ```

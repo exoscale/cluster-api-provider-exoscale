@@ -86,8 +86,6 @@ test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expect
 	KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v
 	$(MAKE) cleanup-test-e2e
 
-
-
 CHAINSAW_VALUES_SUFFIX ?=
 CHAINSAW_VALUES_ZONE ?=
 CHAINSAW_MACHINE_TEMPLATE_ID ?=
@@ -97,12 +95,24 @@ CHAINSAW_ALL_TEST_DIRS := $(shell ls -d -1 test/chainsaw/*)
 CHAINSAW_MACHINE_TEST_DIR := test/chainsaw/deploy-machine
 CHAINSAW_TEST_DIRS ?= $(if $(and $(CHAINSAW_MACHINE_TEMPLATE_ID),$(CHAINSAW_MACHINE_SSH_KEY)),$(CHAINSAW_ALL_TEST_DIRS),$(filter-out $(CHAINSAW_MACHINE_TEST_DIR),$(CHAINSAW_ALL_TEST_DIRS)))
 
-
 .PHONY: chainsaw-test-e2e
 chainsaw-test-e2e: setup-test-e2e-chainsaw chainsaw ## Run the e2e tests. Expected an isolated environment using Kind.
 	$(CHAINSAW) test --set='suffix=$(CHAINSAW_VALUES_SUFFIX),zone=$(CHAINSAW_VALUES_ZONE),templateID=$(CHAINSAW_MACHINE_TEMPLATE_ID),sshKey=$(CHAINSAW_MACHINE_SSH_KEY),instanceType=$(CHAINSAW_MACHINE_INSTANCE_TYPE)' $(CHAINSAW_TEST_DIRS)
 
-setup-test-e2e-chainsaw: setup-test-e2e docker-build manifests generate kustomize clusterctl ## Set up a Kind, CAPI,  cluster for e2e tests if it does not exist
+## Exoscale credentials: use env vars if already set, otherwise read from config file.
+EXOSCALE_CONFIG      ?= $(HOME)/.config/exoscale/exoscale.toml
+EXOSCALE_ACCOUNT     ?= $(shell $(YQ) '.defaultaccount' $(EXOSCALE_CONFIG) 2>/dev/null)
+EXOSCALE_API_KEY     ?= $(shell $(YQ) '.accounts[] | select(.name == "$(EXOSCALE_ACCOUNT)") | .key' $(EXOSCALE_CONFIG) 2>/dev/null)
+EXOSCALE_API_SECRET  ?= $(shell $(YQ) '.accounts[] | select(.name == "$(EXOSCALE_ACCOUNT)") | .secret' $(EXOSCALE_CONFIG) 2>/dev/null)
+
+.PHONY: check-exoscale-creds
+check-exoscale-creds: yq ## Check that exoscale creds are setup before running e2e test.
+	@if [ -z "$(EXOSCALE_API_KEY)" ] || [ -z "$(EXOSCALE_API_SECRET)" ]; then \
+		echo "ERROR: EXOSCALE_API_KEY/EXOSCALE_API_SECRET not set and could not be read from $(EXOSCALE_CONFIG)"; \
+		exit 1; \
+	fi
+
+setup-test-e2e-chainsaw: check-exoscale-creds setup-test-e2e docker-build manifests generate kustomize clusterctl ## Set up a Kind, CAPI,  cluster for e2e tests if it does not exist
 	## Load docker image into kind cluster.
 	$(KIND) load docker-image --name $(KIND_CLUSTER) $(IMG)
 
@@ -119,6 +129,9 @@ setup-test-e2e-chainsaw: setup-test-e2e docker-build manifests generate kustomiz
 	cd $(E2E_TMP) && "$(KUSTOMIZE)" edit set image controller=$(IMG)
 	"$(KUSTOMIZE)" build --load-restrictor LoadRestrictionsNone $(E2E_TMP) | $(KUBECTL) apply -f -
 	rm -rf $(E2E_TMP)
+	$(KUBECTL) wait deployment/cluster-api-provider-exoscale-controller-manager \
+		--namespace cluster-api-provider-exoscale-system \
+		--for=condition=Available
 
 	$(KUBECTL) create secret generic exoscale \
 		--from-literal=apikey=$(EXOSCALE_API_KEY) \
@@ -226,6 +239,7 @@ ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 CLUSTERCTL = $(LOCALBIN)/clusterctl
 CHAINSAW = $(LOCALBIN)/chainsaw
+YQ = $(LOCALBIN)/yq
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.8.1
@@ -233,6 +247,7 @@ CONTROLLER_TOOLS_VERSION ?= v0.20.1
 GOLANGCI_LINT_VERSION ?= v2.8.0
 CLUSTERCTL_VERSION ?= v1.13.2
 CHAINSAW_VERSION ?= v0.2.15
+YQ_VERSION ?= v4.53.3
 
 #ENVTEST_VERSION is the version of controller-runtime release branch to fetch the envtest setup script (i.e. release-0.20)
 ENVTEST_VERSION ?= $(shell v='$(call gomodver,sigs.k8s.io/controller-runtime)'; \
@@ -263,6 +278,11 @@ $(CLUSTERCTL): $(LOCALBIN)
 chainsaw: $(CHAINSAW) ## Download chainsaw locally if necessary.
 $(CHAINSAW): $(LOCALBIN)
 	$(call go-install-tool,$(CHAINSAW),github.com/kyverno/chainsaw,$(CHAINSAW_VERSION))
+
+.PHONY: yq
+yq: $(YQ) ## Download yq locally if necessary.
+$(YQ): $(LOCALBIN)
+	$(call go-install-tool,$(YQ),github.com/mikefarah/yq/v4,$(YQ_VERSION))
 
 .PHONY: setup-envtest
 setup-envtest: envtest ## Download the binaries required for ENVTEST in the local bin directory.

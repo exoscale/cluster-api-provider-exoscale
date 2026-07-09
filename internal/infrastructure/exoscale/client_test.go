@@ -2,6 +2,7 @@ package exoscale
 
 import (
 	"context"
+	"encoding/base64"
 	"testing"
 
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/domain"
@@ -234,6 +235,125 @@ func Test_cloud_ListElasticIPs(t *testing.T) {
 
 			assert.ErrorIs(t, err, ut.err)
 			assert.Equal(t, ut.output, output)
+		})
+	}
+}
+
+func Test_cloud_CreateInstance(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	instanceID := uuid.New()
+	templateID := uuid.New()
+	securityGroupID := uuid.New()
+	rootVolumeSizeGB := int64(20)
+	instanceTypeID := egoscale.UUID(uuid.New().String())
+	instanceType := egoscale.InstanceType{
+		ID:     instanceTypeID,
+		Family: egoscale.InstanceTypeFamilyStandard,
+		Size:   egoscale.InstanceTypeSize("2"),
+	}
+	spec := domain.InstanceSpec{
+		Name:             "machine-0",
+		TemplateID:       templateID,
+		InstanceType:     "standard-2",
+		SSHKey:           "ssh-key",
+		SecurityGroupIDs: []uuid.UUID{securityGroupID},
+		RootVolumeSizeGB: &rootVolumeSizeGB,
+		UserData:         "#cloud-config",
+		Labels:           map[string]string{"machine": "uid"},
+	}
+
+	createOp := &egoscale.Operation{Reference: &egoscale.OperationReference{ID: egoscale.UUID(instanceID.String())}}
+	exoClient := &instanceExoscaleClientFake{
+		ExoscaleClient: mocks.NewExoscaleClient(t),
+		listInstanceTypes: func(context.Context) (*egoscale.ListInstanceTypesResponse, error) {
+			return &egoscale.ListInstanceTypesResponse{InstanceTypes: []egoscale.InstanceType{instanceType}}, nil
+		},
+		createInstance: func(_ context.Context, req egoscale.CreateInstanceRequest) (*egoscale.Operation, error) {
+			assert.Equal(t, egoscale.CreateInstanceRequest{
+				DiskSize:           rootVolumeSizeGB,
+				InstanceType:       &instanceType,
+				Labels:             egoscale.Labels{"machine": "uid"},
+				Name:               "machine-0",
+				PublicIPAssignment: egoscale.PublicIPAssignmentInet4,
+				SecurityGroups:     []egoscale.SecurityGroup{{ID: egoscale.UUID(securityGroupID.String())}},
+				SSHKey:             &egoscale.SSHKey{Name: "ssh-key"},
+				Template:           &egoscale.Template{ID: egoscale.UUID(templateID.String())},
+				UserData:           base64.StdEncoding.EncodeToString([]byte("#cloud-config")),
+			}, req)
+			return createOp, nil
+		},
+	}
+	exoClient.EXPECT().Wait(ctx, createOp).
+		Return(&egoscale.Operation{}, nil)
+
+	client := cloud{exoClient: exoClient, instanceClient: exoClient}
+
+	output, err := client.CreateInstance(ctx, spec)
+
+	assert.NoError(t, err)
+	assert.Equal(t, instanceID, output)
+}
+
+type instanceExoscaleClientFake struct {
+	*mocks.ExoscaleClient
+	listInstances     func(context.Context, ...egoscale.ListInstancesOpt) (*egoscale.ListInstancesResponse, error)
+	createInstance    func(context.Context, egoscale.CreateInstanceRequest) (*egoscale.Operation, error)
+	getInstance       func(context.Context, egoscale.UUID) (*egoscale.Instance, error)
+	deleteInstance    func(context.Context, egoscale.UUID) (*egoscale.Operation, error)
+	listInstanceTypes func(context.Context) (*egoscale.ListInstanceTypesResponse, error)
+}
+
+func (f *instanceExoscaleClientFake) ListInstances(ctx context.Context, opts ...egoscale.ListInstancesOpt) (*egoscale.ListInstancesResponse, error) {
+	if f.listInstances == nil {
+		panic("unexpected ListInstances")
+	}
+	return f.listInstances(ctx, opts...)
+}
+
+func (f *instanceExoscaleClientFake) CreateInstance(ctx context.Context, req egoscale.CreateInstanceRequest) (*egoscale.Operation, error) {
+	if f.createInstance == nil {
+		panic("unexpected CreateInstance")
+	}
+	return f.createInstance(ctx, req)
+}
+
+func (f *instanceExoscaleClientFake) GetInstance(ctx context.Context, id egoscale.UUID) (*egoscale.Instance, error) {
+	if f.getInstance == nil {
+		panic("unexpected GetInstance")
+	}
+	return f.getInstance(ctx, id)
+}
+
+func (f *instanceExoscaleClientFake) DeleteInstance(ctx context.Context, id egoscale.UUID) (*egoscale.Operation, error) {
+	if f.deleteInstance == nil {
+		panic("unexpected DeleteInstance")
+	}
+	return f.deleteInstance(ctx, id)
+}
+
+func (f *instanceExoscaleClientFake) ListInstanceTypes(ctx context.Context) (*egoscale.ListInstanceTypesResponse, error) {
+	if f.listInstanceTypes == nil {
+		panic("unexpected ListInstanceTypes")
+	}
+	return f.listInstanceTypes(ctx)
+}
+
+func Test_normalizeInstanceType(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]string{
+		"small":      "small",
+		"standard-2": "standard.2",
+		"memory-4":   "memory.4",
+		"compute-8":  "cpu.8",
+		"cpu.8":      "cpu.8",
+	}
+
+	for input, expected := range tests {
+		t.Run(input, func(t *testing.T) {
+			assert.Equal(t, expected, normalizeInstanceType(input))
 		})
 	}
 }

@@ -40,7 +40,7 @@ const namespace = "cluster-api-provider-exoscale-system"
 const serviceAccountName = "cluster-api-provider-exoscale-controller-manager"
 
 // metricsServiceName is the name of the metrics service of the project
-const metricsServiceName = "cluster-api-provider-exoscale-controller-manager-metrics-service"
+const metricsServiceName = "cluster-api-provider-exoscale-controller-manager-metrics"
 
 // metricsRoleBindingName is the name of the RBAC that will be created to allow get the metrics data
 const metricsRoleBindingName = "cluster-api-provider-exoscale-metrics-binding"

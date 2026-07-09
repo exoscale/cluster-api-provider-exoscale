@@ -10,7 +10,7 @@ spec:
   - name: zone
     value: ($values.zone || 'bg-sof-1')
   - name: clusterName
-    value: (join('-', ['capi-cluster', ($values.suffix || 'local')]))
+    value: (join('-', ['exo-dc', ($values.suffix || 'local')]))
   - name: namespace
     value: default
   steps:
@@ -51,6 +51,31 @@ spec:
                 namespace: ($namespace)
               (spec.controlPlaneEndpoint.host == status.controlPlaneEndpoint.host): true
               (spec.controlPlaneEndpoint.port == status.controlPlaneEndpoint.port): true
+
+    - name: assert elastic ip endpoint
+      try:
+        - assert:
+            timeout: 10s
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleCluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+              status:
+                controlPlaneEndpoint:
+                  (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
+                  (regex_match('^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$', host)): true
+                  port: 6443
+        - script:
+            timeout: 10s
+            env:
+              - name: CLUSTER_NAME
+                value: ($clusterName)
+            content: |
+              cluster_id=$(kubectl get exoscalecluster "$CLUSTER_NAME" -n default -o jsonpath='{.status.id}')
+              description=$(kubectl get exoscalecluster "$CLUSTER_NAME" -n default -o jsonpath='{.status.controlPlaneEndpoint.description}')
+              test "$description" = "capi - clusterID - $cluster_id"
 
     - name: assert security group rule node
       try:

@@ -1,0 +1,18 @@
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Machine
+metadata:
+  name: ($machineName)
+  namespace: ($namespace)
+  labels:
+    cluster.x-k8s.io/cluster-name: ($clusterName)
+spec:
+  clusterName: ($clusterName)
+  bootstrap:
+    configRef:
+      apiGroup: bootstrap.cluster.x-k8s.io
+      kind: KubeadmConfig
+      name: ($machineName)
+  infrastructureRef:
+    apiGroup: infrastructure.cluster.x-k8s.io
+    kind: ExoscaleMachine
+    name: ($machineName)

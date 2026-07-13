@@ -2,4 +2,5 @@
 resources:
 - infrastructure_v1alpha1_exoscalecluster.yaml
 - infrastructure_v1alpha1_exoscalemachine.yaml
+- infrastructure_v1alpha1_exoscaleclustertemplate.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

@@ -1,0 +1,36 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: deploy-cluster-template
+spec:
+  timeouts:
+    delete: 5m
+    cleanup: 5m
+  bindings:
+  - name: templateName
+    value: (join('-', ['capi-cluster-template', ($values.suffix || 'local')]))
+  - name: namespace
+    value: default
+  steps:
+    - name: apply resources
+      try:
+        - apply:
+            file: exoscaleclustertemplate.yaml
+        - update:
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleClusterTemplate
+              metadata:
+                name: ($templateName)
+                namespace: ($namespace)
+              spec:
+                template:
+                  spec:
+                    zone: ch-gva-2   # trying to change the zone
+            expect:
+              - match:
+                  apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+                  kind: ExoscaleClusterTemplate
+                check:
+                  ($error != null): true
+                  (contains($error, 'ExoscaleClusterTemplate.spec is immutable')): true

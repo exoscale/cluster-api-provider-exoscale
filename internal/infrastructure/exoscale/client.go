@@ -2,8 +2,13 @@ package exoscale
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"maps"
+	"net"
+	"strings"
+	"time"
 
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/domain"
 
@@ -14,8 +19,19 @@ import (
 
 var _ domain.Cloud = (*cloud)(nil)
 
+const defaultRootVolumeSizeGB int64 = 10
+
 type cloud struct {
-	exoClient domain.ExoscaleClient
+	exoClient      domain.ExoscaleClient
+	instanceClient instanceClient
+}
+
+type instanceClient interface {
+	ListInstances(ctx context.Context, opts ...egoscale.ListInstancesOpt) (*egoscale.ListInstancesResponse, error)
+	CreateInstance(ctx context.Context, req egoscale.CreateInstanceRequest) (*egoscale.Operation, error)
+	GetInstance(ctx context.Context, id egoscale.UUID) (*egoscale.Instance, error)
+	DeleteInstance(ctx context.Context, id egoscale.UUID) (*egoscale.Operation, error)
+	ListInstanceTypes(ctx context.Context) (*egoscale.ListInstanceTypesResponse, error)
 }
 
 func NewCloud(apiKey, apisecret string, zone egoscale.ZoneName) (*cloud, error) {
@@ -31,10 +47,10 @@ func NewCloud(apiKey, apisecret string, zone egoscale.ZoneName) (*cloud, error) 
 
 	exoClient = exoClient.WithEndpoint(endpoint)
 
-	return &cloud{exoClient: exoClient}, nil
+	return &cloud{exoClient: exoClient, instanceClient: exoClient}, nil
 }
 
-// CreateElasticIP create a managed elastic IP.
+// CreateElasticIP creates a managed elastic IP and waits for the operation to complete.
 func (c *cloud) CreateElasticIP(ctx context.Context, healthCheckPort int32, description string) (uuid.UUID, error) {
 	op, err := c.exoClient.CreateElasticIP(ctx, egoscale.CreateElasticIPRequest{
 		Description: description,
@@ -279,4 +295,187 @@ func (c *cloud) ListSecurityGroupRules(ctx context.Context, sgID uuid.UUID) ([]d
 	}
 
 	return rules, nil
+}
+
+func (c *cloud) ListInstances(ctx context.Context) ([]domain.Instance, error) {
+	client, err := c.instances()
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := client.ListInstances(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to list instances: %w", err)
+	}
+
+	instances := make([]domain.Instance, 0, len(resp.Instances))
+	for _, instance := range resp.Instances {
+		id, err := uuid.Parse(instance.ID.String())
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse instance ID: %w", err)
+		}
+
+		instances = append(instances, domain.Instance{
+			ID:        id,
+			Name:      instance.Name,
+			State:     string(instance.State),
+			PublicIP:  ipString(instance.PublicIP),
+			CreatedAt: formatTime(instance.CreatedAT),
+			Labels:    copyLabels(instance.Labels),
+		})
+	}
+
+	return instances, nil
+}
+
+func (c *cloud) CreateInstance(ctx context.Context, spec domain.InstanceSpec) (uuid.UUID, error) {
+	client, err := c.instances()
+	if err != nil {
+		return uuid.Nil, err
+	}
+
+	instanceTypes, err := client.ListInstanceTypes(ctx)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("unable to list instance types: %w", err)
+	}
+
+	instanceType, err := instanceTypes.FindInstanceTypeByIdOrFamilyAndSize(normalizeInstanceType(spec.InstanceType))
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("unable to find instance type %q: %w", spec.InstanceType, err)
+	}
+
+	diskSize := defaultRootVolumeSizeGB
+	if spec.RootVolumeSizeGB != nil {
+		diskSize = *spec.RootVolumeSizeGB
+	}
+
+	req := egoscale.CreateInstanceRequest{
+		DiskSize:           diskSize,
+		InstanceType:       &instanceType,
+		Labels:             egoscale.Labels(spec.Labels),
+		Name:               spec.Name,
+		PublicIPAssignment: egoscale.PublicIPAssignmentInet4,
+		SecurityGroups:     securityGroups(spec.SecurityGroupIDs),
+		SSHKey:             &egoscale.SSHKey{Name: spec.SSHKey},
+		Template:           &egoscale.Template{ID: egoscale.UUID(spec.TemplateID.String())},
+	}
+	if spec.UserData != "" {
+		req.UserData = base64.StdEncoding.EncodeToString([]byte(spec.UserData))
+	}
+
+	op, err := client.CreateInstance(ctx, req)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("unable to create instance: %w", err)
+	}
+
+	if _, err := c.exoClient.Wait(ctx, op); err != nil {
+		return uuid.Nil, fmt.Errorf("error while waiting for instance creation: %w", err)
+	}
+
+	id, err := uuid.Parse(op.Reference.ID.String())
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("unable to parse response from create instance: %w", err)
+	}
+
+	return id, nil
+}
+
+func (c *cloud) GetInstance(ctx context.Context, id uuid.UUID) (domain.Instance, error) {
+	client, err := c.instances()
+	if err != nil {
+		return domain.Instance{}, err
+	}
+
+	instance, err := client.GetInstance(ctx, egoscale.UUID(id.String()))
+	if err != nil {
+		if errors.Is(err, egoscale.ErrNotFound) {
+			err = domain.ErrInstanceNotFound
+		}
+		return domain.Instance{}, err
+	}
+
+	return domain.Instance{
+		ID:        id,
+		Name:      instance.Name,
+		State:     string(instance.State),
+		PublicIP:  ipString(instance.PublicIP),
+		CreatedAt: formatTime(instance.CreatedAT),
+		Labels:    copyLabels(instance.Labels),
+	}, nil
+}
+
+func (c *cloud) DeleteInstance(ctx context.Context, id uuid.UUID) error {
+	client, err := c.instances()
+	if err != nil {
+		return err
+	}
+
+	op, err := client.DeleteInstance(ctx, egoscale.UUID(id.String()))
+	if err != nil {
+		return fmt.Errorf("unable to delete instance: %w", err)
+	}
+
+	if _, err := c.exoClient.Wait(ctx, op); err != nil {
+		return fmt.Errorf("error while waiting for instance deletion: %w", err)
+	}
+
+	return nil
+}
+
+func (c *cloud) instances() (instanceClient, error) {
+	if c.instanceClient == nil {
+		return nil, fmt.Errorf("exoscale client does not support instances")
+	}
+	return c.instanceClient, nil
+}
+
+func securityGroups(ids []uuid.UUID) []egoscale.SecurityGroup {
+	groups := make([]egoscale.SecurityGroup, 0, len(ids))
+	for _, id := range ids {
+		groups = append(groups, egoscale.SecurityGroup{ID: egoscale.UUID(id.String())})
+	}
+	return groups
+}
+
+func normalizeInstanceType(instanceType string) string {
+	if strings.Contains(instanceType, ".") {
+		return instanceType
+	}
+
+	for _, family := range []string{"standard", "memory", "startup"} {
+		if suffix, ok := strings.CutPrefix(instanceType, family+"-"); ok {
+			return family + "." + suffix
+		}
+	}
+	if suffix, ok := strings.CutPrefix(instanceType, "compute-"); ok {
+		return "cpu." + suffix
+	}
+	if instanceType == "compute" {
+		return "cpu"
+	}
+
+	return instanceType
+}
+
+func formatTime(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.Format(time.RFC3339)
+}
+
+func ipString(ip net.IP) string {
+	if len(ip) == 0 {
+		return ""
+	}
+	return ip.String()
+}
+
+func copyLabels(labels map[string]string) map[string]string {
+	if len(labels) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(labels))
+	maps.Copy(out, labels)
+	return out
 }

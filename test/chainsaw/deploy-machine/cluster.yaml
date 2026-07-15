@@ -1,0 +1,34 @@
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: ExoscaleCluster
+metadata:
+  name: ($clusterName)
+  namespace: ($namespace)
+spec:
+  zone: ($zone)
+  securityGroupControlPlane:
+    rules:
+      - description: allow ssh
+        network: "0.0.0.0/0"
+        endPort: 22
+        startPort: 22
+        protocol: tcp
+        flowDirection: ingress
+  securityGroupNode:
+    rules:
+      - description: allow ssh
+        network: "0.0.0.0/0"
+        endPort: 22
+        startPort: 22
+        protocol: tcp
+        flowDirection: ingress
+---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: ($clusterName)
+  namespace: ($namespace)
+spec:
+  infrastructureRef:
+    apiGroup: infrastructure.cluster.x-k8s.io
+    kind: ExoscaleCluster
+    name: ($clusterName)

@@ -1,0 +1,103 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: deploy-machine
+spec:
+  timeouts:
+    delete: 10m
+    cleanup: 10m
+  bindings:
+  - name: zone
+    value: ($values.zone || 'bg-sof-1')
+  - name: clusterName
+    value: (join('-', ['exo-dm', ($values.suffix || 'local')]))
+  - name: machineName
+    value: (join('-', ['machine', ($values.suffix || 'local')]))
+  - name: bootstrapSecretName
+    value: (join('-', ['bootstrap', ($values.suffix || 'local')]))
+  - name: namespace
+    value: default
+  - name: templateID
+    value: ($values.templateID)
+  - name: sshKey
+    value: ($values.sshKey)
+  - name: instanceType
+    value: ($values.instanceType || 'small')
+  steps:
+    - name: apply cluster
+      try:
+        - apply:
+            file: cluster.yaml
+
+    - name: assert cluster ready
+      try:
+        - assert:
+            timeout: 5m
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleCluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+              status:
+                initialization:
+                  provisioned: true
+                securityGroupNode:
+                  (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
+                conditions:
+                  - type: Ready
+                    reason: ReconcileSuccess
+                    status: "True"
+
+    - name: apply machine
+      try:
+        - apply:
+            file: machine.yaml
+        - script:
+            timeout: 10s
+            env:
+              - name: MACHINE_NAME
+                value: ($machineName)
+            content: |
+              kubectl get machine "$MACHINE_NAME" -n default -o jsonpath='{.metadata.uid}'
+            outputs:
+              - name: machineUID
+                value: ($stdout)
+        - apply:
+            file: exoscalemachine.yaml
+
+    - name: assert machine ready
+      try:
+        - assert:
+            timeout: 10m
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleMachine
+              metadata:
+                name: ($machineName)
+                namespace: ($namespace)
+              status:
+                ready: true
+                instanceState: running
+                (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', instanceID)): true
+                (length(addresses[?type == 'ExternalIP'])): 1
+        - script:
+            timeout: 10s
+            env:
+              - name: MACHINE_NAME
+                value: ($machineName)
+            content: |
+              instance_id=$(kubectl get exoscalemachine "$MACHINE_NAME" -n default -o jsonpath='{.status.instanceID}')
+              provider_id=$(kubectl get exoscalemachine "$MACHINE_NAME" -n default -o jsonpath='{.spec.providerID}')
+              test "$provider_id" = "exoscale:///$instance_id"
+
+    - name: delete machine
+      try:
+        - script:
+            timeout: 10m
+            env:
+              - name: MACHINE_NAME
+                value: ($machineName)
+            content: |
+              kubectl delete exoscalemachine "$MACHINE_NAME" -n default --timeout=10m
+              kubectl wait --for=delete exoscalemachine/"$MACHINE_NAME" -n default --timeout=10m

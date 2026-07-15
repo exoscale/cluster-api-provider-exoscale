@@ -18,40 +18,77 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
-// ExoscaleMachineSpec defines the desired state of ExoscaleMachine
+// ExoscaleMachineSpec defines the desired state of an Exoscale compute instance
+// backing a Cluster API Machine.
+// Zone is inherited from ExoscaleCluster.spec.zone. If multi-zone support is
+// added later, use CAPI Machine.spec.failureDomain to pick the target zone
+// instead of duplicating zone here.
 type ExoscaleMachineSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	// The following markers will use OpenAPI v3 schema to validate the value
-	// More info: https://book.kubebuilder.io/reference/markers/crd-validation.html
+	// templateID is the UUID of an existing Exoscale instance template.
+	// +required
+	// +kubebuilder:validation:Pattern=`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
+	TemplateID string `json:"templateID"`
 
-	// foo is an example field of ExoscaleMachine. Edit exoscalemachine_types.go to remove/update
+	// instanceType is the Exoscale service offering (e.g. "standard-2", "gpu-plus").
+	// +required
+	// +kubebuilder:validation:Enum=small;medium;large;extra-large;huge;gpu-plus;gpu-2plus;dev;startup-2;startup-4;startup-8;startup-16;standard;standard-2;standard-4;standard-8;standard-12;standard-16;standard-20;standard-24;standard-32;memory;memory-2;memory-4;memory-8;memory-12;memory-16;memory-20;memory-24;compute;compute-2;compute-4;compute-8;compute-12;compute-16;compute-20;compute-24
+	InstanceType string `json:"instanceType"`
+
+	// sshKey is the name of a pre-existing SSH key registered in the Exoscale project.
+	// +required
+	SSHKey string `json:"sshKey"`
+
+	// securityGroups lists UUIDs of Exoscale Security Groups to attach in addition
+	// to the cluster's node security group.
 	// +optional
-	Foo *string `json:"foo,omitempty"`
+	SecurityGroups []string `json:"securityGroups,omitempty"`
+
+	// rootVolumeSizeGB overrides the disk size declared by the template.
+	// +optional
+	// +kubebuilder:validation:Minimum=10
+	// +kubebuilder:validation:Maximum=10000
+	RootVolumeSizeGB *int64 `json:"rootVolumeSizeGB,omitempty"`
+
+	// providerID is the cloud-provider identifier for this instance in the form
+	// exoscale:///<instance-uuid>. Set by the controller after the instance is created.
+	// CAPI uses this field to match the InfraMachine to the Node object.
+	// +optional
+	ProviderID *string `json:"providerID,omitempty"`
 }
 
-// ExoscaleMachineStatus defines the observed state of ExoscaleMachine.
+// ExoscaleMachineStatus defines the observed state of an ExoscaleMachine.
+// Fields follow the CAPI InfraMachine contract:
+// https://cluster-api.sigs.k8s.io/developer/providers/contracts/infra-machine
 type ExoscaleMachineStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// ready is true when the Exoscale instance is running and reachable.
+	Ready bool `json:"ready"`
 
-	// For Kubernetes API conventions, see:
-	// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
+	// instanceID is the Exoscale instance UUID assigned after creation.
+	// +optional
+	// +kubebuilder:validation:Pattern=`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
+	InstanceID string `json:"instanceID,omitempty"`
 
-	// conditions represent the current state of the ExoscaleMachine resource.
-	// Each condition has a unique type and reflects the status of a specific aspect of the resource.
-	//
-	// Standard condition types include:
-	// - "Available": the resource is fully functional
-	// - "Progressing": the resource is being created or updated
-	// - "Degraded": the resource failed to reach or maintain its desired state
-	//
-	// The status of each condition is one of True, False, or Unknown.
+	// instanceState is the Exoscale instance state (e.g. "running", "stopped").
+	// +optional
+	InstanceState string `json:"instanceState,omitempty"`
+
+	// addresses are the network addresses of the instance (public and private IPs).
+	// +optional
+	// +listType=atomic
+	Addresses []clusterv1.MachineAddress `json:"addresses,omitempty"`
+
+	// failureReason is a short machine-readable token set on terminal errors.
+	// +optional
+	FailureReason string `json:"failureReason,omitempty"`
+
+	// failureMessage is a human-readable elaboration of failureReason.
+	// +optional
+	FailureMessage string `json:"failureMessage,omitempty"`
+
+	// conditions represents the observations of the current state of the ExoscaleMachine.
 	// +listType=map
 	// +listMapKey=type
 	// +optional
@@ -60,28 +97,39 @@ type ExoscaleMachineStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:path=exoscalemachines,scope=Namespaced,categories=cluster-api
+// +kubebuilder:resource:path=exoscalemachines,scope=Namespaced,categories=cluster-api,shortName=exom
+// +kubebuilder:storageversion
+// +kubebuilder:printcolumn:name="Cluster",type=string,JSONPath=`.metadata.labels.cluster\.x-k8s\.io/cluster-name`
+// +kubebuilder:printcolumn:name="State",type=string,JSONPath=`.status.instanceState`
+// +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.ready`
+// +kubebuilder:printcolumn:name="ProviderID",type=string,JSONPath=`.spec.providerID`
+// +kubebuilder:printcolumn:name="Machine",type=string,JSONPath=`.metadata.ownerReferences[?(@.kind=="Machine")].name`
 
-// ExoscaleMachine is the Schema for the exoscalemachines API
+// ExoscaleMachine is the Schema for the exoscalemachines API.
 type ExoscaleMachine struct {
 	metav1.TypeMeta `json:",inline"`
 
-	// metadata is a standard object metadata
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitzero"`
 
-	// spec defines the desired state of ExoscaleMachine
 	// +required
 	Spec ExoscaleMachineSpec `json:"spec"`
 
-	// status defines the observed state of ExoscaleMachine
 	// +optional
 	Status ExoscaleMachineStatus `json:"status,omitzero"`
 }
 
+func (in *ExoscaleMachine) GetConditions() []metav1.Condition {
+	return in.Status.Conditions
+}
+
+func (in *ExoscaleMachine) SetConditions(conditions []metav1.Condition) {
+	in.Status.Conditions = conditions
+}
+
 // +kubebuilder:object:root=true
 
-// ExoscaleMachineList contains a list of ExoscaleMachine
+// ExoscaleMachineList contains a list of ExoscaleMachine.
 type ExoscaleMachineList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitzero"`

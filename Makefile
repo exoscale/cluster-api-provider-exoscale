@@ -88,10 +88,16 @@ test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expect
 
 CHAINSAW_VALUES_SUFFIX ?=
 CHAINSAW_VALUES_ZONE ?=
+CHAINSAW_MACHINE_TEMPLATE_ID ?=
+CHAINSAW_MACHINE_SSH_KEY ?=
+CHAINSAW_MACHINE_INSTANCE_TYPE ?= small
+CHAINSAW_ALL_TEST_DIRS := $(shell ls -d -1 test/chainsaw/*)
+CHAINSAW_MACHINE_TEST_DIR := test/chainsaw/deploy-machine
+CHAINSAW_TEST_DIRS ?= $(if $(and $(CHAINSAW_MACHINE_TEMPLATE_ID),$(CHAINSAW_MACHINE_SSH_KEY)),$(CHAINSAW_ALL_TEST_DIRS),$(filter-out $(CHAINSAW_MACHINE_TEST_DIR),$(CHAINSAW_ALL_TEST_DIRS)))
 
 .PHONY: chainsaw-test-e2e
 chainsaw-test-e2e: setup-test-e2e-chainsaw chainsaw ## Run the e2e tests. Expected an isolated environment using Kind.
-	$(CHAINSAW) test --set='suffix=$(CHAINSAW_VALUES_SUFFIX),zone=$(CHAINSAW_VALUES_ZONE)' `ls -d -1 test/chainsaw/*`
+	$(CHAINSAW) test --set='suffix=$(CHAINSAW_VALUES_SUFFIX),zone=$(CHAINSAW_VALUES_ZONE),templateID=$(CHAINSAW_MACHINE_TEMPLATE_ID),sshKey=$(CHAINSAW_MACHINE_SSH_KEY),instanceType=$(CHAINSAW_MACHINE_INSTANCE_TYPE)' $(CHAINSAW_TEST_DIRS)
 
 ## Exoscale credentials: use env vars if already set, otherwise read from config file.
 EXOSCALE_CONFIG      ?= $(HOME)/.config/exoscale/exoscale.toml

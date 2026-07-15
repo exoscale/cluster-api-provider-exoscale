@@ -104,3 +104,29 @@ type Cluster struct {
 	ID       *uuid.UUID
 	Endpoint ElasticIPService
 }
+
+type InstanceService interface {
+	UpsertInstance(ctx context.Context, machineID uuid.UUID, instanceID *uuid.UUID, spec InstanceSpec) (Instance, error)
+	DeleteInstance(ctx context.Context, id uuid.UUID) error
+}
+
+type InstanceSpec struct {
+	Name             string
+	TemplateID       uuid.UUID
+	InstanceType     string
+	SSHKey           string
+	SecurityGroupIDs []uuid.UUID
+	RootVolumeSizeGB *int64
+	UserData         string
+	Labels           map[string]string
+}
+
+type Instance struct {
+	ID        uuid.UUID
+	Name      string
+	State     string
+	PublicIP  string
+	PrivateIP string
+	CreatedAt string
+	Labels    map[string]string
+}

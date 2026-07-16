@@ -156,7 +156,7 @@ spec:
               kubectl get machine "$MACHINE_NAME" -n default -o yaml
               exit 1
 
-    - name: delete after status instance id is lost
+    - name: delete CAPI machine after status instance id is lost
       try:
         - script:
             timeout: 2m
@@ -171,7 +171,7 @@ spec:
             content: |
               kubectl patch exoscalemachine "$MACHINE_NAME" -n default --subresource=status --type=merge -p '{"status":{"instanceID":null}}'
               test -z "$(kubectl get exoscalemachine "$MACHINE_NAME" -n default -o jsonpath='{.status.instanceID}')"
-              kubectl delete exoscalemachine "$MACHINE_NAME" -n default --wait=false
+              kubectl delete machine "$MACHINE_NAME" -n default --wait=false
         - script:
             timeout: 2m
             content: |
@@ -184,6 +184,7 @@ spec:
                 value: ($machineName)
             content: |
               kubectl wait --for=delete exoscalemachine/"$MACHINE_NAME" -n default --timeout=10m
+              kubectl wait --for=delete machine/"$MACHINE_NAME" -n default --timeout=2m
       finally:
         - script:
             timeout: 2m

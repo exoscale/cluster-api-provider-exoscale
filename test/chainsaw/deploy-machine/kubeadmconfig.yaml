@@ -9,6 +9,6 @@ metadata:
     - apiVersion: cluster.x-k8s.io/v1beta2
       kind: Machine
       name: ($machineName)
-      uid: ($machineUID)
+      uid: ($machine.metadata.uid)
 spec:
   format: cloud-config

@@ -30,14 +30,14 @@ spec:
         - patch:
             subresource: status
             resource:
-              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
-              kind: ExoscaleCluster
+              apiVersion: cluster.x-k8s.io/v1beta2
+              kind: Cluster
               metadata:
                 name: ($clusterName)
                 namespace: ($namespace)
               status:
                 initialization:
-                  provisioned: true
+                  infrastructureProvisioned: true
         - assert:
             timeout: 2m
             resource:

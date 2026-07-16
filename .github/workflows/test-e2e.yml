@@ -45,9 +45,6 @@ jobs:
           chmod +x ./kind
           sudo mv ./kind /usr/local/bin/kind
 
-      - name: Install Exoscale CLI
-        run: go install github.com/exoscale/cli@v1.95.3
-
       - name: Run Chainsaw
         env:
           COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}

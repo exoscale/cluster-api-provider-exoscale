@@ -42,6 +42,8 @@ type instanceCloud interface {
 	CreateInstance(ctx context.Context, spec domain.ResolvedInstanceSpec) (uuid.UUID, error)
 	GetInstance(ctx context.Context, id uuid.UUID) (domain.Instance, error)
 	AttachInstanceToElasticIP(ctx context.Context, instanceID, elasticIPID uuid.UUID) error
+	AttachInstanceToSecurityGroup(ctx context.Context, instanceID, securityGroupID uuid.UUID) error
+	DetachInstanceFromSecurityGroup(ctx context.Context, instanceID, securityGroupID uuid.UUID) error
 	DeleteInstance(ctx context.Context, id uuid.UUID) error
 }
 
@@ -59,43 +61,106 @@ func NewInstanceService(apiKey, apiSecret string, zone egoscale.ZoneName, logger
 
 func (s *instanceService) UpsertInstance(ctx context.Context, machineID uuid.UUID, instanceID *uuid.UUID, spec domain.InstanceSpec) (domain.Instance, error) {
 	spec.Labels = labelsWithMachineID(spec.Labels, machineID)
-
-	if instanceID != nil {
-		instance, err := s.cloud.GetInstance(ctx, *instanceID)
-		if err == nil {
-			return s.ensureElasticIP(ctx, instance, spec.ElasticIPID)
-		}
-		if !errors.Is(err, domain.ErrInstanceNotFound) {
-			return domain.Instance{}, fmt.Errorf("error while fetching instance: %w", err)
-		}
-		s.logger.Info("Instance not found, will create a new one", "instanceID", instanceID.String())
-	}
-
-	instance, err := s.findInstanceByMachineID(ctx, machineID)
-	if err == nil {
-		s.logger.Info("Found an existing instance by Machine UID, reusing it", "instanceID", instance.ID.String())
-		return s.ensureElasticIP(ctx, instance, spec.ElasticIPID)
-	}
-	if !errors.Is(err, domain.ErrInstanceNotFound) {
+	matches, err := s.findInstancesByMachineID(ctx, machineID)
+	if err != nil {
 		return domain.Instance{}, fmt.Errorf("error while searching for existing instance: %w", err)
 	}
 
-	s.logger.Info("Create instance", "machineID", machineID.String())
-	resolvedSpec, err := s.resolveInstanceSpec(ctx, spec)
-	if err != nil {
+	var instance domain.Instance
+	if instanceID != nil {
+		instance, err = s.cloud.GetInstance(ctx, *instanceID)
+		switch {
+		case err == nil:
+		case errors.Is(err, domain.ErrInstanceNotFound):
+			instance = domain.Instance{}
+			matches = removeInstance(matches, *instanceID)
+			s.logger.Info("Status instance not found", "instanceID", instanceID.String())
+		default:
+			return domain.Instance{}, fmt.Errorf("error while fetching instance: %w", err)
+		}
+	}
+
+	if instance.ID == uuid.Nil && len(matches) > 0 {
+		instance = oldestInstance(matches)
+		s.logger.Info("Found an existing instance by Machine UID, reusing it", "instanceID", instance.ID.String())
+	}
+
+	if instance.ID == uuid.Nil {
+		s.logger.Info("Create instance", "machineID", machineID.String())
+		resolvedSpec, err := s.resolveInstanceSpec(ctx, spec)
+		if err != nil {
+			return domain.Instance{}, err
+		}
+		id, err := s.cloud.CreateInstance(ctx, resolvedSpec)
+		if err != nil {
+			return domain.Instance{}, fmt.Errorf("error while creating instance: %w", err)
+		}
+
+		instance, err = s.cloud.GetInstance(ctx, id)
+		if err != nil {
+			return domain.Instance{}, fmt.Errorf("error while fetching new instance: %w", err)
+		}
+	}
+	if instance.Labels[machineUIDLabel] != machineID.String() {
+		return domain.Instance{}, fmt.Errorf("instance %s is not owned by Machine UID %s", instance.ID, machineID)
+	}
+
+	for _, duplicate := range matches {
+		if duplicate.ID == instance.ID {
+			continue
+		}
+		s.logger.Info("Delete duplicate instance", "instanceID", duplicate.ID.String(), "machineID", machineID.String())
+		if err := s.cloud.DeleteInstance(ctx, duplicate.ID); err != nil && !errors.Is(err, domain.ErrInstanceNotFound) {
+			return domain.Instance{}, fmt.Errorf("delete duplicate instance: %w", err)
+		}
+	}
+
+	if err := s.ensureSecurityGroups(ctx, instance, spec.SecurityGroupIDs); err != nil {
 		return domain.Instance{}, err
 	}
-	id, err := s.cloud.CreateInstance(ctx, resolvedSpec)
-	if err != nil {
-		return domain.Instance{}, fmt.Errorf("error while creating instance: %w", err)
-	}
-
-	instance, err = s.cloud.GetInstance(ctx, id)
-	if err != nil {
-		return domain.Instance{}, fmt.Errorf("error while fetching new instance: %w", err)
-	}
-
 	return s.ensureElasticIP(ctx, instance, spec.ElasticIPID)
+}
+
+func (s *instanceService) ensureSecurityGroups(ctx context.Context, instance domain.Instance, desired []uuid.UUID) error {
+	current := make(map[uuid.UUID]struct{}, len(instance.SecurityGroupIDs))
+	for _, id := range instance.SecurityGroupIDs {
+		current[id] = struct{}{}
+	}
+	desiredSet := make(map[uuid.UUID]struct{}, len(desired))
+	for _, id := range uniqueUUIDs(desired) {
+		desiredSet[id] = struct{}{}
+		if _, ok := current[id]; ok {
+			continue
+		}
+		if err := s.cloud.AttachInstanceToSecurityGroup(ctx, instance.ID, id); err != nil {
+			return fmt.Errorf("attach instance to security group: %w", err)
+		}
+	}
+	for id := range current {
+		if _, ok := desiredSet[id]; ok {
+			continue
+		}
+		if err := s.cloud.DetachInstanceFromSecurityGroup(ctx, instance.ID, id); err != nil {
+			return fmt.Errorf("detach instance from security group: %w", err)
+		}
+	}
+	return nil
+}
+
+func uniqueUUIDs(ids []uuid.UUID) []uuid.UUID {
+	if len(ids) == 0 {
+		return nil
+	}
+	unique := make([]uuid.UUID, 0, len(ids))
+	seen := make(map[uuid.UUID]struct{}, len(ids))
+	for _, id := range ids {
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+	}
+	return unique
 }
 
 func (s *instanceService) ensureElasticIP(ctx context.Context, instance domain.Instance, elasticIPID *uuid.UUID) (domain.Instance, error) {
@@ -137,7 +202,7 @@ func (s *instanceService) resolveInstanceSpec(ctx context.Context, spec domain.I
 		TemplateID:       template.ID,
 		InstanceType:     instanceType,
 		SSHKey:           spec.SSHKey,
-		SecurityGroupIDs: spec.SecurityGroupIDs,
+		SecurityGroupIDs: uniqueUUIDs(spec.SecurityGroupIDs),
 		DiskSizeGB:       diskSize,
 		UserData:         spec.UserData,
 		Labels:           spec.Labels,
@@ -239,6 +304,14 @@ func (s *instanceService) DeleteInstance(ctx context.Context, machineID, instanc
 		if err != nil && !errors.Is(err, domain.ErrInstanceNotFound) {
 			return err
 		}
+		if err == nil {
+			if machineID == nil {
+				return fmt.Errorf("cannot verify status instance %s without a Machine UID", statusInstance.ID)
+			}
+			if statusInstance.Labels[machineUIDLabel] != machineID.String() {
+				return fmt.Errorf("status instance %s is not owned by Machine UID %s", statusInstance.ID, machineID)
+			}
+		}
 	}
 
 	var instances []domain.Instance
@@ -247,15 +320,10 @@ func (s *instanceService) DeleteInstance(ctx context.Context, machineID, instanc
 		if err != nil {
 			return err
 		}
-		if len(byMachineID) > 0 {
-			if statusInstance.ID != uuid.Nil && !containsInstance(byMachineID, statusInstance.ID) {
-				return fmt.Errorf("status instance %s differs from Machine UID instances", statusInstance.ID)
-			}
-			instances = byMachineID
+		instances = byMachineID
+		if statusInstance.ID != uuid.Nil && !containsInstance(instances, statusInstance.ID) {
+			instances = append(instances, statusInstance)
 		}
-	}
-	if len(instances) == 0 && statusInstance.ID != uuid.Nil {
-		instances = []domain.Instance{statusInstance}
 	}
 	if len(instances) == 0 {
 		return nil
@@ -268,20 +336,6 @@ func (s *instanceService) DeleteInstance(ctx context.Context, machineID, instanc
 		}
 	}
 	return nil
-}
-
-func (s *instanceService) findInstanceByMachineID(ctx context.Context, machineID uuid.UUID) (domain.Instance, error) {
-	matches, err := s.findInstancesByMachineID(ctx, machineID)
-	if err != nil {
-		return domain.Instance{}, err
-	}
-	if len(matches) == 0 {
-		return domain.Instance{}, domain.ErrInstanceNotFound
-	}
-	if len(matches) > 1 {
-		return domain.Instance{}, fmt.Errorf("multiple instances found for Machine UID %s", machineID)
-	}
-	return matches[0], nil
 }
 
 func (s *instanceService) findInstancesByMachineID(ctx context.Context, machineID uuid.UUID) ([]domain.Instance, error) {
@@ -299,6 +353,16 @@ func (s *instanceService) findInstancesByMachineID(ctx context.Context, machineI
 	return matches, nil
 }
 
+func oldestInstance(instances []domain.Instance) domain.Instance {
+	oldest := instances[0]
+	for _, instance := range instances[1:] {
+		if instance.CreatedAt < oldest.CreatedAt || (instance.CreatedAt == oldest.CreatedAt && instance.ID.String() < oldest.ID.String()) {
+			oldest = instance
+		}
+	}
+	return oldest
+}
+
 func containsInstance(instances []domain.Instance, id uuid.UUID) bool {
 	for _, instance := range instances {
 		if instance.ID == id {
@@ -306,6 +370,16 @@ func containsInstance(instances []domain.Instance, id uuid.UUID) bool {
 		}
 	}
 	return false
+}
+
+func removeInstance(instances []domain.Instance, id uuid.UUID) []domain.Instance {
+	filtered := instances[:0]
+	for _, instance := range instances {
+		if instance.ID != id {
+			filtered = append(filtered, instance)
+		}
+	}
+	return filtered
 }
 
 func labelsWithMachineID(labels map[string]string, machineID uuid.UUID) map[string]string {

@@ -30,6 +30,8 @@ type instanceClient interface {
 	CreateInstance(ctx context.Context, req egoscale.CreateInstanceRequest) (*egoscale.Operation, error)
 	GetInstance(ctx context.Context, id egoscale.UUID) (*egoscale.Instance, error)
 	AttachInstanceToElasticIP(ctx context.Context, id egoscale.UUID, req egoscale.AttachInstanceToElasticIPRequest) (*egoscale.Operation, error)
+	AttachInstanceToSecurityGroup(ctx context.Context, id egoscale.UUID, req egoscale.AttachInstanceToSecurityGroupRequest) (*egoscale.Operation, error)
+	DetachInstanceFromSecurityGroup(ctx context.Context, id egoscale.UUID, req egoscale.DetachInstanceFromSecurityGroupRequest) (*egoscale.Operation, error)
 	DeleteInstance(ctx context.Context, id egoscale.UUID) (*egoscale.Operation, error)
 	ListInstanceTypes(ctx context.Context) (*egoscale.ListInstanceTypesResponse, error)
 	GetTemplate(ctx context.Context, id egoscale.UUID) (*egoscale.Template, error)
@@ -319,14 +321,19 @@ func (c *cloud) ListInstances(ctx context.Context) ([]domain.Instance, error) {
 		if err != nil {
 			return nil, fmt.Errorf("unable to parse instance ID: %w", err)
 		}
+		securityGroupIDs, err := instanceSecurityGroupIDs(instance.SecurityGroups)
+		if err != nil {
+			return nil, err
+		}
 
 		instances = append(instances, domain.Instance{
-			ID:        id,
-			Name:      instance.Name,
-			State:     string(instance.State),
-			PublicIP:  ipString(instance.PublicIP),
-			CreatedAt: formatTime(instance.CreatedAT),
-			Labels:    copyLabels(instance.Labels),
+			ID:               id,
+			Name:             instance.Name,
+			State:            string(instance.State),
+			PublicIP:         ipString(instance.PublicIP),
+			CreatedAt:        formatTime(instance.CreatedAT),
+			Labels:           copyLabels(instance.Labels),
+			SecurityGroupIDs: securityGroupIDs,
 		})
 	}
 
@@ -457,13 +464,19 @@ func (c *cloud) GetInstance(ctx context.Context, id uuid.UUID) (domain.Instance,
 		return domain.Instance{}, err
 	}
 
+	securityGroupIDs, err := instanceSecurityGroupIDs(instance.SecurityGroups)
+	if err != nil {
+		return domain.Instance{}, err
+	}
+
 	return domain.Instance{
-		ID:        id,
-		Name:      instance.Name,
-		State:     string(instance.State),
-		PublicIP:  ipString(instance.PublicIP),
-		CreatedAt: formatTime(instance.CreatedAT),
-		Labels:    copyLabels(instance.Labels),
+		ID:               id,
+		Name:             instance.Name,
+		State:            string(instance.State),
+		PublicIP:         ipString(instance.PublicIP),
+		CreatedAt:        formatTime(instance.CreatedAT),
+		Labels:           copyLabels(instance.Labels),
+		SecurityGroupIDs: securityGroupIDs,
 	}, nil
 }
 
@@ -486,6 +499,54 @@ func (c *cloud) AttachInstanceToElasticIP(ctx context.Context, instanceID, elast
 	}
 	if completed == nil || completed.State != egoscale.OperationStateSuccess {
 		return fmt.Errorf("instance attachment to elastic IP operation did not succeed")
+	}
+
+	return nil
+}
+
+func (c *cloud) AttachInstanceToSecurityGroup(ctx context.Context, instanceID, securityGroupID uuid.UUID) error {
+	client, err := c.instances()
+	if err != nil {
+		return err
+	}
+
+	op, err := client.AttachInstanceToSecurityGroup(ctx, egoscale.UUID(securityGroupID.String()), egoscale.AttachInstanceToSecurityGroupRequest{
+		Instance: &egoscale.Instance{ID: egoscale.UUID(instanceID.String())},
+	})
+	if err != nil {
+		return fmt.Errorf("unable to attach instance to security group: %w", err)
+	}
+
+	completed, err := c.exoClient.Wait(ctx, op, egoscale.OperationStateSuccess)
+	if err != nil {
+		return fmt.Errorf("error while waiting for instance attachment to security group: %w", err)
+	}
+	if completed == nil || completed.State != egoscale.OperationStateSuccess {
+		return fmt.Errorf("instance attachment to security group operation did not succeed")
+	}
+
+	return nil
+}
+
+func (c *cloud) DetachInstanceFromSecurityGroup(ctx context.Context, instanceID, securityGroupID uuid.UUID) error {
+	client, err := c.instances()
+	if err != nil {
+		return err
+	}
+
+	op, err := client.DetachInstanceFromSecurityGroup(ctx, egoscale.UUID(securityGroupID.String()), egoscale.DetachInstanceFromSecurityGroupRequest{
+		Instance: &egoscale.Instance{ID: egoscale.UUID(instanceID.String())},
+	})
+	if err != nil {
+		return fmt.Errorf("unable to detach instance from security group: %w", err)
+	}
+
+	completed, err := c.exoClient.Wait(ctx, op, egoscale.OperationStateSuccess)
+	if err != nil {
+		return fmt.Errorf("error while waiting for instance detachment from security group: %w", err)
+	}
+	if completed == nil || completed.State != egoscale.OperationStateSuccess {
+		return fmt.Errorf("instance detachment from security group operation did not succeed")
 	}
 
 	return nil
@@ -529,6 +590,18 @@ func securityGroups(ids []uuid.UUID) []egoscale.SecurityGroup {
 		groups = append(groups, egoscale.SecurityGroup{ID: egoscale.UUID(id.String())})
 	}
 	return groups
+}
+
+func instanceSecurityGroupIDs(groups []egoscale.SecurityGroup) ([]uuid.UUID, error) {
+	ids := make([]uuid.UUID, 0, len(groups))
+	for _, group := range groups {
+		id, err := uuid.Parse(group.ID.String())
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse instance security group ID: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
 }
 
 func formatTime(t time.Time) string {

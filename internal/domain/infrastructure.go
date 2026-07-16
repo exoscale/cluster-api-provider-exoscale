@@ -148,11 +148,12 @@ type InstanceType struct {
 }
 
 type Instance struct {
-	ID        uuid.UUID
-	Name      string
-	State     string
-	PublicIP  string
-	PrivateIP string
-	CreatedAt string
-	Labels    map[string]string
+	ID               uuid.UUID
+	Name             string
+	State            string
+	PublicIP         string
+	PrivateIP        string
+	CreatedAt        string
+	Labels           map[string]string
+	SecurityGroupIDs []uuid.UUID
 }

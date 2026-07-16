@@ -33,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/util"
@@ -82,17 +83,14 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	defer func() {
-		if pErr := patchHelper.Patch(ctx, exoMachine); pErr != nil && reterr == nil {
-			reterr = pErr
-		}
-	}()
+	defer func() { reterr = patchExoscaleMachine(ctx, patchHelper, exoMachine, reterr) }()
 
 	deleting := !exoMachine.DeletionTimestamp.IsZero()
 	var machine *clusterv1.Machine
 	var machineID, instanceID *uuid.UUID
 	cluster, clusterErr := util.GetClusterFromMetadata(ctx, r.Client, exoMachine.ObjectMeta)
 	if deleting {
+		setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.DeletingReason, "Deleting instance")
 		machineID, instanceID, err = deletionInstanceIDs(exoMachine)
 		if err != nil {
 			return ctrl.Result{}, err
@@ -111,11 +109,13 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		}
 		if machine == nil {
 			log.Info("owner Machine not yet set, requeueing")
+			setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.NotReadyReason, "Waiting for owner Machine")
 			return ctrl.Result{}, nil
 		}
 		cluster, err = util.GetClusterFromMetadata(ctx, r.Client, machine.ObjectMeta)
 		if err != nil {
 			log.Info("Machine missing cluster label or cluster not found")
+			setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.NotReadyReason, "Waiting for Cluster")
 			return ctrl.Result{}, nil
 		}
 	}
@@ -152,6 +152,7 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		}
 		if machine == nil {
 			log.Info("owner Machine not yet set, requeueing")
+			setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.NotReadyReason, "Waiting for owner Machine")
 			return ctrl.Result{}, nil
 		}
 	}
@@ -167,10 +168,12 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 	if cluster.Status.Initialization.InfrastructureProvisioned == nil || !*cluster.Status.Initialization.InfrastructureProvisioned {
 		log.Info("cluster infrastructure not yet ready")
+		setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.WaitingForClusterInfrastructureReadyReason, "Waiting for cluster infrastructure")
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 	}
 	if machine.Spec.Bootstrap.DataSecretName == nil {
 		log.Info("bootstrap data not yet available")
+		setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.WaitingForBootstrapDataReason, "Waiting for bootstrap data")
 		return ctrl.Result{}, nil
 	}
 
@@ -258,6 +261,7 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 	}
 	if len(securityGroupIDs) == 0 {
 		log.Info("Cluster machine security group not yet available", "controlPlane", isControlPlane)
+		setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.NotReadyReason, "Waiting for machine security group")
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 	}
 
@@ -265,6 +269,7 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 	if isControlPlane {
 		if exoCluster.Status.ControlPlaneEndpoint == nil {
 			log.Info("Cluster control plane Elastic IP not yet available")
+			setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.NotReadyReason, "Waiting for control plane Elastic IP")
 			return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 		}
 		id, err := uuid.Parse(exoCluster.Status.ControlPlaneEndpoint.ID)
@@ -295,14 +300,15 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 
 	if instance.State != "running" {
 		log.Info("instance not yet running", "state", instance.State)
+		setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.NotReadyReason, fmt.Sprintf("Instance state is %s", instance.State))
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 	}
 
 	providerID := fmt.Sprintf("exoscale://%s", instance.ID)
 	exoMachine.Spec.ProviderID = &providerID
-	exoMachine.Status.Ready = true
 	exoMachine.Status.Initialization.Provisioned = new(true)
 	exoMachine.Status.Addresses = buildAddresses(instance)
+	setMachineReady(exoMachine, metav1.ConditionTrue, clusterv1.ReadyReason, "Instance is running")
 
 	return ctrl.Result{}, nil
 }
@@ -427,8 +433,48 @@ func (r *ExoscaleMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			capipredicates.ClusterPausedTransitionsOrInfrastructureProvisioned(mgr.GetScheme(), predicateLog),
 			capipredicates.ResourceHasFilterLabel(mgr.GetScheme(), predicateLog, r.WatchFilter),
 		).
+		Watches(
+			&infrastructurev1alpha1.ExoscaleCluster{},
+			handler.EnqueueRequestsFromMapFunc(exoscaleClusterToExoscaleMachines(mgr.GetClient(), clusterToExoscaleMachines)),
+		).
 		Named("exoscalemachine").
 		Complete(r)
+}
+
+func exoscaleClusterToExoscaleMachines(c client.Client, clusterToExoscaleMachines handler.MapFunc) handler.MapFunc {
+	return func(ctx context.Context, obj client.Object) []reconcile.Request {
+		exoCluster, ok := obj.(*infrastructurev1alpha1.ExoscaleCluster)
+		if !ok {
+			return nil
+		}
+		cluster, err := util.GetOwnerCluster(ctx, c, exoCluster.ObjectMeta)
+		if err != nil || cluster == nil {
+			return nil
+		}
+		return clusterToExoscaleMachines(ctx, cluster)
+	}
+}
+
+func patchExoscaleMachine(ctx context.Context, patchHelper *capipatch.Helper, exoMachine *infrastructurev1alpha1.ExoscaleMachine, reconcileErr error) error {
+	if reconcileErr != nil {
+		setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.InternalErrorReason, reconcileErr.Error())
+	}
+	if err := patchHelper.Patch(ctx, exoMachine); err != nil && reconcileErr == nil {
+		return err
+	}
+	return reconcileErr
+}
+
+func setMachineReady(exoMachine *infrastructurev1alpha1.ExoscaleMachine, status metav1.ConditionStatus, reason, message string) {
+	if status == metav1.ConditionTrue {
+		exoMachine.Status.Ready = true
+	}
+	conditions.Set(exoMachine, metav1.Condition{
+		Type:    clusterv1.ReadyCondition,
+		Status:  status,
+		Reason:  reason,
+		Message: message,
+	})
 }
 
 func buildAddresses(instance domain.Instance) []clusterv1.MachineAddress {

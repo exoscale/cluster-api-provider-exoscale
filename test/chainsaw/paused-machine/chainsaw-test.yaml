@@ -72,5 +72,8 @@ spec:
               spec:
                 (providerID == null): true
               status:
-                (conditions == null): true
+                conditions:
+                  - type: Ready
+                    reason: NotReady
+                    status: "False"
                 (instanceID == null): true

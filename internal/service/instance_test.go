@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -37,6 +38,9 @@ func Test_instanceService_UpsertInstance(t *testing.T) {
 			name:       "reuses instance from status id",
 			instanceID: &instanceID,
 			cloud: fakeInstanceCloud{
+				listInstances: func(context.Context) ([]domain.Instance, error) {
+					return []domain.Instance{instance}, nil
+				},
 				getInstance: func(_ context.Context, id uuid.UUID) (domain.Instance, error) {
 					assert.Equal(t, instanceID, id)
 					return instance, nil
@@ -73,6 +77,9 @@ func Test_instanceService_UpsertInstance(t *testing.T) {
 			instanceID:  &instanceID,
 			elasticIPID: &elasticIPID,
 			cloud: fakeInstanceCloud{
+				listInstances: func(context.Context) ([]domain.Instance, error) {
+					return []domain.Instance{instance}, nil
+				},
 				getInstance: func(context.Context, uuid.UUID) (domain.Instance, error) {
 					return instance, nil
 				},
@@ -117,12 +124,28 @@ func Test_instanceService_UpsertInstance(t *testing.T) {
 			name:       "returns get error",
 			instanceID: &instanceID,
 			cloud: fakeInstanceCloud{
+				listInstances: func(context.Context) ([]domain.Instance, error) {
+					return nil, nil
+				},
 				getInstance: func(_ context.Context, id uuid.UUID) (domain.Instance, error) {
 					assert.Equal(t, instanceID, id)
 					return domain.Instance{}, assert.AnError
 				},
 			},
 			err: assert.AnError,
+		},
+		{
+			name:       "rejects status instance owned by another machine",
+			instanceID: &instanceID,
+			cloud: fakeInstanceCloud{
+				listInstances: func(context.Context) ([]domain.Instance, error) {
+					return nil, nil
+				},
+				getInstance: func(context.Context, uuid.UUID) (domain.Instance, error) {
+					return domain.Instance{ID: instanceID, Labels: map[string]string{machineUIDLabel: uuid.NewString()}}, nil
+				},
+			},
+			err: errNotOwned,
 		},
 	}
 
@@ -133,12 +156,113 @@ func Test_instanceService_UpsertInstance(t *testing.T) {
 			testSpec.ElasticIPID = ut.elasticIPID
 			output, err := svc.UpsertInstance(ctx, machineID, ut.instanceID, testSpec)
 
-			assert.ErrorIs(t, err, ut.err)
+			if ut.err == errNotOwned {
+				assert.ErrorContains(t, err, "is not owned by Machine UID")
+			} else {
+				assert.ErrorIs(t, err, ut.err)
+			}
 			assert.Equal(t, ut.output, output)
 		})
 	}
 
+	t.Run("keeps oldest duplicate and deletes the rest", func(t *testing.T) {
+		oldest := domain.Instance{ID: uuid.New(), CreatedAt: "2026-07-15T10:00:00Z", Labels: instance.Labels}
+		newest := domain.Instance{ID: uuid.New(), CreatedAt: "2026-07-15T11:00:00Z", Labels: instance.Labels}
+		deleted := uuid.Nil
+		svc := instanceService{cloud: fakeInstanceCloud{
+			listInstances: func(context.Context) ([]domain.Instance, error) {
+				return []domain.Instance{newest, oldest}, nil
+			},
+			deleteInstance: func(_ context.Context, id uuid.UUID) error {
+				deleted = id
+				return nil
+			},
+		}, logger: logr.Discard()}
+
+		output, err := svc.UpsertInstance(ctx, machineID, nil, spec)
+
+		assert.NoError(t, err)
+		assert.Equal(t, oldest, output)
+		assert.Equal(t, newest.ID, deleted)
+	})
+
+	t.Run("keeps the owned status instance and deletes duplicates", func(t *testing.T) {
+		oldest := domain.Instance{ID: uuid.New(), CreatedAt: "2026-07-15T10:00:00Z", Labels: instance.Labels}
+		statusInstance := domain.Instance{ID: uuid.New(), CreatedAt: "2026-07-15T11:00:00Z", Labels: instance.Labels}
+		deleted := uuid.Nil
+		svc := instanceService{cloud: fakeInstanceCloud{
+			listInstances: func(context.Context) ([]domain.Instance, error) {
+				return []domain.Instance{oldest, statusInstance}, nil
+			},
+			getInstance: func(context.Context, uuid.UUID) (domain.Instance, error) {
+				return statusInstance, nil
+			},
+			deleteInstance: func(_ context.Context, id uuid.UUID) error {
+				deleted = id
+				return nil
+			},
+		}, logger: logr.Discard()}
+
+		output, err := svc.UpsertInstance(ctx, machineID, &statusInstance.ID, spec)
+
+		assert.NoError(t, err)
+		assert.Equal(t, statusInstance, output)
+		assert.Equal(t, oldest.ID, deleted)
+	})
+
+	t.Run("ignores a stale listed status instance", func(t *testing.T) {
+		staleID := uuid.New()
+		healthy := domain.Instance{ID: uuid.New(), CreatedAt: "2026-07-15T11:00:00Z", Labels: instance.Labels}
+		svc := instanceService{cloud: fakeInstanceCloud{
+			listInstances: func(context.Context) ([]domain.Instance, error) {
+				return []domain.Instance{{ID: staleID, CreatedAt: "2026-07-15T10:00:00Z", Labels: instance.Labels}, healthy}, nil
+			},
+			getInstance: func(context.Context, uuid.UUID) (domain.Instance, error) {
+				return domain.Instance{}, domain.ErrInstanceNotFound
+			},
+		}, logger: logr.Discard()}
+
+		output, err := svc.UpsertInstance(ctx, machineID, &staleID, spec)
+
+		assert.NoError(t, err)
+		assert.Equal(t, healthy, output)
+	})
+
+	t.Run("converges security groups", func(t *testing.T) {
+		keepID := uuid.New()
+		attachID := uuid.New()
+		detachID := uuid.New()
+		withGroups := instance
+		withGroups.SecurityGroupIDs = []uuid.UUID{keepID, detachID}
+		var attached, detached uuid.UUID
+		svc := instanceService{cloud: fakeInstanceCloud{
+			listInstances: func(context.Context) ([]domain.Instance, error) {
+				return []domain.Instance{withGroups}, nil
+			},
+			attachInstanceToSecurityGroup: func(_ context.Context, gotInstanceID, gotGroupID uuid.UUID) error {
+				assert.Equal(t, instanceID, gotInstanceID)
+				attached = gotGroupID
+				return nil
+			},
+			detachInstanceFromSecurityGroup: func(_ context.Context, gotInstanceID, gotGroupID uuid.UUID) error {
+				assert.Equal(t, instanceID, gotInstanceID)
+				detached = gotGroupID
+				return nil
+			},
+		}, logger: logr.Discard()}
+		testSpec := spec
+		testSpec.SecurityGroupIDs = []uuid.UUID{keepID, attachID, attachID}
+
+		_, err := svc.UpsertInstance(ctx, machineID, nil, testSpec)
+
+		assert.NoError(t, err)
+		assert.Equal(t, attachID, attached)
+		assert.Equal(t, detachID, detached)
+	})
+
 }
+
+var errNotOwned = errors.New("not owned")
 
 func Test_instanceService_resolveInstanceSpec(t *testing.T) {
 	t.Parallel()
@@ -146,6 +270,7 @@ func Test_instanceService_resolveInstanceSpec(t *testing.T) {
 	ctx := context.Background()
 	templateID := uuid.New()
 	instanceTypeID := uuid.New().String()
+	securityGroupID := uuid.New()
 	template := domain.InstanceTemplate{ID: templateID, Name: "ubuntu", SizeBytes: 15 * bytesPerGiB}
 	instanceType := domain.InstanceType{ID: instanceTypeID, Family: "standard", Size: "2"}
 	rootVolumeSizeGB := int64(20)
@@ -162,13 +287,18 @@ func Test_instanceService_resolveInstanceSpec(t *testing.T) {
 			},
 		}}
 
-		output, err := svc.resolveInstanceSpec(ctx, domain.InstanceSpec{Template: "ubuntu", InstanceType: "standard-2"})
+		output, err := svc.resolveInstanceSpec(ctx, domain.InstanceSpec{
+			Template:         "ubuntu",
+			InstanceType:     "standard-2",
+			SecurityGroupIDs: []uuid.UUID{securityGroupID, securityGroupID},
+		})
 
 		assert.NoError(t, err)
 		assert.Equal(t, domain.ResolvedInstanceSpec{
-			TemplateID:   templateID,
-			InstanceType: instanceType,
-			DiskSizeGB:   15,
+			TemplateID:       templateID,
+			InstanceType:     instanceType,
+			SecurityGroupIDs: []uuid.UUID{securityGroupID},
+			DiskSizeGB:       15,
 		}, output)
 	})
 
@@ -360,11 +490,15 @@ func Test_instanceService_DeleteInstance(t *testing.T) {
 	}{
 		{
 			name:       "deletes instance from status id",
+			machineID:  &machineID,
 			instanceID: &id,
 			cloud: fakeInstanceCloud{
 				getInstance: func(_ context.Context, gotID uuid.UUID) (domain.Instance, error) {
 					assert.Equal(t, id, gotID)
 					return instance, nil
+				},
+				listInstances: func(context.Context) ([]domain.Instance, error) {
+					return []domain.Instance{instance}, nil
 				},
 				deleteInstance: func(_ context.Context, gotID uuid.UUID) error {
 					assert.Equal(t, id, gotID)
@@ -405,10 +539,14 @@ func Test_instanceService_DeleteInstance(t *testing.T) {
 		},
 		{
 			name:       "delete not found is already deleted",
+			machineID:  &machineID,
 			instanceID: &id,
 			cloud: fakeInstanceCloud{
 				getInstance: func(context.Context, uuid.UUID) (domain.Instance, error) {
 					return instance, nil
+				},
+				listInstances: func(context.Context) ([]domain.Instance, error) {
+					return []domain.Instance{instance}, nil
 				},
 				deleteInstance: func(context.Context, uuid.UUID) error {
 					return domain.ErrInstanceNotFound
@@ -417,6 +555,7 @@ func Test_instanceService_DeleteInstance(t *testing.T) {
 		},
 		{
 			name:       "returns get error",
+			machineID:  &machineID,
 			instanceID: &id,
 			cloud: fakeInstanceCloud{
 				getInstance: func(_ context.Context, gotID uuid.UUID) (domain.Instance, error) {
@@ -436,6 +575,16 @@ func Test_instanceService_DeleteInstance(t *testing.T) {
 			},
 		},
 		{name: "no identifiers is already deleted"},
+		{
+			name:       "rejects status id without machine uid",
+			instanceID: &id,
+			cloud: fakeInstanceCloud{
+				getInstance: func(context.Context, uuid.UUID) (domain.Instance, error) {
+					return instance, nil
+				},
+			},
+			err: errNotOwned,
+		},
 	}
 
 	for _, ut := range tests {
@@ -443,7 +592,11 @@ func Test_instanceService_DeleteInstance(t *testing.T) {
 			svc := instanceService{cloud: ut.cloud, logger: logr.Discard()}
 			err := svc.DeleteInstance(ctx, ut.machineID, ut.instanceID)
 
-			assert.ErrorIs(t, err, ut.err)
+			if ut.err == errNotOwned {
+				assert.Error(t, err)
+			} else {
+				assert.ErrorIs(t, err, ut.err)
+			}
 		})
 	}
 
@@ -470,31 +623,29 @@ func Test_instanceService_DeleteInstance(t *testing.T) {
 	})
 
 	t.Run("rejects status instance owned by another machine", func(t *testing.T) {
-		ownedID := uuid.New()
 		svc := instanceService{cloud: fakeInstanceCloud{
 			getInstance: func(context.Context, uuid.UUID) (domain.Instance, error) {
-				return domain.Instance{ID: id}, nil
-			},
-			listInstances: func(context.Context) ([]domain.Instance, error) {
-				return []domain.Instance{{ID: ownedID, Labels: instance.Labels}}, nil
+				return domain.Instance{ID: id, Labels: map[string]string{machineUIDLabel: uuid.NewString()}}, nil
 			},
 		}}
 
 		err := svc.DeleteInstance(ctx, &machineID, &id)
 
-		assert.ErrorContains(t, err, "differs from Machine UID instances")
+		assert.ErrorContains(t, err, "is not owned by Machine UID")
 	})
 }
 
 type fakeInstanceCloud struct {
-	listInstances             func(context.Context) ([]domain.Instance, error)
-	listInstanceTypes         func(context.Context) ([]domain.InstanceType, error)
-	getTemplate               func(context.Context, uuid.UUID) (domain.InstanceTemplate, error)
-	listTemplates             func(context.Context) ([]domain.InstanceTemplate, error)
-	createInstance            func(context.Context, domain.ResolvedInstanceSpec) (uuid.UUID, error)
-	getInstance               func(context.Context, uuid.UUID) (domain.Instance, error)
-	attachInstanceToElasticIP func(context.Context, uuid.UUID, uuid.UUID) error
-	deleteInstance            func(context.Context, uuid.UUID) error
+	listInstances                   func(context.Context) ([]domain.Instance, error)
+	listInstanceTypes               func(context.Context) ([]domain.InstanceType, error)
+	getTemplate                     func(context.Context, uuid.UUID) (domain.InstanceTemplate, error)
+	listTemplates                   func(context.Context) ([]domain.InstanceTemplate, error)
+	createInstance                  func(context.Context, domain.ResolvedInstanceSpec) (uuid.UUID, error)
+	getInstance                     func(context.Context, uuid.UUID) (domain.Instance, error)
+	attachInstanceToElasticIP       func(context.Context, uuid.UUID, uuid.UUID) error
+	attachInstanceToSecurityGroup   func(context.Context, uuid.UUID, uuid.UUID) error
+	detachInstanceFromSecurityGroup func(context.Context, uuid.UUID, uuid.UUID) error
+	deleteInstance                  func(context.Context, uuid.UUID) error
 }
 
 func (f fakeInstanceCloud) ListInstances(ctx context.Context) ([]domain.Instance, error) {
@@ -544,6 +695,20 @@ func (f fakeInstanceCloud) AttachInstanceToElasticIP(ctx context.Context, instan
 		panic("unexpected AttachInstanceToElasticIP")
 	}
 	return f.attachInstanceToElasticIP(ctx, instanceID, elasticIPID)
+}
+
+func (f fakeInstanceCloud) AttachInstanceToSecurityGroup(ctx context.Context, instanceID, securityGroupID uuid.UUID) error {
+	if f.attachInstanceToSecurityGroup == nil {
+		panic("unexpected AttachInstanceToSecurityGroup")
+	}
+	return f.attachInstanceToSecurityGroup(ctx, instanceID, securityGroupID)
+}
+
+func (f fakeInstanceCloud) DetachInstanceFromSecurityGroup(ctx context.Context, instanceID, securityGroupID uuid.UUID) error {
+	if f.detachInstanceFromSecurityGroup == nil {
+		panic("unexpected DetachInstanceFromSecurityGroup")
+	}
+	return f.detachInstanceFromSecurityGroup(ctx, instanceID, securityGroupID)
 }
 
 func (f fakeInstanceCloud) DeleteInstance(ctx context.Context, id uuid.UUID) error {

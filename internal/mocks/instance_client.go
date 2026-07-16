@@ -112,6 +112,80 @@ func (_c *InstanceClient_AttachInstanceToElasticIP_Call) RunAndReturn(run func(c
 	return _c
 }
 
+// AttachInstanceToSecurityGroup provides a mock function for the type InstanceClient
+func (_mock *InstanceClient) AttachInstanceToSecurityGroup(ctx context.Context, id v3.UUID, req v3.AttachInstanceToSecurityGroupRequest) (*v3.Operation, error) {
+	ret := _mock.Called(ctx, id, req)
+
+	if len(ret) == 0 {
+		panic("no return value specified for AttachInstanceToSecurityGroup")
+	}
+
+	var r0 *v3.Operation
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v3.UUID, v3.AttachInstanceToSecurityGroupRequest) (*v3.Operation, error)); ok {
+		return returnFunc(ctx, id, req)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v3.UUID, v3.AttachInstanceToSecurityGroupRequest) *v3.Operation); ok {
+		r0 = returnFunc(ctx, id, req)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*v3.Operation)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, v3.UUID, v3.AttachInstanceToSecurityGroupRequest) error); ok {
+		r1 = returnFunc(ctx, id, req)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// InstanceClient_AttachInstanceToSecurityGroup_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AttachInstanceToSecurityGroup'
+type InstanceClient_AttachInstanceToSecurityGroup_Call struct {
+	*mock.Call
+}
+
+// AttachInstanceToSecurityGroup is a helper method to define mock.On call
+//   - ctx context.Context
+//   - id v3.UUID
+//   - req v3.AttachInstanceToSecurityGroupRequest
+func (_e *InstanceClient_Expecter) AttachInstanceToSecurityGroup(ctx any, id any, req any) *InstanceClient_AttachInstanceToSecurityGroup_Call {
+	return &InstanceClient_AttachInstanceToSecurityGroup_Call{Call: _e.mock.On("AttachInstanceToSecurityGroup", ctx, id, req)}
+}
+
+func (_c *InstanceClient_AttachInstanceToSecurityGroup_Call) Run(run func(ctx context.Context, id v3.UUID, req v3.AttachInstanceToSecurityGroupRequest)) *InstanceClient_AttachInstanceToSecurityGroup_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 v3.UUID
+		if args[1] != nil {
+			arg1 = args[1].(v3.UUID)
+		}
+		var arg2 v3.AttachInstanceToSecurityGroupRequest
+		if args[2] != nil {
+			arg2 = args[2].(v3.AttachInstanceToSecurityGroupRequest)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *InstanceClient_AttachInstanceToSecurityGroup_Call) Return(operation *v3.Operation, err error) *InstanceClient_AttachInstanceToSecurityGroup_Call {
+	_c.Call.Return(operation, err)
+	return _c
+}
+
+func (_c *InstanceClient_AttachInstanceToSecurityGroup_Call) RunAndReturn(run func(ctx context.Context, id v3.UUID, req v3.AttachInstanceToSecurityGroupRequest) (*v3.Operation, error)) *InstanceClient_AttachInstanceToSecurityGroup_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreateInstance provides a mock function for the type InstanceClient
 func (_mock *InstanceClient) CreateInstance(ctx context.Context, req v3.CreateInstanceRequest) (*v3.Operation, error) {
 	ret := _mock.Called(ctx, req)
@@ -244,6 +318,80 @@ func (_c *InstanceClient_DeleteInstance_Call) Return(operation *v3.Operation, er
 }
 
 func (_c *InstanceClient_DeleteInstance_Call) RunAndReturn(run func(ctx context.Context, id v3.UUID) (*v3.Operation, error)) *InstanceClient_DeleteInstance_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// DetachInstanceFromSecurityGroup provides a mock function for the type InstanceClient
+func (_mock *InstanceClient) DetachInstanceFromSecurityGroup(ctx context.Context, id v3.UUID, req v3.DetachInstanceFromSecurityGroupRequest) (*v3.Operation, error) {
+	ret := _mock.Called(ctx, id, req)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DetachInstanceFromSecurityGroup")
+	}
+
+	var r0 *v3.Operation
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v3.UUID, v3.DetachInstanceFromSecurityGroupRequest) (*v3.Operation, error)); ok {
+		return returnFunc(ctx, id, req)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v3.UUID, v3.DetachInstanceFromSecurityGroupRequest) *v3.Operation); ok {
+		r0 = returnFunc(ctx, id, req)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*v3.Operation)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, v3.UUID, v3.DetachInstanceFromSecurityGroupRequest) error); ok {
+		r1 = returnFunc(ctx, id, req)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// InstanceClient_DetachInstanceFromSecurityGroup_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DetachInstanceFromSecurityGroup'
+type InstanceClient_DetachInstanceFromSecurityGroup_Call struct {
+	*mock.Call
+}
+
+// DetachInstanceFromSecurityGroup is a helper method to define mock.On call
+//   - ctx context.Context
+//   - id v3.UUID
+//   - req v3.DetachInstanceFromSecurityGroupRequest
+func (_e *InstanceClient_Expecter) DetachInstanceFromSecurityGroup(ctx any, id any, req any) *InstanceClient_DetachInstanceFromSecurityGroup_Call {
+	return &InstanceClient_DetachInstanceFromSecurityGroup_Call{Call: _e.mock.On("DetachInstanceFromSecurityGroup", ctx, id, req)}
+}
+
+func (_c *InstanceClient_DetachInstanceFromSecurityGroup_Call) Run(run func(ctx context.Context, id v3.UUID, req v3.DetachInstanceFromSecurityGroupRequest)) *InstanceClient_DetachInstanceFromSecurityGroup_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 v3.UUID
+		if args[1] != nil {
+			arg1 = args[1].(v3.UUID)
+		}
+		var arg2 v3.DetachInstanceFromSecurityGroupRequest
+		if args[2] != nil {
+			arg2 = args[2].(v3.DetachInstanceFromSecurityGroupRequest)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *InstanceClient_DetachInstanceFromSecurityGroup_Call) Return(operation *v3.Operation, err error) *InstanceClient_DetachInstanceFromSecurityGroup_Call {
+	_c.Call.Return(operation, err)
+	return _c
+}
+
+func (_c *InstanceClient_DetachInstanceFromSecurityGroup_Call) RunAndReturn(run func(ctx context.Context, id v3.UUID, req v3.DetachInstanceFromSecurityGroupRequest) (*v3.Operation, error)) *InstanceClient_DetachInstanceFromSecurityGroup_Call {
 	_c.Call.Return(run)
 	return _c
 }

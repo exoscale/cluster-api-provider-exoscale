@@ -20,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	"sigs.k8s.io/cluster-api/util/conditions"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -168,6 +169,11 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 	assert.Equal(t, instanceID.String(), updated.Status.InstanceID)
 	assert.Equal(t, "running", updated.Status.InstanceState)
 	assert.True(t, updated.Status.Ready)
+	ready := apimeta.FindStatusCondition(updated.Status.Conditions, clusterv1.ReadyCondition)
+	if assert.NotNil(t, ready) {
+		assert.Equal(t, metav1.ConditionTrue, ready.Status)
+		assert.Equal(t, clusterv1.ReadyReason, ready.Reason)
+	}
 	if assert.NotNil(t, updated.Status.Initialization.Provisioned) {
 		assert.True(t, *updated.Status.Initialization.Provisioned)
 	}
@@ -208,6 +214,31 @@ func TestExoscaleMachineReconciler_Reconcile_ignoresDifferentWatchFilter(t *test
 	updated := &infrav1alpha1.ExoscaleMachine{}
 	assert.NoError(t, client.Get(ctx, crclient.ObjectKeyFromObject(exoMachine), updated))
 	assert.Contains(t, updated.Finalizers, machineFinalizer)
+}
+
+func TestExoscaleClusterToExoscaleMachines(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := newExoscaleMachineTestScheme(t)
+	cluster := &clusterv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: "cluster", Namespace: "default"}}
+	exoCluster := &infrav1alpha1.ExoscaleCluster{ObjectMeta: metav1.ObjectMeta{
+		Name:      "exo-cluster",
+		Namespace: "default",
+		OwnerReferences: []metav1.OwnerReference{{
+			APIVersion: clusterv1.GroupVersion.String(),
+			Kind:       "Cluster",
+			Name:       cluster.Name,
+		}},
+	}}
+	client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster, exoCluster).Build()
+	want := []reconcile.Request{{NamespacedName: types.NamespacedName{Name: "machine", Namespace: "default"}}}
+	mapper := exoscaleClusterToExoscaleMachines(client, func(_ context.Context, obj crclient.Object) []reconcile.Request {
+		assert.Equal(t, cluster.Name, obj.GetName())
+		return want
+	})
+
+	assert.Equal(t, want, mapper(ctx, exoCluster))
 }
 
 func TestExoscaleMachineReconciler_Reconcile_waitsForClusterInfrastructure(t *testing.T) {
@@ -489,7 +520,7 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 	}{
 		{name: "recovers instance by Machine UID", ownerReference: true, ownerMachine: true, wantService: true},
 		{name: "recovers instance when owner Machine is gone", ownerReference: true, wantService: true},
-		{name: "deletes instance from status without owner", statusInstanceID: instanceID.String(), wantService: true},
+		{name: "status instance without owner keeps finalizer", statusInstanceID: instanceID.String(), deleteErr: assert.AnError, wantService: true, wantErr: assert.AnError, wantFinalizer: true},
 		{name: "without either identifier removes finalizer"},
 		{name: "instance not found removes finalizer", ownerReference: true, statusInstanceID: instanceID.String(), deleteErr: domain.ErrInstanceNotFound, wantService: true},
 		{name: "delete error keeps finalizer", ownerReference: true, statusInstanceID: instanceID.String(), deleteErr: assert.AnError, wantService: true, wantErr: assert.AnError, wantFinalizer: true},
@@ -635,6 +666,12 @@ func TestExoscaleMachineReconciler_Reconcile_waitsForInstanceRunning(t *testing.
 
 	instanceID := uuid.New()
 	ctx, r, client, exoscaleMachineName, ns := newReadyMachineReconciler(t, domain.Instance{ID: instanceID, State: "starting"}, nil, new(uuid.New()))
+	exoMachine := &infrav1alpha1.ExoscaleMachine{}
+	assert.NoError(t, client.Get(ctx, types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}, exoMachine))
+	exoMachine.Status.Ready = true
+	exoMachine.Status.Initialization.Provisioned = new(true)
+	conditions.Set(exoMachine, metav1.Condition{Type: clusterv1.ReadyCondition, Status: metav1.ConditionTrue, Reason: clusterv1.ReadyReason})
+	assert.NoError(t, client.Status().Update(ctx, exoMachine))
 
 	result, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}})
 
@@ -645,9 +682,15 @@ func TestExoscaleMachineReconciler_Reconcile_waitsForInstanceRunning(t *testing.
 	assert.NoError(t, client.Get(ctx, types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}, updated))
 	assert.Equal(t, instanceID.String(), updated.Status.InstanceID)
 	assert.Equal(t, "starting", updated.Status.InstanceState)
-	assert.Nil(t, updated.Spec.ProviderID)
-	assert.False(t, updated.Status.Ready)
-	assert.Nil(t, updated.Status.Initialization.Provisioned)
+	assert.True(t, updated.Status.Ready)
+	ready := apimeta.FindStatusCondition(updated.Status.Conditions, clusterv1.ReadyCondition)
+	if assert.NotNil(t, ready) {
+		assert.Equal(t, metav1.ConditionFalse, ready.Status)
+		assert.Equal(t, clusterv1.NotReadyReason, ready.Reason)
+	}
+	if assert.NotNil(t, updated.Status.Initialization.Provisioned) {
+		assert.True(t, *updated.Status.Initialization.Provisioned)
+	}
 }
 
 func TestExoscaleMachineReconciler_Reconcile_returnsInvalidStatusInstanceID(t *testing.T) {
@@ -669,13 +712,20 @@ func TestExoscaleMachineReconciler_Reconcile_returnsInstanceServiceError(t *test
 	t.Parallel()
 
 	nodeSecurityGroupID := uuid.New()
-	ctx, r, _, exoscaleMachineName, ns := newReadyMachineReconciler(t, domain.Instance{}, assert.AnError, &nodeSecurityGroupID)
+	ctx, r, client, exoscaleMachineName, ns := newReadyMachineReconciler(t, domain.Instance{}, assert.AnError, &nodeSecurityGroupID)
 
 	result, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}})
 
 	assert.Equal(t, reconcile.Result{}, result)
 	assert.ErrorIs(t, err, assert.AnError)
 	assert.ErrorContains(t, err, "upsert instance")
+	updated := &infrav1alpha1.ExoscaleMachine{}
+	assert.NoError(t, client.Get(ctx, types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}, updated))
+	ready := apimeta.FindStatusCondition(updated.Status.Conditions, clusterv1.ReadyCondition)
+	if assert.NotNil(t, ready) {
+		assert.Equal(t, metav1.ConditionFalse, ready.Status)
+		assert.Equal(t, clusterv1.InternalErrorReason, ready.Reason)
+	}
 }
 
 func Test_securityGroupIDs_rejectsInvalidIDs(t *testing.T) {

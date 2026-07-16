@@ -89,11 +89,18 @@ spec:
 
     - name: delete before instance exists
       try:
-        - script:
+        - delete:
             timeout: 2m
-            env:
-              - name: MACHINE_NAME
-                value: ($machineName)
-            content: |
-              kubectl delete exoscalemachine "$MACHINE_NAME" -n default --timeout=2m
-              kubectl wait --for=delete exoscalemachine/"$MACHINE_NAME" -n default --timeout=2m
+            ref:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleMachine
+              namespace: ($namespace)
+              name: ($machineName)
+        - wait:
+            apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+            kind: ExoscaleMachine
+            namespace: ($namespace)
+            name: ($machineName)
+            timeout: 2m
+            for:
+              deletion: {}

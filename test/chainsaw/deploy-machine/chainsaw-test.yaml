@@ -97,11 +97,18 @@ spec:
 
     - name: delete machine
       try:
-        - script:
+        - delete:
             timeout: 10m
-            env:
-              - name: MACHINE_NAME
-                value: ($machineName)
-            content: |
-              kubectl delete exoscalemachine "$MACHINE_NAME" -n default --timeout=10m
-              kubectl wait --for=delete exoscalemachine/"$MACHINE_NAME" -n default --timeout=10m
+            ref:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleMachine
+              namespace: ($namespace)
+              name: ($machineName)
+        - wait:
+            apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+            kind: ExoscaleMachine
+            namespace: ($namespace)
+            name: ($machineName)
+            timeout: 10m
+            for:
+              deletion: {}

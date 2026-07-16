@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"net"
-	"net/http"
-	"strings"
 	"testing"
 	"time"
 
@@ -15,27 +13,13 @@ import (
 
 	egoscale "github.com/exoscale/egoscale/v3"
 	"github.com/exoscale/egoscale/v3/credentials"
-	"github.com/go-logr/logr/funcr"
 	"github.com/google/uuid"
 )
-
-func Test_traceAPIRequest_omitsSensitiveData(t *testing.T) {
-	t.Parallel()
-
-	var output string
-	logger := funcr.New(func(prefix, args string) { output += prefix + args }, funcr.Options{})
-	req, err := http.NewRequest(http.MethodPost, "https://api.example.test/v2/instance?token=query-secret", strings.NewReader("body-secret"))
-	assert.NoError(t, err)
-	req.Header.Set("Authorization", "header-secret")
-
-	assert.NoError(t, traceAPIRequest(logger)(context.Background(), req))
-	assert.Equal(t, `"level"=0 "msg"="Exoscale API request" "method"="POST" "path"="/v2/instance"`, output)
-}
 
 func Test_NewCloud_rejectsIncompleteCredentials(t *testing.T) {
 	t.Parallel()
 
-	client, err := NewCloud("key", "", egoscale.ZoneNameCHGva2, funcr.New(func(_, _ string) {}, funcr.Options{}), false)
+	client, err := NewCloud("key", "", egoscale.ZoneNameCHGva2)
 
 	assert.Nil(t, client)
 	assert.ErrorIs(t, err, credentials.ErrMissingIncomplete)

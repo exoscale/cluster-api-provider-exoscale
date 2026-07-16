@@ -23,8 +23,8 @@ type clusterService struct {
 var _ domain.ClusterService = (*clusterService)(nil)
 var errInvalidID = errors.New("invalid id")
 
-func NewClusterService(apiKey, apisecret string, zone egoscale.ZoneName, logger logr.Logger, traceAPI bool) (domain.ClusterService, error) {
-	cloudClient, err := exoscale.NewCloud(apiKey, apisecret, zone, logger, traceAPI)
+func NewClusterService(apiKey, apisecret string, zone egoscale.ZoneName, logger logr.Logger) (domain.ClusterService, error) {
+	cloudClient, err := exoscale.NewCloud(apiKey, apisecret, zone)
 	if err != nil {
 		return nil, err
 	}

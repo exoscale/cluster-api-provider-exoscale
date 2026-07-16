@@ -40,10 +40,7 @@ import (
 
 	infrastructurev1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/controller"
-	"github.com/exoscale/cluster-api-provider-exoscale/internal/domain"
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/service"
-	egoscale "github.com/exoscale/egoscale/v3"
-	"github.com/go-logr/logr"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -68,7 +65,6 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
-	var traceExoscaleAPI bool
 	var tlsOpts []func(*tls.Config)
 	// watchNamespace restricts the operator to a single namespace. This enables running multiple
 	// instances of the operator in the same cluster, each responsible for a different namespace,
@@ -99,8 +95,6 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
-	flag.BoolVar(&traceExoscaleAPI, "exoscale-api-trace", false,
-		"Log Exoscale API request methods and paths; headers, query strings, and bodies are omitted.")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -207,31 +201,19 @@ func main() {
 	}
 
 	if err := (&controller.ExoscaleClusterReconciler{
-		Client:      mgr.GetClient(),
-		Scheme:      mgr.GetScheme(),
-		WatchFilter: watchFilter,
-		NewClusterService: func(
-			apiKey, apiSecret string,
-			zone egoscale.ZoneName,
-			logger logr.Logger,
-		) (domain.ClusterService, error) {
-			return service.NewClusterService(apiKey, apiSecret, zone, logger, traceExoscaleAPI)
-		},
+		Client:            mgr.GetClient(),
+		Scheme:            mgr.GetScheme(),
+		WatchFilter:       watchFilter,
+		NewClusterService: service.NewClusterService,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "ExoscaleCluster")
 		os.Exit(1)
 	}
 	if err := (&controller.ExoscaleMachineReconciler{
-		Client:      mgr.GetClient(),
-		Scheme:      mgr.GetScheme(),
-		WatchFilter: watchFilter,
-		NewInstanceService: func(
-			apiKey, apiSecret string,
-			zone egoscale.ZoneName,
-			logger logr.Logger,
-		) (domain.InstanceService, error) {
-			return service.NewInstanceService(apiKey, apiSecret, zone, logger, traceExoscaleAPI)
-		},
+		Client:             mgr.GetClient(),
+		Scheme:             mgr.GetScheme(),
+		WatchFilter:        watchFilter,
+		NewInstanceService: service.NewInstanceService,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "ExoscaleMachine")
 		os.Exit(1)

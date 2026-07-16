@@ -49,7 +49,6 @@ jobs:
         env:
           COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           CHAINSAW_MACHINE_TEMPLATE: Linux Ubuntu 24.04 LTS 64-bit
-          CHAINSAW_VALUES_ZONE: bg-sof-1
           EXOSCALE_API_KEY: ${{ secrets.EXOSCALE_API_KEY }}
           EXOSCALE_API_SECRET: ${{ secrets.EXOSCALE_API_SECRET }}
         run: |

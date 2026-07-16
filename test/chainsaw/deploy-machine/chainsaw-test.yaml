@@ -108,7 +108,9 @@ spec:
                     status: "True"
                 instanceState: running
                 (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', instanceID)): true
-                (length(addresses[?type == 'ExternalIP'])): 1
+                addresses:
+                  - type: ExternalIP
+                    (address != ''): true
         - assert:
             resource:
               apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1

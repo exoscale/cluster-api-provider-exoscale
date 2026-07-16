@@ -247,6 +247,7 @@ func Test_cloud_CreateInstance(t *testing.T) {
 	templateID := uuid.New()
 	securityGroupID := uuid.New()
 	rootVolumeSizeGB := int64(20)
+	template := egoscale.Template{ID: egoscale.UUID(templateID.String()), Size: 15 * bytesPerGiB}
 	instanceTypeID := egoscale.UUID(uuid.New().String())
 	instanceType := egoscale.InstanceType{
 		ID:     instanceTypeID,
@@ -270,6 +271,10 @@ func Test_cloud_CreateInstance(t *testing.T) {
 		listInstanceTypes: func(context.Context) (*egoscale.ListInstanceTypesResponse, error) {
 			return &egoscale.ListInstanceTypesResponse{InstanceTypes: []egoscale.InstanceType{instanceType}}, nil
 		},
+		getTemplate: func(_ context.Context, id egoscale.UUID) (*egoscale.Template, error) {
+			assert.Equal(t, egoscale.UUID(templateID.String()), id)
+			return &template, nil
+		},
 		createInstance: func(_ context.Context, req egoscale.CreateInstanceRequest) (*egoscale.Operation, error) {
 			assert.Equal(t, egoscale.CreateInstanceRequest{
 				DiskSize:           rootVolumeSizeGB,
@@ -279,7 +284,7 @@ func Test_cloud_CreateInstance(t *testing.T) {
 				PublicIPAssignment: egoscale.PublicIPAssignmentInet4,
 				SecurityGroups:     []egoscale.SecurityGroup{{ID: egoscale.UUID(securityGroupID.String())}},
 				SSHKey:             &egoscale.SSHKey{Name: "ssh-key"},
-				Template:           &egoscale.Template{ID: egoscale.UUID(templateID.String())},
+				Template:           &egoscale.Template{ID: template.ID},
 				UserData:           base64.StdEncoding.EncodeToString([]byte("#cloud-config")),
 			}, req)
 			return createOp, nil
@@ -296,6 +301,76 @@ func Test_cloud_CreateInstance(t *testing.T) {
 	assert.Equal(t, instanceID, output)
 }
 
+func Test_cloud_CreateInstance_diskSize(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	instanceID := uuid.New()
+	templateID := uuid.New()
+	instanceType := egoscale.InstanceType{
+		ID:     egoscale.UUID(uuid.New().String()),
+		Family: egoscale.InstanceTypeFamilyStandard,
+		Size:   egoscale.InstanceTypeSize("2"),
+	}
+	template := egoscale.Template{ID: egoscale.UUID(templateID.String()), Size: 30 * bytesPerGiB}
+
+	t.Run("defaults to template size", func(t *testing.T) {
+		t.Parallel()
+
+		createOp := &egoscale.Operation{Reference: &egoscale.OperationReference{ID: egoscale.UUID(instanceID.String())}}
+		exoClient := &instanceExoscaleClientFake{
+			ExoscaleClient: mocks.NewExoscaleClient(t),
+			listInstanceTypes: func(context.Context) (*egoscale.ListInstanceTypesResponse, error) {
+				return &egoscale.ListInstanceTypesResponse{InstanceTypes: []egoscale.InstanceType{instanceType}}, nil
+			},
+			getTemplate: func(_ context.Context, id egoscale.UUID) (*egoscale.Template, error) {
+				assert.Equal(t, egoscale.UUID(templateID.String()), id)
+				return &template, nil
+			},
+			createInstance: func(_ context.Context, req egoscale.CreateInstanceRequest) (*egoscale.Operation, error) {
+				assert.Equal(t, int64(30), req.DiskSize)
+				assert.Equal(t, &egoscale.Template{ID: template.ID}, req.Template)
+				return createOp, nil
+			},
+		}
+		exoClient.EXPECT().Wait(ctx, createOp).Return(&egoscale.Operation{}, nil)
+
+		client := cloud{exoClient: exoClient, instanceClient: exoClient}
+
+		output, err := client.CreateInstance(ctx, domain.InstanceSpec{TemplateID: templateID, InstanceType: "standard-2"})
+
+		assert.NoError(t, err)
+		assert.Equal(t, instanceID, output)
+	})
+
+	t.Run("rejects override below template size", func(t *testing.T) {
+		t.Parallel()
+
+		rootVolumeSizeGB := int64(20)
+		exoClient := &instanceExoscaleClientFake{
+			ExoscaleClient: mocks.NewExoscaleClient(t),
+			listInstanceTypes: func(context.Context) (*egoscale.ListInstanceTypesResponse, error) {
+				return &egoscale.ListInstanceTypesResponse{InstanceTypes: []egoscale.InstanceType{instanceType}}, nil
+			},
+			getTemplate: func(_ context.Context, id egoscale.UUID) (*egoscale.Template, error) {
+				assert.Equal(t, egoscale.UUID(templateID.String()), id)
+				return &template, nil
+			},
+		}
+
+		client := cloud{exoClient: exoClient, instanceClient: exoClient}
+
+		output, err := client.CreateInstance(ctx, domain.InstanceSpec{
+			TemplateID:       templateID,
+			InstanceType:     "standard-2",
+			RootVolumeSizeGB: &rootVolumeSizeGB,
+		})
+
+		assert.ErrorContains(t, err, "rootVolumeSizeGB 20 is smaller than template size 30")
+		assert.Equal(t, uuid.Nil, output)
+	})
+}
+
 type instanceExoscaleClientFake struct {
 	*mocks.ExoscaleClient
 	listInstances     func(context.Context, ...egoscale.ListInstancesOpt) (*egoscale.ListInstancesResponse, error)
@@ -303,6 +378,7 @@ type instanceExoscaleClientFake struct {
 	getInstance       func(context.Context, egoscale.UUID) (*egoscale.Instance, error)
 	deleteInstance    func(context.Context, egoscale.UUID) (*egoscale.Operation, error)
 	listInstanceTypes func(context.Context) (*egoscale.ListInstanceTypesResponse, error)
+	getTemplate       func(context.Context, egoscale.UUID) (*egoscale.Template, error)
 }
 
 func (f *instanceExoscaleClientFake) ListInstances(ctx context.Context, opts ...egoscale.ListInstancesOpt) (*egoscale.ListInstancesResponse, error) {
@@ -338,6 +414,13 @@ func (f *instanceExoscaleClientFake) ListInstanceTypes(ctx context.Context) (*eg
 		panic("unexpected ListInstanceTypes")
 	}
 	return f.listInstanceTypes(ctx)
+}
+
+func (f *instanceExoscaleClientFake) GetTemplate(ctx context.Context, id egoscale.UUID) (*egoscale.Template, error) {
+	if f.getTemplate == nil {
+		panic("unexpected GetTemplate")
+	}
+	return f.getTemplate(ctx, id)
 }
 
 func Test_normalizeInstanceType(t *testing.T) {

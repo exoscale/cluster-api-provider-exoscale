@@ -19,7 +19,7 @@ import (
 
 var _ domain.Cloud = (*cloud)(nil)
 
-const defaultRootVolumeSizeGB int64 = 10
+const bytesPerGiB int64 = 1024 * 1024 * 1024
 
 type cloud struct {
 	exoClient      domain.ExoscaleClient
@@ -32,6 +32,7 @@ type instanceClient interface {
 	GetInstance(ctx context.Context, id egoscale.UUID) (*egoscale.Instance, error)
 	DeleteInstance(ctx context.Context, id egoscale.UUID) (*egoscale.Operation, error)
 	ListInstanceTypes(ctx context.Context) (*egoscale.ListInstanceTypesResponse, error)
+	GetTemplate(ctx context.Context, id egoscale.UUID) (*egoscale.Template, error)
 }
 
 func NewCloud(apiKey, apisecret string, zone egoscale.ZoneName) (*cloud, error) {
@@ -344,8 +345,19 @@ func (c *cloud) CreateInstance(ctx context.Context, spec domain.InstanceSpec) (u
 		return uuid.Nil, fmt.Errorf("unable to find instance type %q: %w", spec.InstanceType, err)
 	}
 
-	diskSize := defaultRootVolumeSizeGB
+	template, err := client.GetTemplate(ctx, egoscale.UUID(spec.TemplateID.String()))
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("unable to get template %q: %w", spec.TemplateID, err)
+	}
+	if template.Size <= 0 {
+		return uuid.Nil, fmt.Errorf("template %q has invalid size %d", spec.TemplateID, template.Size)
+	}
+
+	diskSize := templateDiskSizeGB(template.Size)
 	if spec.RootVolumeSizeGB != nil {
+		if *spec.RootVolumeSizeGB < diskSize {
+			return uuid.Nil, fmt.Errorf("rootVolumeSizeGB %d is smaller than template size %d", *spec.RootVolumeSizeGB, diskSize)
+		}
 		diskSize = *spec.RootVolumeSizeGB
 	}
 
@@ -357,7 +369,7 @@ func (c *cloud) CreateInstance(ctx context.Context, spec domain.InstanceSpec) (u
 		PublicIPAssignment: egoscale.PublicIPAssignmentInet4,
 		SecurityGroups:     securityGroups(spec.SecurityGroupIDs),
 		SSHKey:             &egoscale.SSHKey{Name: spec.SSHKey},
-		Template:           &egoscale.Template{ID: egoscale.UUID(spec.TemplateID.String())},
+		Template:           &egoscale.Template{ID: template.ID},
 	}
 	if spec.UserData != "" {
 		req.UserData = base64.StdEncoding.EncodeToString([]byte(spec.UserData))
@@ -455,6 +467,10 @@ func normalizeInstanceType(instanceType string) string {
 	}
 
 	return instanceType
+}
+
+func templateDiskSizeGB(size int64) int64 {
+	return (size + bytesPerGiB - 1) / bytesPerGiB
 }
 
 func formatTime(t time.Time) string {

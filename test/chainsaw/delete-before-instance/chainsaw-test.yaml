@@ -55,21 +55,3 @@ spec:
               spec:
                 (providerID == null): true
               (status.instanceID == null): true
-
-    - name: delete before instance exists
-      try:
-        - delete:
-            timeout: 2m
-            ref:
-              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
-              kind: ExoscaleMachine
-              namespace: ($namespace)
-              name: ($machineName)
-        - wait:
-            apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
-            kind: ExoscaleMachine
-            namespace: ($namespace)
-            name: ($machineName)
-            timeout: 2m
-            for:
-              deletion: {}

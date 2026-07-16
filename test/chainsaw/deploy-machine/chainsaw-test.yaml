@@ -120,21 +120,3 @@ spec:
               done
               kubectl get machine "$MACHINE_NAME" -n default -o yaml
               exit 1
-
-    - name: delete machine
-      try:
-        - delete:
-            timeout: 10m
-            ref:
-              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
-              kind: ExoscaleMachine
-              namespace: ($namespace)
-              name: ($machineName)
-        - wait:
-            apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
-            kind: ExoscaleMachine
-            namespace: ($namespace)
-            name: ($machineName)
-            timeout: 10m
-            for:
-              deletion: {}

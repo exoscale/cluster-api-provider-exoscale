@@ -74,6 +74,9 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 						Name:     exoscaleClusterName,
 					},
 				},
+				Status: clusterv1.ClusterStatus{
+					Initialization: clusterv1.ClusterInitializationStatus{InfrastructureProvisioned: &clusterProvisioned},
+				},
 			},
 			&infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: exoscaleClusterName, Namespace: ns},
@@ -235,12 +238,12 @@ func TestExoscaleMachineReconciler_Reconcile_waitsForClusterInfrastructure(t *te
 						Name:     exoscaleClusterName,
 					},
 				},
+				Status: clusterv1.ClusterStatus{
+					Initialization: clusterv1.ClusterInitializationStatus{InfrastructureProvisioned: &clusterProvisioned},
+				},
 			},
 			&infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: exoscaleClusterName, Namespace: ns},
-				Status: infrav1alpha1.ExoscaleClusterStatus{
-					Initialization: infrav1alpha1.ExoscaleClusterInitializationStatus{Provisioned: &clusterProvisioned},
-				},
 			},
 			&clusterv1.Machine{
 				ObjectMeta: metav1.ObjectMeta{
@@ -323,12 +326,12 @@ func TestExoscaleMachineReconciler_Reconcile_waitsForBootstrapData(t *testing.T)
 						Name:     exoscaleClusterName,
 					},
 				},
+				Status: clusterv1.ClusterStatus{
+					Initialization: clusterv1.ClusterInitializationStatus{InfrastructureProvisioned: &clusterProvisioned},
+				},
 			},
 			&infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: exoscaleClusterName, Namespace: ns},
-				Status: infrav1alpha1.ExoscaleClusterStatus{
-					Initialization: infrav1alpha1.ExoscaleClusterInitializationStatus{Provisioned: &clusterProvisioned},
-				},
 			},
 			&clusterv1.Machine{
 				ObjectMeta: metav1.ObjectMeta{
@@ -759,6 +762,9 @@ func newReadyMachineReconciler(t *testing.T, instance domain.Instance, upsertErr
 						Kind:     "ExoscaleCluster",
 						Name:     exoscaleClusterName,
 					},
+				},
+				Status: clusterv1.ClusterStatus{
+					Initialization: clusterv1.ClusterInitializationStatus{InfrastructureProvisioned: &clusterProvisioned},
 				},
 			},
 			&infrav1alpha1.ExoscaleCluster{

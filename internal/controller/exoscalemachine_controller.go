@@ -165,7 +165,7 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			return ctrl.Result{}, err
 		}
 	}
-	if exoCluster.Status.Initialization.Provisioned == nil || !*exoCluster.Status.Initialization.Provisioned {
+	if cluster.Status.Initialization.InfrastructureProvisioned == nil || !*cluster.Status.Initialization.InfrastructureProvisioned {
 		log.Info("cluster infrastructure not yet ready")
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 	}

@@ -34,6 +34,17 @@ spec:
                 value: ($clusterName)
             content: |
               kubectl patch exoscalecluster "$CLUSTER_NAME" -n default --subresource=status --type=merge -p '{"status":{"initialization":{"provisioned":true}}}'
+        - assert:
+            timeout: 2m
+            resource:
+              apiVersion: cluster.x-k8s.io/v1beta2
+              kind: Cluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+              status:
+                initialization:
+                  infrastructureProvisioned: true
 
     - name: apply machine with invalid security group
       try:

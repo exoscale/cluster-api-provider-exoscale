@@ -159,6 +159,16 @@ spec:
     - name: delete CAPI machine after status instance id is lost
       try:
         - script:
+            timeout: 10s
+            env:
+              - name: MACHINE_NAME
+                value: ($machineName)
+            content: |
+              kubectl get exoscalemachine "$MACHINE_NAME" -n default -o jsonpath='{.status.instanceID}'
+            outputs:
+              - name: instanceID
+                value: ($stdout)
+        - script:
             timeout: 2m
             content: |
               kubectl -n cluster-api-provider-exoscale-system scale deployment/cluster-api-provider-exoscale-controller-manager --replicas=0
@@ -185,27 +195,24 @@ spec:
             content: |
               kubectl wait --for=delete exoscalemachine/"$MACHINE_NAME" -n default --timeout=10m
               kubectl wait --for=delete machine/"$MACHINE_NAME" -n default --timeout=2m
+        - script:
+            timeout: 2m
+            env:
+              - name: INSTANCE_ID
+                value: ($instanceID)
+              - name: ZONE
+                value: ($zone)
+            content: |
+              set -eu
+              instances=$(exo compute instance list --zone "$ZONE" -O json -Q)
+              count=$(printf '%s' "$instances" | jq --arg id "$INSTANCE_ID" '[.[] | select(.id == $id)] | length')
+              if [ "$count" -gt 0 ]; then
+                echo "instance $INSTANCE_ID still exists"
+                exit 1
+              fi
       finally:
         - script:
             timeout: 2m
             content: |
               kubectl -n cluster-api-provider-exoscale-system scale deployment/cluster-api-provider-exoscale-controller-manager --replicas=1
               kubectl -n cluster-api-provider-exoscale-system rollout status deployment/cluster-api-provider-exoscale-controller-manager --timeout=2m
-
-    - name: assert recovered instance was deleted
-      try:
-        - script:
-            timeout: 2m
-            env:
-              - name: MACHINE_UID
-                value: ($machineUID)
-              - name: ZONE
-                value: ($zone)
-            content: |
-              set -eu
-              instances=$(exo compute instance list --zone "$ZONE" -O json -Q)
-              count=$(printf '%s' "$instances" | jq --arg uid "$MACHINE_UID" '[.[] | select(.labels["cluster-api-provider-exoscale/machine-uid"] == $uid)] | length')
-              if [ "$count" -gt 0 ]; then
-                echo "$count instance(s) for Machine UID $MACHINE_UID still exist"
-                exit 1
-              fi

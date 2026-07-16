@@ -19,6 +19,7 @@ package main
 import (
 	"crypto/tls"
 	"flag"
+	"fmt"
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -40,7 +41,10 @@ import (
 
 	infrastructurev1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/controller"
+	"github.com/exoscale/cluster-api-provider-exoscale/internal/domain"
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/service"
+	egoscale "github.com/exoscale/egoscale/v3"
+	"github.com/go-logr/logr"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -65,6 +69,7 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
+	var exoscaleAPITraceLevel string
 	var tlsOpts []func(*tls.Config)
 	// watchNamespace restricts the operator to a single namespace. This enables running multiple
 	// instances of the operator in the same cluster, each responsible for a different namespace,
@@ -95,6 +100,8 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	flag.StringVar(&exoscaleAPITraceLevel, "exoscale-api-trace-level", "off",
+		"Exoscale API trace level: off or metadata (method, host, path, status, duration).")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -102,6 +109,11 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	if exoscaleAPITraceLevel != "off" && exoscaleAPITraceLevel != "metadata" {
+		setupLog.Error(fmt.Errorf("unsupported trace level %q", exoscaleAPITraceLevel), "Invalid Exoscale API trace level")
+		os.Exit(1)
+	}
+	traceExoscaleAPI := exoscaleAPITraceLevel == "metadata"
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
@@ -210,10 +222,16 @@ func main() {
 		os.Exit(1)
 	}
 	if err := (&controller.ExoscaleMachineReconciler{
-		Client:             mgr.GetClient(),
-		Scheme:             mgr.GetScheme(),
-		WatchFilter:        watchFilter,
-		NewInstanceService: service.NewInstanceService,
+		Client:      mgr.GetClient(),
+		Scheme:      mgr.GetScheme(),
+		WatchFilter: watchFilter,
+		NewInstanceService: func(
+			apiKey, apiSecret string,
+			zone egoscale.ZoneName,
+			logger logr.Logger,
+		) (domain.InstanceService, error) {
+			return service.NewInstanceService(apiKey, apiSecret, zone, logger, traceExoscaleAPI)
+		},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "ExoscaleMachine")
 		os.Exit(1)

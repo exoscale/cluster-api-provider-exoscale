@@ -139,6 +139,10 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		log.Info("cluster infrastructure not yet ready")
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 	}
+	if machine.Spec.Bootstrap.DataSecretName == nil {
+		log.Info("bootstrap data not yet available")
+		return ctrl.Result{}, nil
+	}
 
 	instanceService, err := r.instanceService(ctx, exoCluster)
 	if err != nil {
@@ -196,11 +200,6 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 		if err := patchHelper.Patch(ctx, exoMachine); err != nil {
 			return ctrl.Result{}, err
 		}
-	}
-
-	if machine.Spec.Bootstrap.DataSecretName == nil {
-		log.Info("bootstrap data not yet available")
-		return ctrl.Result{}, nil
 	}
 
 	userData, err := r.bootstrapData(ctx, machine)
@@ -288,7 +287,7 @@ func (r *ExoscaleMachineReconciler) reconcileDelete(
 
 func (r *ExoscaleMachineReconciler) bootstrapData(ctx context.Context, machine *clusterv1.Machine) (string, error) {
 	if machine.Spec.Bootstrap.DataSecretName == nil {
-		return "", nil
+		return "", fmt.Errorf("bootstrap data secret name is not set")
 	}
 
 	secret := &corev1.Secret{}

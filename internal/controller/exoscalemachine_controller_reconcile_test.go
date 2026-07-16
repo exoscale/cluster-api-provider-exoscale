@@ -258,6 +258,95 @@ func TestExoscaleMachineReconciler_Reconcile_waitsForClusterInfrastructure(t *te
 	assert.Empty(t, updated.Status.InstanceID)
 }
 
+func TestExoscaleMachineReconciler_Reconcile_waitsForBootstrapData(t *testing.T) {
+	t.Parallel()
+
+	const (
+		ns                  = "default"
+		clusterName         = "test-cluster"
+		machineName         = "test-machine"
+		exoscaleClusterName = "test-exoscale-cluster"
+		exoscaleMachineName = "test-exoscale-machine"
+	)
+
+	ctx := context.Background()
+	machineUID := uuid.New()
+	templateID := uuid.New()
+	clusterProvisioned := true
+
+	scheme := runtime.NewScheme()
+	_ = clientgoscheme.AddToScheme(scheme)
+	_ = clusterv1.AddToScheme(scheme)
+	_ = infrav1alpha1.AddToScheme(scheme)
+
+	client := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&infrav1alpha1.ExoscaleMachine{}).
+		WithObjects(
+			&clusterv1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: ns},
+				Spec: clusterv1.ClusterSpec{
+					InfrastructureRef: clusterv1.ContractVersionedObjectReference{
+						APIGroup: infrav1alpha1.GroupVersion.Group,
+						Kind:     "ExoscaleCluster",
+						Name:     exoscaleClusterName,
+					},
+				},
+			},
+			&infrav1alpha1.ExoscaleCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: exoscaleClusterName, Namespace: ns},
+				Status: infrav1alpha1.ExoscaleClusterStatus{
+					Initialization: infrav1alpha1.ExoscaleClusterInitializationStatus{Provisioned: &clusterProvisioned},
+				},
+			},
+			&clusterv1.Machine{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      machineName,
+					Namespace: ns,
+					UID:       types.UID(machineUID.String()),
+					Labels: map[string]string{
+						clusterv1.ClusterNameLabel: clusterName,
+					},
+				},
+			},
+			&infrav1alpha1.ExoscaleMachine{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      exoscaleMachineName,
+					Namespace: ns,
+					OwnerReferences: []metav1.OwnerReference{
+						{APIVersion: clusterv1.GroupVersion.String(), Kind: "Machine", Name: machineName},
+					},
+				},
+				Spec: infrav1alpha1.ExoscaleMachineSpec{
+					TemplateID:   templateID.String(),
+					InstanceType: "standard-2",
+					SSHKey:       "ssh-key",
+				},
+			},
+		).
+		Build()
+
+	r := &ExoscaleMachineReconciler{
+		Client: client,
+		Scheme: scheme,
+		NewInstanceService: func(string, string, egoscale.ZoneName, logr.Logger) (domain.InstanceService, error) {
+			assert.Fail(t, "instance service should not be created before bootstrap data is ready")
+			return nil, nil
+		},
+	}
+
+	result, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}})
+
+	assert.NoError(t, err)
+	assert.Equal(t, reconcile.Result{}, result)
+
+	updated := &infrav1alpha1.ExoscaleMachine{}
+	assert.NoError(t, client.Get(ctx, types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}, updated))
+	assert.Contains(t, updated.Finalizers, machineFinalizer)
+	assert.Nil(t, updated.Spec.ProviderID)
+	assert.Empty(t, updated.Status.InstanceID)
+}
+
 func TestExoscaleMachineReconciler_Reconcile_setsPausedCondition(t *testing.T) {
 	t.Parallel()
 

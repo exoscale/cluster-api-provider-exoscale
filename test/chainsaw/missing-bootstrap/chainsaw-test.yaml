@@ -38,6 +38,16 @@ spec:
                     status: "True"
                 (securityGroupNode == null): true
 
+    - name: mark cluster infrastructure ready
+      try:
+        - script:
+            timeout: 10s
+            env:
+              - name: CLUSTER_NAME
+                value: ($clusterName)
+            content: |
+              kubectl patch exoscalecluster "$CLUSTER_NAME" -n default --subresource=status --type=merge -p '{"status":{"initialization":{"provisioned":true}}}'
+
     - name: apply machine without bootstrap data
       try:
         - apply:

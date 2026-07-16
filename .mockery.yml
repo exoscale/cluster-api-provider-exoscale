@@ -30,3 +30,11 @@ packages:
       ElasticIPService:
       SecurityGroupService:
       ClusterService:
+  github.com/exoscale/cluster-api-provider-exoscale/internal/infrastructure/exoscale:
+    config:
+      dir: '{{.InterfaceDir}}/../../mocks'
+    interfaces:
+      instanceClient:
+        config:
+          structname: InstanceClient
+          filename: instance_client.go

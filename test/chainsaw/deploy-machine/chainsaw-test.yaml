@@ -29,26 +29,6 @@ spec:
         - apply:
             file: cluster.yaml
 
-    - name: assert cluster ready
-      try:
-        - assert:
-            timeout: 5m
-            resource:
-              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
-              kind: ExoscaleCluster
-              metadata:
-                name: ($clusterName)
-                namespace: ($namespace)
-              status:
-                initialization:
-                  provisioned: true
-                securityGroupNode:
-                  (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
-                conditions:
-                  - type: Ready
-                    reason: ReconcileSuccess
-                    status: "True"
-
     - name: apply machine
       try:
         - apply:

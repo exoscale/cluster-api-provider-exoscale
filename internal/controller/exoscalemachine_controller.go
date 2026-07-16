@@ -122,6 +122,15 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+	if controllerutil.AddFinalizer(exoMachine, machineFinalizer) {
+		if err := patchHelper.Patch(ctx, exoMachine); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+	if exoCluster.Status.Initialization.Provisioned == nil || !*exoCluster.Status.Initialization.Provisioned {
+		log.Info("cluster infrastructure not yet ready")
+		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
+	}
 
 	instanceService, err := r.instanceService(ctx, exoCluster)
 	if err != nil {

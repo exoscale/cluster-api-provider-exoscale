@@ -221,58 +221,80 @@ func templateDiskSizeGB(size int64) int64 {
 }
 
 func (s *instanceService) DeleteInstance(ctx context.Context, machineID, instanceID *uuid.UUID) error {
-	var instance domain.Instance
+	var statusInstance domain.Instance
 	if instanceID != nil {
 		var err error
-		instance, err = s.cloud.GetInstance(ctx, *instanceID)
+		statusInstance, err = s.cloud.GetInstance(ctx, *instanceID)
 		if err != nil && !errors.Is(err, domain.ErrInstanceNotFound) {
 			return err
 		}
 	}
 
+	var instances []domain.Instance
 	if machineID != nil {
-		byMachineID, err := s.findInstanceByMachineID(ctx, *machineID)
-		if err != nil && !errors.Is(err, domain.ErrInstanceNotFound) {
+		byMachineID, err := s.findInstancesByMachineID(ctx, *machineID)
+		if err != nil {
 			return err
 		}
-		if err == nil {
-			if instance.ID != uuid.Nil && instance.ID != byMachineID.ID {
-				return fmt.Errorf("status instance %s differs from Machine UID instance %s", instance.ID, byMachineID.ID)
+		if len(byMachineID) > 0 {
+			if statusInstance.ID != uuid.Nil && !containsInstance(byMachineID, statusInstance.ID) {
+				return fmt.Errorf("status instance %s differs from Machine UID instances", statusInstance.ID)
 			}
-			instance = byMachineID
+			instances = byMachineID
 		}
 	}
-	if instance.ID == uuid.Nil {
+	if len(instances) == 0 && statusInstance.ID != uuid.Nil {
+		instances = []domain.Instance{statusInstance}
+	}
+	if len(instances) == 0 {
 		return nil
 	}
 
-	s.logger.Info("Delete instance", "instanceID", instance.ID.String())
-	if err := s.cloud.DeleteInstance(ctx, instance.ID); err != nil && !errors.Is(err, domain.ErrInstanceNotFound) {
-		return err
+	for _, instance := range instances {
+		s.logger.Info("Delete instance", "instanceID", instance.ID.String())
+		if err := s.cloud.DeleteInstance(ctx, instance.ID); err != nil && !errors.Is(err, domain.ErrInstanceNotFound) {
+			return err
+		}
 	}
 	return nil
 }
 
 func (s *instanceService) findInstanceByMachineID(ctx context.Context, machineID uuid.UUID) (domain.Instance, error) {
-	instances, err := s.cloud.ListInstances(ctx)
+	matches, err := s.findInstancesByMachineID(ctx, machineID)
 	if err != nil {
 		return domain.Instance{}, err
 	}
+	if len(matches) == 0 {
+		return domain.Instance{}, domain.ErrInstanceNotFound
+	}
+	if len(matches) > 1 {
+		return domain.Instance{}, fmt.Errorf("multiple instances found for Machine UID %s", machineID)
+	}
+	return matches[0], nil
+}
 
-	var match domain.Instance
+func (s *instanceService) findInstancesByMachineID(ctx context.Context, machineID uuid.UUID) ([]domain.Instance, error) {
+	instances, err := s.cloud.ListInstances(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var matches []domain.Instance
 	for _, instance := range instances {
 		if instance.Labels[machineUIDLabel] == machineID.String() {
-			if match.ID != uuid.Nil {
-				return domain.Instance{}, fmt.Errorf("multiple instances found for Machine UID %s", machineID)
-			}
-			match = instance
+			matches = append(matches, instance)
 		}
 	}
-	if match.ID != uuid.Nil {
-		return match, nil
-	}
+	return matches, nil
+}
 
-	return domain.Instance{}, domain.ErrInstanceNotFound
+func containsInstance(instances []domain.Instance, id uuid.UUID) bool {
+	for _, instance := range instances {
+		if instance.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 func labelsWithMachineID(labels map[string]string, machineID uuid.UUID) map[string]string {

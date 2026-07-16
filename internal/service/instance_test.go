@@ -414,19 +414,42 @@ func Test_instanceService_DeleteInstance(t *testing.T) {
 		})
 	}
 
-	t.Run("duplicate machine instances keep deletion pending when status exists", func(t *testing.T) {
+	t.Run("deletes all duplicate machine instances", func(t *testing.T) {
+		duplicateID := uuid.New()
+		deleted := map[uuid.UUID]bool{}
 		svc := instanceService{cloud: fakeInstanceCloud{
 			getInstance: func(context.Context, uuid.UUID) (domain.Instance, error) {
 				return instance, nil
 			},
 			listInstances: func(context.Context) ([]domain.Instance, error) {
-				return []domain.Instance{instance, {ID: uuid.New(), Labels: instance.Labels}}, nil
+				return []domain.Instance{instance, {ID: duplicateID, Labels: instance.Labels}}, nil
+			},
+			deleteInstance: func(_ context.Context, id uuid.UUID) error {
+				deleted[id] = true
+				return nil
 			},
 		}}
 
 		err := svc.DeleteInstance(ctx, &machineID, &id)
 
-		assert.ErrorContains(t, err, "multiple instances found")
+		assert.NoError(t, err)
+		assert.Equal(t, map[uuid.UUID]bool{id: true, duplicateID: true}, deleted)
+	})
+
+	t.Run("rejects status instance owned by another machine", func(t *testing.T) {
+		ownedID := uuid.New()
+		svc := instanceService{cloud: fakeInstanceCloud{
+			getInstance: func(context.Context, uuid.UUID) (domain.Instance, error) {
+				return domain.Instance{ID: id}, nil
+			},
+			listInstances: func(context.Context) ([]domain.Instance, error) {
+				return []domain.Instance{{ID: ownedID, Labels: instance.Labels}}, nil
+			},
+		}}
+
+		err := svc.DeleteInstance(ctx, &machineID, &id)
+
+		assert.ErrorContains(t, err, "differs from Machine UID instances")
 	})
 }
 

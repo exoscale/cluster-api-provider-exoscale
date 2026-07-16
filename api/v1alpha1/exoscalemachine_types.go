@@ -53,16 +53,30 @@ type ExoscaleMachineSpec struct {
 	RootVolumeSizeGB *int64 `json:"rootVolumeSizeGB,omitempty"`
 
 	// providerID is the cloud-provider identifier for this instance in the form
-	// exoscale:///<instance-uuid>. Set by the controller after the instance is created.
+	// exoscale://<instance-uuid>. Set by the controller after the instance is created.
 	// CAPI uses this field to match the InfraMachine to the Node object.
 	// +optional
 	ProviderID *string `json:"providerID,omitempty"`
+}
+
+// ExoscaleMachineInitializationStatus provides observations of the ExoscaleMachine initialization process.
+// +kubebuilder:validation:MinProperties=1
+type ExoscaleMachineInitializationStatus struct {
+	// provisioned is true when the infrastructure provider reports that the Machine's infrastructure is fully provisioned.
+	// NOTE: this field is part of the Cluster API contract, and it is used to orchestrate Machine provisioning.
+	// see: https://cluster-api.sigs.k8s.io/developer/providers/contracts/infra-machine#inframachine-initialization-completed
+	// +optional
+	Provisioned *bool `json:"provisioned,omitempty"`
 }
 
 // ExoscaleMachineStatus defines the observed state of an ExoscaleMachine.
 // Fields follow the CAPI InfraMachine contract:
 // https://cluster-api.sigs.k8s.io/developer/providers/contracts/infra-machine
 type ExoscaleMachineStatus struct {
+	// initialization provides observations of the Machine infrastructure initialization process.
+	// +optional
+	Initialization ExoscaleMachineInitializationStatus `json:"initialization,omitempty,omitzero"`
+
 	// ready is true when the Exoscale instance is running and reachable.
 	Ready bool `json:"ready"`
 

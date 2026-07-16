@@ -242,9 +242,10 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 	}
 
-	providerID := fmt.Sprintf("exoscale:///%s", instance.ID)
+	providerID := fmt.Sprintf("exoscale://%s", instance.ID)
 	exoMachine.Spec.ProviderID = &providerID
 	exoMachine.Status.Ready = true
+	exoMachine.Status.Initialization.Provisioned = new(true)
 	exoMachine.Status.Addresses = buildAddresses(instance)
 
 	return ctrl.Result{}, nil

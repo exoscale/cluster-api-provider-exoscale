@@ -152,8 +152,11 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 	assert.Equal(t, instanceID.String(), updated.Status.InstanceID)
 	assert.Equal(t, "running", updated.Status.InstanceState)
 	assert.True(t, updated.Status.Ready)
+	if assert.NotNil(t, updated.Status.Initialization.Provisioned) {
+		assert.True(t, *updated.Status.Initialization.Provisioned)
+	}
 	if assert.NotNil(t, updated.Spec.ProviderID) {
-		assert.Equal(t, "exoscale:///"+instanceID.String(), *updated.Spec.ProviderID)
+		assert.Equal(t, "exoscale://"+instanceID.String(), *updated.Spec.ProviderID)
 	}
 }
 

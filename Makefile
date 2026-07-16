@@ -95,8 +95,15 @@ CHAINSAW_MACHINE_TEST_DIR := test/chainsaw/deploy-machine
 CHAINSAW_TEST_DIRS ?= $(if $(CHAINSAW_MACHINE_TEMPLATE),$(CHAINSAW_ALL_TEST_DIRS),$(filter-out $(CHAINSAW_MACHINE_TEST_DIR),$(CHAINSAW_ALL_TEST_DIRS)))
 
 .PHONY: chainsaw-test-e2e
-chainsaw-test-e2e: setup-test-e2e-chainsaw chainsaw ## Run the e2e tests. Expected an isolated environment using Kind.
+chainsaw-test-e2e: setup-test-e2e-chainsaw chainsaw check-machine-e2e-tools ## Run the e2e tests. Expected an isolated environment using Kind.
 	$(CHAINSAW) test --set='suffix=$(CHAINSAW_VALUES_SUFFIX),zone=$(CHAINSAW_VALUES_ZONE),template=$(CHAINSAW_MACHINE_TEMPLATE),instanceType=$(CHAINSAW_MACHINE_INSTANCE_TYPE)' $(CHAINSAW_TEST_DIRS)
+
+.PHONY: check-machine-e2e-tools
+check-machine-e2e-tools:
+	@if [ -n "$(CHAINSAW_MACHINE_TEMPLATE)" ]; then \
+		command -v exo >/dev/null || { echo "ERROR: exo is required for the machine e2e test"; exit 1; }; \
+		command -v jq >/dev/null || { echo "ERROR: jq is required for the machine e2e test"; exit 1; }; \
+	fi
 
 ## Exoscale credentials: use env vars if already set, otherwise read from config file.
 EXOSCALE_CONFIG      ?= $(HOME)/.config/exoscale/exoscale.toml

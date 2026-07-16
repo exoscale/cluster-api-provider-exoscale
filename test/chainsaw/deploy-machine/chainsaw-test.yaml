@@ -49,6 +49,23 @@ spec:
             file: kubeadmconfig.yaml
         - apply:
             file: exoscalemachine.yaml
+      cleanup:
+        - script:
+            timeout: 10m
+            env:
+              - name: MACHINE_UID
+                value: ($machineUID)
+              - name: ZONE
+                value: ($zone)
+            content: |
+              set -eu
+              instances=$(exo compute instance list --zone "$ZONE" -O json -Q)
+              printf '%s' "$instances" | jq -r --arg uid "$MACHINE_UID" '.[] | select(.labels["cluster-api-provider-exoscale/machine-uid"] == $uid) | .id' |
+                while IFS= read -r id; do
+                  if [ -n "$id" ]; then
+                    exo compute instance delete "$id" --zone "$ZONE" --force -Q
+                  fi
+                done
 
     - name: assert requested machine inputs
       try:
@@ -116,7 +133,6 @@ spec:
               instance_id=$(kubectl get exoscalemachine "$MACHINE_NAME" -n default -o jsonpath='{.status.instanceID}')
               provider_id=$(kubectl get exoscalemachine "$MACHINE_NAME" -n default -o jsonpath='{.spec.providerID}')
               test "$provider_id" = "exoscale://$instance_id"
-              printf '%s' "$instance_id"
 
     - name: assert capi machine registered infra machine
       try:
@@ -168,21 +184,6 @@ spec:
                 value: ($machineName)
             content: |
               kubectl wait --for=delete exoscalemachine/"$MACHINE_NAME" -n default --timeout=10m
-      catch:
-        - script:
-            timeout: 10m
-            env:
-              - name: INSTANCE_NAME
-                value: ($machineName)
-              - name: ZONE
-                value: ($zone)
-            content: |
-              set -eu
-              instances=$(exo compute instance list --zone "$ZONE" -O json -Q)
-              count=$(printf '%s' "$instances" | jq --arg name "$INSTANCE_NAME" '[.[] | select(.name == $name)] | length')
-              if [ "$count" -gt 0 ]; then
-                exo compute instance delete "$INSTANCE_NAME" --zone "$ZONE" --force -Q
-              fi
       finally:
         - script:
             timeout: 2m
@@ -195,16 +196,15 @@ spec:
         - script:
             timeout: 2m
             env:
-              - name: INSTANCE_NAME
-                value: ($machineName)
+              - name: MACHINE_UID
+                value: ($machineUID)
               - name: ZONE
                 value: ($zone)
             content: |
               set -eu
               instances=$(exo compute instance list --zone "$ZONE" -O json -Q)
-              count=$(printf '%s' "$instances" | jq --arg name "$INSTANCE_NAME" '[.[] | select(.name == $name)] | length')
+              count=$(printf '%s' "$instances" | jq --arg uid "$MACHINE_UID" '[.[] | select(.labels["cluster-api-provider-exoscale/machine-uid"] == $uid)] | length')
               if [ "$count" -gt 0 ]; then
-                exo compute instance delete "$INSTANCE_NAME" --zone "$ZONE" --force -Q
-                echo "instance $INSTANCE_NAME still exists"
+                echo "$count instance(s) for Machine UID $MACHINE_UID still exist"
                 exit 1
               fi

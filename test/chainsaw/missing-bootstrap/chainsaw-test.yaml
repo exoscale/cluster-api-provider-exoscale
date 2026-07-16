@@ -42,13 +42,17 @@ spec:
 
     - name: mark cluster infrastructure ready
       try:
-        - script:
-            timeout: 10s
-            env:
-              - name: CLUSTER_NAME
-                value: ($clusterName)
-            content: |
-              kubectl patch exoscalecluster "$CLUSTER_NAME" -n default --subresource=status --type=merge -p '{"status":{"initialization":{"provisioned":true}}}'
+        - patch:
+            subresource: status
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleCluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+              status:
+                initialization:
+                  provisioned: true
         - assert:
             timeout: 2m
             resource:
@@ -65,56 +69,39 @@ spec:
       try:
         - apply:
             file: machine.yaml
-        - script:
-            timeout: 10s
-            env:
-              - name: MACHINE_NAME
-                value: ($machineName)
-            content: |
-              kubectl get machine "$MACHINE_NAME" -n default -o jsonpath='{.metadata.uid}'
             outputs:
-              - name: machineUID
-                value: ($stdout)
+              - name: machine
+                match:
+                  apiVersion: cluster.x-k8s.io/v1beta2
+                  kind: Machine
+                  metadata:
+                    name: ($machineName)
+                value: (@)
         - apply:
             file: exoscalemachine.yaml
 
     - name: assert no instance is created
       try:
-        - script:
+        - assert:
             timeout: 2m
-            env:
-              - name: MACHINE_NAME
-                value: ($machineName)
-            content: |
-              for _ in $(seq 1 60); do
-                finalizers=$(kubectl get exoscalemachine "$MACHINE_NAME" -n default -o jsonpath='{.metadata.finalizers[*]}')
-                case " $finalizers " in
-                  *" exoscalemachine.infrastructure.cluster.x-k8s.io "*) exit 0 ;;
-                esac
-                sleep 2
-              done
-              kubectl get exoscalemachine "$MACHINE_NAME" -n default -o yaml
-              exit 1
-        - script:
-            timeout: 10s
-            env:
-              - name: MACHINE_NAME
-                value: ($machineName)
-            content: |
-              instance_id=$(kubectl get exoscalemachine "$MACHINE_NAME" -n default -o jsonpath='{.status.instanceID}')
-              provider_id=$(kubectl get exoscalemachine "$MACHINE_NAME" -n default -o jsonpath='{.spec.providerID}')
-              ready=$(kubectl get exoscalemachine "$MACHINE_NAME" -n default -o jsonpath='{.status.ready}')
-              test -z "$instance_id"
-              test -z "$provider_id"
-              test "$ready" != "true"
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleMachine
+              metadata:
+                name: ($machineName)
+                namespace: ($namespace)
+                finalizers:
+                  - exoscalemachine.infrastructure.cluster.x-k8s.io
+              (spec.providerID == null): true
+              (status.instanceID == null): true
+              (status.ready != true): true
 
     - name: delete machine without instance
       try:
-        - script:
+        - delete:
             timeout: 2m
-            env:
-              - name: MACHINE_NAME
-                value: ($machineName)
-            content: |
-              kubectl delete exoscalemachine "$MACHINE_NAME" -n default --timeout=2m
-              kubectl wait --for=delete exoscalemachine/"$MACHINE_NAME" -n default --timeout=2m
+            ref:
+              apiVersion: cluster.x-k8s.io/v1beta2
+              kind: Machine
+              name: ($machineName)
+              namespace: ($namespace)

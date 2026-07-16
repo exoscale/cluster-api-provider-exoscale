@@ -27,13 +27,17 @@ spec:
 
     - name: mark cluster infrastructure ready
       try:
-        - script:
-            timeout: 10s
-            env:
-              - name: CLUSTER_NAME
-                value: ($clusterName)
-            content: |
-              kubectl patch exoscalecluster "$CLUSTER_NAME" -n default --subresource=status --type=merge -p '{"status":{"initialization":{"provisioned":true}}}'
+        - patch:
+            subresource: status
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleCluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+              status:
+                initialization:
+                  provisioned: true
         - assert:
             timeout: 2m
             resource:
@@ -50,16 +54,14 @@ spec:
       try:
         - apply:
             file: machine.yaml
-        - script:
-            timeout: 10s
-            env:
-              - name: MACHINE_NAME
-                value: ($machineName)
-            content: |
-              kubectl get machine "$MACHINE_NAME" -n default -o jsonpath='{.metadata.uid}'
             outputs:
-              - name: machineUID
-                value: ($stdout)
+              - name: machine
+                match:
+                  apiVersion: cluster.x-k8s.io/v1beta2
+                  kind: Machine
+                  metadata:
+                    name: ($machineName)
+                value: (@)
         - apply:
             file: exoscalemachine.yaml
 

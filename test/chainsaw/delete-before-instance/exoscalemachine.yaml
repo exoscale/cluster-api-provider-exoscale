@@ -9,7 +9,7 @@ metadata:
     - apiVersion: cluster.x-k8s.io/v1beta2
       kind: Machine
       name: ($machineName)
-      uid: ($machineUID)
+      uid: ($machine.metadata.uid)
 spec:
   template: 11111111-2222-3333-4444-555555555555
   instanceType: small

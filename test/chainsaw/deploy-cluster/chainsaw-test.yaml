@@ -146,26 +146,16 @@ spec:
 
     - name: assert cluster endpoint consistency
       try:
-        - script:
-            timeout: 10s
-            env:
-              - name: CLUSTER_NAME
-                value: ($clusterName)
-            content: |
-              kubectl get exoscalecluster "$CLUSTER_NAME" -n default \
-                -o jsonpath='{.spec.controlPlaneEndpoint.host} {.spec.controlPlaneEndpoint.port}'
-            outputs:
-              - name: cpHost
-                value: (split($stdout, ' ')[0])
-              - name: cpPort
-                value: (split($stdout, ' ')[1])
         - assert:
             timeout: 10s
+            bindings:
+              - name: exoscaleCluster
+                value: (x_k8s_get($client, 'infrastructure.cluster.x-k8s.io/v1alpha1', 'ExoscaleCluster', $namespace, $clusterName))
             resource:
               apiVersion: cluster.x-k8s.io/v1beta2
               kind: Cluster
               metadata:
                 name: ($clusterName)
                 namespace: ($namespace)
-              (spec.controlPlaneEndpoint.host == $cpHost): true
-              (to_string(spec.controlPlaneEndpoint.port) == $cpPort): true
+              (spec.controlPlaneEndpoint.host == $exoscaleCluster.spec.controlPlaneEndpoint.host): true
+              (spec.controlPlaneEndpoint.port == $exoscaleCluster.spec.controlPlaneEndpoint.port): true

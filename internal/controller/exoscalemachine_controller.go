@@ -24,6 +24,7 @@ import (
 
 	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -35,6 +36,7 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
+	"sigs.k8s.io/cluster-api/util/conditions"
 	capipatch "sigs.k8s.io/cluster-api/util/patch"
 
 	infrastructurev1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
@@ -84,11 +86,6 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, nil
 	}
 
-	if annotations.IsPaused(cluster, exoMachine) {
-		log.Info("ExoscaleMachine or Cluster is paused")
-		return ctrl.Result{}, nil
-	}
-
 	patchHelper, err := capipatch.NewHelper(exoMachine, r.Client)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -98,6 +95,17 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			reterr = pErr
 		}
 	}()
+	if annotations.IsPaused(cluster, exoMachine) {
+		log.Info("ExoscaleMachine or Cluster is paused")
+		conditions.Set(exoMachine, metav1.Condition{
+			Type:    clusterv1.PausedCondition,
+			Status:  metav1.ConditionTrue,
+			Reason:  clusterv1.PausedReason,
+			Message: "Reconciliation is paused",
+		})
+		return ctrl.Result{}, nil
+	}
+	conditions.Delete(exoMachine, clusterv1.PausedCondition)
 
 	if !exoMachine.DeletionTimestamp.IsZero() {
 		if exoMachine.Status.InstanceID == "" {

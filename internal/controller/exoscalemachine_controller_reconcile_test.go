@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -130,6 +131,11 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 					InstanceType: "standard-2",
 					SSHKey:       "ssh-key",
 				},
+				Status: infrav1alpha1.ExoscaleMachineStatus{
+					Conditions: []metav1.Condition{
+						{Type: clusterv1.PausedCondition, Status: metav1.ConditionTrue, Reason: clusterv1.PausedReason},
+					},
+				},
 			},
 		).
 		Build()
@@ -161,6 +167,7 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 	if assert.NotNil(t, updated.Spec.ProviderID) {
 		assert.Equal(t, "exoscale://"+instanceID.String(), *updated.Spec.ProviderID)
 	}
+	assert.Nil(t, apimeta.FindStatusCondition(updated.Status.Conditions, clusterv1.PausedCondition))
 }
 
 func TestExoscaleMachineReconciler_Reconcile_waitsForClusterInfrastructure(t *testing.T) {
@@ -249,6 +256,93 @@ func TestExoscaleMachineReconciler_Reconcile_waitsForClusterInfrastructure(t *te
 	assert.NoError(t, client.Get(ctx, types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}, updated))
 	assert.Contains(t, updated.Finalizers, machineFinalizer)
 	assert.Empty(t, updated.Status.InstanceID)
+}
+
+func TestExoscaleMachineReconciler_Reconcile_setsPausedCondition(t *testing.T) {
+	t.Parallel()
+
+	const (
+		ns                  = "default"
+		clusterName         = "test-cluster"
+		machineName         = "test-machine"
+		exoscaleClusterName = "test-exoscale-cluster"
+		exoscaleMachineName = "test-exoscale-machine"
+	)
+
+	ctx := context.Background()
+	machineUID := uuid.New()
+	templateID := uuid.New()
+
+	scheme := runtime.NewScheme()
+	_ = clientgoscheme.AddToScheme(scheme)
+	_ = clusterv1.AddToScheme(scheme)
+	_ = infrav1alpha1.AddToScheme(scheme)
+
+	client := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&infrav1alpha1.ExoscaleMachine{}).
+		WithObjects(
+			&clusterv1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: ns},
+				Spec: clusterv1.ClusterSpec{
+					InfrastructureRef: clusterv1.ContractVersionedObjectReference{
+						APIGroup: infrav1alpha1.GroupVersion.Group,
+						Kind:     "ExoscaleCluster",
+						Name:     exoscaleClusterName,
+					},
+				},
+			},
+			&clusterv1.Machine{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      machineName,
+					Namespace: ns,
+					UID:       types.UID(machineUID.String()),
+					Labels: map[string]string{
+						clusterv1.ClusterNameLabel: clusterName,
+					},
+				},
+			},
+			&infrav1alpha1.ExoscaleMachine{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      exoscaleMachineName,
+					Namespace: ns,
+					Annotations: map[string]string{
+						clusterv1.PausedAnnotation: "",
+					},
+					OwnerReferences: []metav1.OwnerReference{
+						{APIVersion: clusterv1.GroupVersion.String(), Kind: "Machine", Name: machineName},
+					},
+				},
+				Spec: infrav1alpha1.ExoscaleMachineSpec{
+					TemplateID:   templateID.String(),
+					InstanceType: "standard-2",
+					SSHKey:       "ssh-key",
+				},
+			},
+		).
+		Build()
+
+	r := &ExoscaleMachineReconciler{
+		Client: client,
+		Scheme: scheme,
+		NewInstanceService: func(string, string, egoscale.ZoneName, logr.Logger) (domain.InstanceService, error) {
+			assert.Fail(t, "instance service should not be created while paused")
+			return nil, nil
+		},
+	}
+
+	result, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}})
+
+	assert.NoError(t, err)
+	assert.Equal(t, reconcile.Result{}, result)
+
+	updated := &infrav1alpha1.ExoscaleMachine{}
+	assert.NoError(t, client.Get(ctx, types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}, updated))
+	paused := apimeta.FindStatusCondition(updated.Status.Conditions, clusterv1.PausedCondition)
+	if assert.NotNil(t, paused) {
+		assert.Equal(t, metav1.ConditionTrue, paused.Status)
+		assert.Equal(t, clusterv1.PausedReason, paused.Reason)
+	}
 }
 
 type instanceServiceStub struct {

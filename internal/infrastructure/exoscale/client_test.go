@@ -3,7 +3,9 @@ package exoscale
 import (
 	"context"
 	"encoding/base64"
+	"net"
 	"testing"
+	"time"
 
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/domain"
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/mocks"
@@ -299,6 +301,322 @@ func Test_cloud_CreateInstance(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, instanceID, output)
+}
+
+func Test_cloud_ListInstances(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	id := uuid.New()
+	createdAt := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
+
+	t.Run("maps instances", func(t *testing.T) {
+		t.Parallel()
+
+		exoClient := &instanceExoscaleClientFake{
+			listInstances: func(context.Context, ...egoscale.ListInstancesOpt) (*egoscale.ListInstancesResponse, error) {
+				return &egoscale.ListInstancesResponse{Instances: []egoscale.ListInstancesResponseInstances{{
+					ID:        egoscale.UUID(id.String()),
+					Name:      "machine-0",
+					State:     egoscale.InstanceStateRunning,
+					PublicIP:  net.ParseIP("1.2.3.4"),
+					CreatedAT: createdAt,
+					Labels:    egoscale.Labels{"machine": "uid"},
+				}}}, nil
+			},
+		}
+
+		client := cloud{instanceClient: exoClient}
+
+		output, err := client.ListInstances(ctx)
+
+		assert.NoError(t, err)
+		assert.Equal(t, []domain.Instance{{
+			ID:        id,
+			Name:      "machine-0",
+			State:     "running",
+			PublicIP:  "1.2.3.4",
+			CreatedAt: createdAt.Format(time.RFC3339),
+			Labels:    map[string]string{"machine": "uid"},
+		}}, output)
+	})
+
+	t.Run("returns list error", func(t *testing.T) {
+		t.Parallel()
+
+		exoClient := &instanceExoscaleClientFake{
+			listInstances: func(context.Context, ...egoscale.ListInstancesOpt) (*egoscale.ListInstancesResponse, error) {
+				return nil, assert.AnError
+			},
+		}
+
+		client := cloud{instanceClient: exoClient}
+
+		output, err := client.ListInstances(ctx)
+
+		assert.ErrorIs(t, err, assert.AnError)
+		assert.Nil(t, output)
+	})
+}
+
+func Test_cloud_GetInstance(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	id := uuid.New()
+	createdAt := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
+
+	t.Run("maps instance", func(t *testing.T) {
+		t.Parallel()
+
+		exoClient := &instanceExoscaleClientFake{
+			getInstance: func(_ context.Context, gotID egoscale.UUID) (*egoscale.Instance, error) {
+				assert.Equal(t, egoscale.UUID(id.String()), gotID)
+				return &egoscale.Instance{
+					Name:      "machine-0",
+					State:     egoscale.InstanceStateRunning,
+					PublicIP:  net.ParseIP("1.2.3.4"),
+					CreatedAT: createdAt,
+					Labels:    egoscale.Labels{"machine": "uid"},
+				}, nil
+			},
+		}
+
+		client := cloud{instanceClient: exoClient}
+
+		output, err := client.GetInstance(ctx, id)
+
+		assert.NoError(t, err)
+		assert.Equal(t, domain.Instance{
+			ID:        id,
+			Name:      "machine-0",
+			State:     "running",
+			PublicIP:  "1.2.3.4",
+			CreatedAt: createdAt.Format(time.RFC3339),
+			Labels:    map[string]string{"machine": "uid"},
+		}, output)
+	})
+
+	t.Run("maps not found", func(t *testing.T) {
+		t.Parallel()
+
+		exoClient := &instanceExoscaleClientFake{
+			getInstance: func(context.Context, egoscale.UUID) (*egoscale.Instance, error) {
+				return nil, egoscale.ErrNotFound
+			},
+		}
+
+		client := cloud{instanceClient: exoClient}
+
+		_, err := client.GetInstance(ctx, id)
+
+		assert.ErrorIs(t, err, domain.ErrInstanceNotFound)
+	})
+
+	t.Run("returns get error", func(t *testing.T) {
+		t.Parallel()
+
+		exoClient := &instanceExoscaleClientFake{
+			getInstance: func(context.Context, egoscale.UUID) (*egoscale.Instance, error) {
+				return nil, assert.AnError
+			},
+		}
+
+		client := cloud{instanceClient: exoClient}
+
+		_, err := client.GetInstance(ctx, id)
+
+		assert.ErrorIs(t, err, assert.AnError)
+	})
+}
+
+func Test_cloud_DeleteInstance(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	id := uuid.New()
+	op := &egoscale.Operation{Reference: &egoscale.OperationReference{ID: egoscale.UUID(id.String())}}
+
+	t.Run("deletes and waits", func(t *testing.T) {
+		t.Parallel()
+
+		exoClient := &instanceExoscaleClientFake{
+			ExoscaleClient: mocks.NewExoscaleClient(t),
+			deleteInstance: func(_ context.Context, gotID egoscale.UUID) (*egoscale.Operation, error) {
+				assert.Equal(t, egoscale.UUID(id.String()), gotID)
+				return op, nil
+			},
+		}
+		exoClient.EXPECT().Wait(ctx, op).Return(&egoscale.Operation{}, nil)
+
+		client := cloud{exoClient: exoClient, instanceClient: exoClient}
+
+		assert.NoError(t, client.DeleteInstance(ctx, id))
+	})
+
+	t.Run("returns delete error", func(t *testing.T) {
+		t.Parallel()
+
+		exoClient := &instanceExoscaleClientFake{
+			ExoscaleClient: mocks.NewExoscaleClient(t),
+			deleteInstance: func(context.Context, egoscale.UUID) (*egoscale.Operation, error) {
+				return nil, assert.AnError
+			},
+		}
+
+		client := cloud{exoClient: exoClient, instanceClient: exoClient}
+
+		assert.ErrorIs(t, client.DeleteInstance(ctx, id), assert.AnError)
+	})
+
+	t.Run("returns wait error", func(t *testing.T) {
+		t.Parallel()
+
+		exoClient := &instanceExoscaleClientFake{
+			ExoscaleClient: mocks.NewExoscaleClient(t),
+			deleteInstance: func(context.Context, egoscale.UUID) (*egoscale.Operation, error) {
+				return op, nil
+			},
+		}
+		exoClient.EXPECT().Wait(ctx, op).Return(nil, assert.AnError)
+
+		client := cloud{exoClient: exoClient, instanceClient: exoClient}
+
+		assert.ErrorIs(t, client.DeleteInstance(ctx, id), assert.AnError)
+	})
+}
+
+func Test_cloud_CreateInstance_errors(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	instanceID := uuid.New()
+	templateID := uuid.New()
+	instanceType := egoscale.InstanceType{
+		ID:     egoscale.UUID(uuid.New().String()),
+		Family: egoscale.InstanceTypeFamilyStandard,
+		Size:   egoscale.InstanceTypeSize("2"),
+	}
+	template := egoscale.Template{ID: egoscale.UUID(templateID.String()), Size: 10 * bytesPerGiB}
+	spec := domain.InstanceSpec{TemplateID: templateID, InstanceType: "standard-2"}
+
+	t.Run("returns list instance types error", func(t *testing.T) {
+		t.Parallel()
+
+		exoClient := &instanceExoscaleClientFake{
+			listInstanceTypes: func(context.Context) (*egoscale.ListInstanceTypesResponse, error) {
+				return nil, assert.AnError
+			},
+		}
+
+		client := cloud{instanceClient: exoClient}
+
+		_, err := client.CreateInstance(ctx, spec)
+
+		assert.ErrorIs(t, err, assert.AnError)
+	})
+
+	t.Run("returns instance type lookup error", func(t *testing.T) {
+		t.Parallel()
+
+		exoClient := &instanceExoscaleClientFake{
+			listInstanceTypes: func(context.Context) (*egoscale.ListInstanceTypesResponse, error) {
+				return &egoscale.ListInstanceTypesResponse{}, nil
+			},
+		}
+
+		client := cloud{instanceClient: exoClient}
+
+		_, err := client.CreateInstance(ctx, spec)
+
+		assert.ErrorContains(t, err, "unable to find instance type")
+	})
+
+	t.Run("returns get template error", func(t *testing.T) {
+		t.Parallel()
+
+		exoClient := &instanceExoscaleClientFake{
+			listInstanceTypes: func(context.Context) (*egoscale.ListInstanceTypesResponse, error) {
+				return &egoscale.ListInstanceTypesResponse{InstanceTypes: []egoscale.InstanceType{instanceType}}, nil
+			},
+			getTemplate: func(context.Context, egoscale.UUID) (*egoscale.Template, error) {
+				return nil, assert.AnError
+			},
+		}
+
+		client := cloud{instanceClient: exoClient}
+
+		_, err := client.CreateInstance(ctx, spec)
+
+		assert.ErrorIs(t, err, assert.AnError)
+	})
+
+	t.Run("rejects invalid template size", func(t *testing.T) {
+		t.Parallel()
+
+		exoClient := &instanceExoscaleClientFake{
+			listInstanceTypes: func(context.Context) (*egoscale.ListInstanceTypesResponse, error) {
+				return &egoscale.ListInstanceTypesResponse{InstanceTypes: []egoscale.InstanceType{instanceType}}, nil
+			},
+			getTemplate: func(context.Context, egoscale.UUID) (*egoscale.Template, error) {
+				return &egoscale.Template{ID: egoscale.UUID(templateID.String())}, nil
+			},
+		}
+
+		client := cloud{instanceClient: exoClient}
+
+		_, err := client.CreateInstance(ctx, spec)
+
+		assert.ErrorContains(t, err, "invalid size")
+	})
+
+	t.Run("returns create error", func(t *testing.T) {
+		t.Parallel()
+
+		exoClient := &instanceExoscaleClientFake{
+			ExoscaleClient: mocks.NewExoscaleClient(t),
+			listInstanceTypes: func(context.Context) (*egoscale.ListInstanceTypesResponse, error) {
+				return &egoscale.ListInstanceTypesResponse{InstanceTypes: []egoscale.InstanceType{instanceType}}, nil
+			},
+			getTemplate: func(context.Context, egoscale.UUID) (*egoscale.Template, error) {
+				return &template, nil
+			},
+			createInstance: func(context.Context, egoscale.CreateInstanceRequest) (*egoscale.Operation, error) {
+				return nil, assert.AnError
+			},
+		}
+
+		client := cloud{exoClient: exoClient, instanceClient: exoClient}
+
+		_, err := client.CreateInstance(ctx, spec)
+
+		assert.ErrorIs(t, err, assert.AnError)
+	})
+
+	t.Run("returns wait error", func(t *testing.T) {
+		t.Parallel()
+
+		op := &egoscale.Operation{Reference: &egoscale.OperationReference{ID: egoscale.UUID(instanceID.String())}}
+		exoClient := &instanceExoscaleClientFake{
+			ExoscaleClient: mocks.NewExoscaleClient(t),
+			listInstanceTypes: func(context.Context) (*egoscale.ListInstanceTypesResponse, error) {
+				return &egoscale.ListInstanceTypesResponse{InstanceTypes: []egoscale.InstanceType{instanceType}}, nil
+			},
+			getTemplate: func(context.Context, egoscale.UUID) (*egoscale.Template, error) {
+				return &template, nil
+			},
+			createInstance: func(context.Context, egoscale.CreateInstanceRequest) (*egoscale.Operation, error) {
+				return op, nil
+			},
+		}
+		exoClient.EXPECT().Wait(ctx, op).Return(nil, assert.AnError)
+
+		client := cloud{exoClient: exoClient, instanceClient: exoClient}
+
+		_, err := client.CreateInstance(ctx, spec)
+
+		assert.ErrorIs(t, err, assert.AnError)
+	})
 }
 
 func Test_cloud_CreateInstance_diskSize(t *testing.T) {

@@ -18,6 +18,8 @@ import (
 
 var _ domain.Cloud = (*cloud)(nil)
 
+const operationWaitTimeout = 10 * time.Minute
+
 type cloud struct {
 	exoClient      domain.ExoscaleClient
 	instanceClient instanceClient
@@ -34,7 +36,10 @@ type instanceClient interface {
 }
 
 func NewCloud(apiKey, apisecret string, zone egoscale.ZoneName) (*cloud, error) {
-	exoClient, err := egoscale.NewClient(credentials.NewStaticCredentials(apiKey, apisecret))
+	exoClient, err := egoscale.NewClient(
+		credentials.NewStaticCredentials(apiKey, apisecret),
+		egoscale.ClientOptWithWaitTimeout(operationWaitTimeout),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create exoscale client: %w", err)
 	}

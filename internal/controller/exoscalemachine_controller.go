@@ -39,6 +39,7 @@ import (
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	capicontrollerutil "sigs.k8s.io/cluster-api/util/controller"
+	capilabels "sigs.k8s.io/cluster-api/util/labels"
 	capipatch "sigs.k8s.io/cluster-api/util/patch"
 	capipredicates "sigs.k8s.io/cluster-api/util/predicates"
 
@@ -63,6 +64,7 @@ const machineFinalizer = "exoscalemachine.infrastructure.cluster.x-k8s.io"
 type ExoscaleMachineReconciler struct {
 	client.Client
 	Scheme             *runtime.Scheme
+	WatchFilter        string
 	NewInstanceService func(apiKey, apiSecret string, zone egoscale.ZoneName, logger logr.Logger) (domain.InstanceService, error)
 }
 
@@ -71,6 +73,9 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	exoMachine := &infrastructurev1alpha1.ExoscaleMachine{}
 	if err := r.Get(ctx, req.NamespacedName, exoMachine); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+	if r.WatchFilter != "" && !capilabels.HasWatchLabel(exoMachine, r.WatchFilter) {
+		return ctrl.Result{}, nil
 	}
 
 	patchHelper, err := capipatch.NewHelper(exoMachine, r.Client)
@@ -383,6 +388,7 @@ func (r *ExoscaleMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	return capicontrollerutil.NewControllerManagedBy(mgr, predicateLog).
 		For(&infrastructurev1alpha1.ExoscaleMachine{}).
+		WithEventFilter(capipredicates.ResourceHasFilterLabel(mgr.GetScheme(), predicateLog, r.WatchFilter)).
 		Watches(
 			&clusterv1.Machine{},
 			handler.EnqueueRequestsFromMapFunc(
@@ -395,6 +401,7 @@ func (r *ExoscaleMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			&clusterv1.Cluster{},
 			handler.EnqueueRequestsFromMapFunc(clusterToExoscaleMachines),
 			capipredicates.ClusterPausedTransitionsOrInfrastructureProvisioned(mgr.GetScheme(), predicateLog),
+			capipredicates.ResourceHasFilterLabel(mgr.GetScheme(), predicateLog, r.WatchFilter),
 		).
 		Named("exoscalemachine").
 		Complete(r)

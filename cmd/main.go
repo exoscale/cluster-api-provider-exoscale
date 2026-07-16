@@ -212,6 +212,7 @@ func main() {
 	if err := (&controller.ExoscaleMachineReconciler{
 		Client:             mgr.GetClient(),
 		Scheme:             mgr.GetScheme(),
+		WatchFilter:        watchFilter,
 		NewInstanceService: service.NewInstanceService,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "ExoscaleMachine")

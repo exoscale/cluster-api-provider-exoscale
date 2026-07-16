@@ -207,11 +207,6 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 		return ctrl.Result{}, err
 	}
 
-	templateID, err := uuid.Parse(exoMachine.Spec.TemplateID)
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("invalid templateID %q: %w", exoMachine.Spec.TemplateID, err)
-	}
-
 	machineUID, err := uuid.Parse(string(machine.UID))
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("invalid Machine UID %q: %w", machine.UID, err)
@@ -237,7 +232,7 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 
 	spec := domain.InstanceSpec{
 		Name:             machine.Name,
-		TemplateID:       templateID,
+		Template:         exoMachine.Spec.Template,
 		InstanceType:     exoMachine.Spec.InstanceType,
 		SSHKey:           exoMachine.Spec.SSHKey,
 		SecurityGroupIDs: securityGroupIDs,

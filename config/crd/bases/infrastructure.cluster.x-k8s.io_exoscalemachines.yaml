@@ -130,14 +130,15 @@ spec:
                 description: sshKey is the name of a pre-existing SSH key registered
                   in the Exoscale project.
                 type: string
-              templateID:
-                description: templateID is the UUID of an existing Exoscale instance
-                  template.
-                pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+              template:
+                description: |-
+                  template is an Exoscale instance template UUID or exact template name.
+                  UUIDs pin an exact template; names are resolved at create time.
+                minLength: 1
                 type: string
             required:
             - instanceType
-            - templateID
+            - template
             type: object
           status:
             description: |-

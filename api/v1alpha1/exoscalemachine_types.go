@@ -27,10 +27,11 @@ import (
 // added later, use CAPI Machine.spec.failureDomain to pick the target zone
 // instead of duplicating zone here.
 type ExoscaleMachineSpec struct {
-	// templateID is the UUID of an existing Exoscale instance template.
+	// template is an Exoscale instance template UUID or exact template name.
+	// UUIDs pin an exact template; names are resolved at create time.
 	// +required
-	// +kubebuilder:validation:Pattern=`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
-	TemplateID string `json:"templateID"`
+	// +kubebuilder:validation:MinLength=1
+	Template string `json:"template"`
 
 	// instanceType is the Exoscale service offering (e.g. "standard-2", "gpu-plus").
 	// +required

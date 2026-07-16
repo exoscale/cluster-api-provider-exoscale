@@ -448,3 +448,80 @@ func (_c *InstanceClient_ListInstances_Call) RunAndReturn(run func(ctx context.C
 	_c.Call.Return(run)
 	return _c
 }
+
+// ListTemplates provides a mock function for the type InstanceClient
+func (_mock *InstanceClient) ListTemplates(ctx context.Context, opts ...v3.ListTemplatesOpt) (*v3.ListTemplatesResponse, error) {
+	var tmpRet mock.Arguments
+	if len(opts) > 0 {
+		tmpRet = _mock.Called(ctx, opts)
+	} else {
+		tmpRet = _mock.Called(ctx)
+	}
+	ret := tmpRet
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListTemplates")
+	}
+
+	var r0 *v3.ListTemplatesResponse
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, ...v3.ListTemplatesOpt) (*v3.ListTemplatesResponse, error)); ok {
+		return returnFunc(ctx, opts...)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, ...v3.ListTemplatesOpt) *v3.ListTemplatesResponse); ok {
+		r0 = returnFunc(ctx, opts...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*v3.ListTemplatesResponse)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, ...v3.ListTemplatesOpt) error); ok {
+		r1 = returnFunc(ctx, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// InstanceClient_ListTemplates_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListTemplates'
+type InstanceClient_ListTemplates_Call struct {
+	*mock.Call
+}
+
+// ListTemplates is a helper method to define mock.On call
+//   - ctx context.Context
+//   - opts ...v3.ListTemplatesOpt
+func (_e *InstanceClient_Expecter) ListTemplates(ctx any, opts ...any) *InstanceClient_ListTemplates_Call {
+	return &InstanceClient_ListTemplates_Call{Call: _e.mock.On("ListTemplates",
+		append([]any{ctx}, opts...)...)}
+}
+
+func (_c *InstanceClient_ListTemplates_Call) Run(run func(ctx context.Context, opts ...v3.ListTemplatesOpt)) *InstanceClient_ListTemplates_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 []v3.ListTemplatesOpt
+		var variadicArgs []v3.ListTemplatesOpt
+		if len(args) > 1 {
+			variadicArgs = args[1].([]v3.ListTemplatesOpt)
+		}
+		arg1 = variadicArgs
+		run(
+			arg0,
+			arg1...,
+		)
+	})
+	return _c
+}
+
+func (_c *InstanceClient_ListTemplates_Call) Return(listTemplatesResponse *v3.ListTemplatesResponse, err error) *InstanceClient_ListTemplates_Call {
+	_c.Call.Return(listTemplatesResponse, err)
+	return _c
+}
+
+func (_c *InstanceClient_ListTemplates_Call) RunAndReturn(run func(ctx context.Context, opts ...v3.ListTemplatesOpt) (*v3.ListTemplatesResponse, error)) *InstanceClient_ListTemplates_Call {
+	_c.Call.Return(run)
+	return _c
+}

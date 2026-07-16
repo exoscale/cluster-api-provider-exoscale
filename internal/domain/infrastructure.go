@@ -112,13 +112,36 @@ type InstanceService interface {
 
 type InstanceSpec struct {
 	Name             string
-	TemplateID       uuid.UUID
+	Template         string
 	InstanceType     string
 	SSHKey           string
 	SecurityGroupIDs []uuid.UUID
 	RootVolumeSizeGB *int64
 	UserData         string
 	Labels           map[string]string
+}
+
+type ResolvedInstanceSpec struct {
+	Name             string
+	TemplateID       uuid.UUID
+	InstanceType     InstanceType
+	SSHKey           string
+	SecurityGroupIDs []uuid.UUID
+	DiskSizeGB       int64
+	UserData         string
+	Labels           map[string]string
+}
+
+type InstanceTemplate struct {
+	ID        uuid.UUID
+	Name      string
+	SizeBytes int64
+}
+
+type InstanceType struct {
+	ID     string
+	Family string
+	Size   string
 }
 
 type Instance struct {

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"maps"
 	"net"
-	"strings"
 	"time"
 
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/domain"
@@ -18,8 +17,6 @@ import (
 )
 
 var _ domain.Cloud = (*cloud)(nil)
-
-const bytesPerGiB int64 = 1024 * 1024 * 1024
 
 type cloud struct {
 	exoClient      domain.ExoscaleClient
@@ -33,6 +30,7 @@ type instanceClient interface {
 	DeleteInstance(ctx context.Context, id egoscale.UUID) (*egoscale.Operation, error)
 	ListInstanceTypes(ctx context.Context) (*egoscale.ListInstanceTypesResponse, error)
 	GetTemplate(ctx context.Context, id egoscale.UUID) (*egoscale.Template, error)
+	ListTemplates(ctx context.Context, opts ...egoscale.ListTemplatesOpt) (*egoscale.ListTemplatesResponse, error)
 }
 
 func NewCloud(apiKey, apisecret string, zone egoscale.ZoneName) (*cloud, error) {
@@ -329,46 +327,84 @@ func (c *cloud) ListInstances(ctx context.Context) ([]domain.Instance, error) {
 	return instances, nil
 }
 
-func (c *cloud) CreateInstance(ctx context.Context, spec domain.InstanceSpec) (uuid.UUID, error) {
+func (c *cloud) ListInstanceTypes(ctx context.Context) ([]domain.InstanceType, error) {
+	client, err := c.instances()
+	if err != nil {
+		return nil, err
+	}
+
+	instanceTypes, err := client.ListInstanceTypes(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to list instance types: %w", err)
+	}
+
+	out := make([]domain.InstanceType, 0, len(instanceTypes.InstanceTypes))
+	for _, instanceType := range instanceTypes.InstanceTypes {
+		out = append(out, domain.InstanceType{
+			ID:     instanceType.ID.String(),
+			Family: string(instanceType.Family),
+			Size:   string(instanceType.Size),
+		})
+	}
+
+	return out, nil
+}
+
+func (c *cloud) GetTemplate(ctx context.Context, id uuid.UUID) (domain.InstanceTemplate, error) {
+	client, err := c.instances()
+	if err != nil {
+		return domain.InstanceTemplate{}, err
+	}
+
+	template, err := client.GetTemplate(ctx, egoscale.UUID(id.String()))
+	if err != nil {
+		return domain.InstanceTemplate{}, err
+	}
+
+	return mapTemplate(*template)
+}
+
+func (c *cloud) ListTemplates(ctx context.Context) ([]domain.InstanceTemplate, error) {
+	client, err := c.instances()
+	if err != nil {
+		return nil, err
+	}
+
+	templates, err := client.ListTemplates(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]domain.InstanceTemplate, 0, len(templates.Templates))
+	for _, template := range templates.Templates {
+		mapped, err := mapTemplate(template)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, mapped)
+	}
+
+	return out, nil
+}
+
+func (c *cloud) CreateInstance(ctx context.Context, spec domain.ResolvedInstanceSpec) (uuid.UUID, error) {
 	client, err := c.instances()
 	if err != nil {
 		return uuid.Nil, err
 	}
 
-	instanceTypes, err := client.ListInstanceTypes(ctx)
-	if err != nil {
-		return uuid.Nil, fmt.Errorf("unable to list instance types: %w", err)
-	}
-
-	instanceType, err := instanceTypes.FindInstanceTypeByIdOrFamilyAndSize(normalizeInstanceType(spec.InstanceType))
-	if err != nil {
-		return uuid.Nil, fmt.Errorf("unable to find instance type %q: %w", spec.InstanceType, err)
-	}
-
-	template, err := client.GetTemplate(ctx, egoscale.UUID(spec.TemplateID.String()))
-	if err != nil {
-		return uuid.Nil, fmt.Errorf("unable to get template %q: %w", spec.TemplateID, err)
-	}
-	if template.Size <= 0 {
-		return uuid.Nil, fmt.Errorf("template %q has invalid size %d", spec.TemplateID, template.Size)
-	}
-
-	diskSize := templateDiskSizeGB(template.Size)
-	if spec.RootVolumeSizeGB != nil {
-		if *spec.RootVolumeSizeGB < diskSize {
-			return uuid.Nil, fmt.Errorf("rootVolumeSizeGB %d is smaller than template size %d", *spec.RootVolumeSizeGB, diskSize)
-		}
-		diskSize = *spec.RootVolumeSizeGB
-	}
-
 	req := egoscale.CreateInstanceRequest{
-		DiskSize:           diskSize,
-		InstanceType:       &instanceType,
+		DiskSize: spec.DiskSizeGB,
+		InstanceType: &egoscale.InstanceType{
+			ID:     egoscale.UUID(spec.InstanceType.ID),
+			Family: egoscale.InstanceTypeFamily(spec.InstanceType.Family),
+			Size:   egoscale.InstanceTypeSize(spec.InstanceType.Size),
+		},
 		Labels:             egoscale.Labels(spec.Labels),
 		Name:               spec.Name,
 		PublicIPAssignment: egoscale.PublicIPAssignmentInet4,
 		SecurityGroups:     securityGroups(spec.SecurityGroupIDs),
-		Template:           &egoscale.Template{ID: template.ID},
+		Template:           &egoscale.Template{ID: egoscale.UUID(spec.TemplateID.String())},
 	}
 	if spec.SSHKey != "" {
 		req.SSHKey = &egoscale.SSHKey{Name: spec.SSHKey}
@@ -451,35 +487,20 @@ func securityGroups(ids []uuid.UUID) []egoscale.SecurityGroup {
 	return groups
 }
 
-func normalizeInstanceType(instanceType string) string {
-	if strings.Contains(instanceType, ".") {
-		return instanceType
-	}
-
-	for _, family := range []string{"standard", "memory", "startup"} {
-		if suffix, ok := strings.CutPrefix(instanceType, family+"-"); ok {
-			return family + "." + suffix
-		}
-	}
-	if suffix, ok := strings.CutPrefix(instanceType, "compute-"); ok {
-		return "cpu." + suffix
-	}
-	if instanceType == "compute" {
-		return "cpu"
-	}
-
-	return instanceType
-}
-
-func templateDiskSizeGB(size int64) int64 {
-	return (size + bytesPerGiB - 1) / bytesPerGiB
-}
-
 func formatTime(t time.Time) string {
 	if t.IsZero() {
 		return ""
 	}
 	return t.Format(time.RFC3339)
+}
+
+func mapTemplate(template egoscale.Template) (domain.InstanceTemplate, error) {
+	id, err := uuid.Parse(template.ID.String())
+	if err != nil {
+		return domain.InstanceTemplate{}, fmt.Errorf("unable to parse template id %q: %w", template.ID, err)
+	}
+
+	return domain.InstanceTemplate{ID: id, Name: template.Name, SizeBytes: template.Size}, nil
 }
 
 func ipString(ip net.IP) string {

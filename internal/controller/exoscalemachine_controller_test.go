@@ -52,7 +52,7 @@ var _ = Describe("ExoscaleMachine Controller", func() {
 						Namespace: "default",
 					},
 					Spec: infrastructurev1alpha1.ExoscaleMachineSpec{
-						TemplateID:   "11111111-2222-3333-4444-555555555555",
+						Template:     "11111111-2222-3333-4444-555555555555",
 						InstanceType: "small",
 						SSHKey:       "test",
 					},

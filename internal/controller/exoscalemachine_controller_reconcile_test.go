@@ -54,7 +54,7 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 	instanceSvc := mocks.NewInstanceService(t)
 	instanceSvc.EXPECT().UpsertInstance(ctx, machineUID, (*uuid.UUID)(nil), domain.InstanceSpec{
 		Name:             machineName,
-		TemplateID:       templateID,
+		Template:         templateID.String(),
 		InstanceType:     "standard-2",
 		SSHKey:           "ssh-key",
 		SecurityGroupIDs: []uuid.UUID{nodeSecurityGroupID},
@@ -125,7 +125,7 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 					},
 				},
 				Spec: infrav1alpha1.ExoscaleMachineSpec{
-					TemplateID:   templateID.String(),
+					Template:     templateID.String(),
 					InstanceType: "standard-2",
 					SSHKey:       "ssh-key",
 				},
@@ -228,7 +228,7 @@ func TestExoscaleMachineReconciler_Reconcile_waitsForClusterInfrastructure(t *te
 					},
 				},
 				Spec: infrav1alpha1.ExoscaleMachineSpec{
-					TemplateID:   templateID.String(),
+					Template:     templateID.String(),
 					InstanceType: "standard-2",
 					SSHKey:       "ssh-key",
 				},
@@ -316,7 +316,7 @@ func TestExoscaleMachineReconciler_Reconcile_waitsForBootstrapData(t *testing.T)
 					},
 				},
 				Spec: infrav1alpha1.ExoscaleMachineSpec{
-					TemplateID:   templateID.String(),
+					Template:     templateID.String(),
 					InstanceType: "standard-2",
 					SSHKey:       "ssh-key",
 				},
@@ -401,7 +401,7 @@ func TestExoscaleMachineReconciler_Reconcile_setsPausedCondition(t *testing.T) {
 					},
 				},
 				Spec: infrav1alpha1.ExoscaleMachineSpec{
-					TemplateID:   templateID.String(),
+					Template:     templateID.String(),
 					InstanceType: "standard-2",
 					SSHKey:       "ssh-key",
 				},
@@ -633,7 +633,7 @@ func newReadyMachineReconciler(t *testing.T, instance domain.Instance, nodeSecur
 		securityGroupNode = &infrav1alpha1.SecurityGroupStatus{ID: nodeSecurityGroupID.String()}
 		instanceSvc.EXPECT().UpsertInstance(ctx, machineUID, (*uuid.UUID)(nil), domain.InstanceSpec{
 			Name:             machineName,
-			TemplateID:       templateID,
+			Template:         templateID.String(),
 			InstanceType:     "standard-2",
 			SSHKey:           "ssh-key",
 			SecurityGroupIDs: []uuid.UUID{*nodeSecurityGroupID},
@@ -703,7 +703,7 @@ func newReadyMachineReconciler(t *testing.T, instance domain.Instance, nodeSecur
 					},
 				},
 				Spec: infrav1alpha1.ExoscaleMachineSpec{
-					TemplateID:   templateID.String(),
+					Template:     templateID.String(),
 					InstanceType: "standard-2",
 					SSHKey:       "ssh-key",
 				},

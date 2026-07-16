@@ -403,6 +403,70 @@ func Test_cloud_GetInstance(t *testing.T) {
 	})
 }
 
+func Test_cloud_AttachInstanceToElasticIP(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	instanceID := uuid.New()
+	elasticIPID := uuid.New()
+	request := egoscale.AttachInstanceToElasticIPRequest{
+		Instance: &egoscale.InstanceTarget{ID: egoscale.UUID(instanceID.String())},
+	}
+	op := &egoscale.Operation{ID: egoscale.UUID(uuid.New().String())}
+
+	t.Run("attaches and waits", func(t *testing.T) {
+		t.Parallel()
+
+		exoClient := mocks.NewExoscaleClient(t)
+		instanceClient := mocks.NewInstanceClient(t)
+		instanceClient.EXPECT().AttachInstanceToElasticIP(ctx, egoscale.UUID(elasticIPID.String()), request).Return(op, nil)
+		exoClient.EXPECT().Wait(ctx, op, []egoscale.OperationState{egoscale.OperationStateSuccess}).
+			Return(&egoscale.Operation{State: egoscale.OperationStateSuccess}, nil)
+
+		client := cloud{exoClient: exoClient, instanceClient: instanceClient}
+
+		assert.NoError(t, client.AttachInstanceToElasticIP(ctx, instanceID, elasticIPID))
+	})
+
+	t.Run("returns attach error", func(t *testing.T) {
+		t.Parallel()
+
+		instanceClient := mocks.NewInstanceClient(t)
+		instanceClient.EXPECT().AttachInstanceToElasticIP(ctx, egoscale.UUID(elasticIPID.String()), request).Return(nil, assert.AnError)
+
+		client := cloud{instanceClient: instanceClient}
+
+		assert.ErrorIs(t, client.AttachInstanceToElasticIP(ctx, instanceID, elasticIPID), assert.AnError)
+	})
+
+	t.Run("returns wait error", func(t *testing.T) {
+		t.Parallel()
+
+		exoClient := mocks.NewExoscaleClient(t)
+		instanceClient := mocks.NewInstanceClient(t)
+		instanceClient.EXPECT().AttachInstanceToElasticIP(ctx, egoscale.UUID(elasticIPID.String()), request).Return(op, nil)
+		exoClient.EXPECT().Wait(ctx, op, []egoscale.OperationState{egoscale.OperationStateSuccess}).Return(nil, assert.AnError)
+
+		client := cloud{exoClient: exoClient, instanceClient: instanceClient}
+
+		assert.ErrorIs(t, client.AttachInstanceToElasticIP(ctx, instanceID, elasticIPID), assert.AnError)
+	})
+
+	t.Run("rejects unsuccessful operation", func(t *testing.T) {
+		t.Parallel()
+
+		exoClient := mocks.NewExoscaleClient(t)
+		instanceClient := mocks.NewInstanceClient(t)
+		instanceClient.EXPECT().AttachInstanceToElasticIP(ctx, egoscale.UUID(elasticIPID.String()), request).Return(op, nil)
+		exoClient.EXPECT().Wait(ctx, op, []egoscale.OperationState{egoscale.OperationStateSuccess}).
+			Return(&egoscale.Operation{State: egoscale.OperationStateFailure}, nil)
+
+		client := cloud{exoClient: exoClient, instanceClient: instanceClient}
+
+		assert.ErrorContains(t, client.AttachInstanceToElasticIP(ctx, instanceID, elasticIPID), "did not succeed")
+	})
+}
+
 func Test_cloud_DeleteInstance(t *testing.T) {
 	t.Parallel()
 

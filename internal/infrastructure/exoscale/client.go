@@ -29,6 +29,7 @@ type instanceClient interface {
 	ListInstances(ctx context.Context, opts ...egoscale.ListInstancesOpt) (*egoscale.ListInstancesResponse, error)
 	CreateInstance(ctx context.Context, req egoscale.CreateInstanceRequest) (*egoscale.Operation, error)
 	GetInstance(ctx context.Context, id egoscale.UUID) (*egoscale.Instance, error)
+	AttachInstanceToElasticIP(ctx context.Context, id egoscale.UUID, req egoscale.AttachInstanceToElasticIPRequest) (*egoscale.Operation, error)
 	DeleteInstance(ctx context.Context, id egoscale.UUID) (*egoscale.Operation, error)
 	ListInstanceTypes(ctx context.Context) (*egoscale.ListInstanceTypesResponse, error)
 	GetTemplate(ctx context.Context, id egoscale.UUID) (*egoscale.Template, error)
@@ -464,6 +465,30 @@ func (c *cloud) GetInstance(ctx context.Context, id uuid.UUID) (domain.Instance,
 		CreatedAt: formatTime(instance.CreatedAT),
 		Labels:    copyLabels(instance.Labels),
 	}, nil
+}
+
+func (c *cloud) AttachInstanceToElasticIP(ctx context.Context, instanceID, elasticIPID uuid.UUID) error {
+	client, err := c.instances()
+	if err != nil {
+		return err
+	}
+
+	op, err := client.AttachInstanceToElasticIP(ctx, egoscale.UUID(elasticIPID.String()), egoscale.AttachInstanceToElasticIPRequest{
+		Instance: &egoscale.InstanceTarget{ID: egoscale.UUID(instanceID.String())},
+	})
+	if err != nil {
+		return fmt.Errorf("unable to attach instance to elastic IP: %w", err)
+	}
+
+	completed, err := c.exoClient.Wait(ctx, op, egoscale.OperationStateSuccess)
+	if err != nil {
+		return fmt.Errorf("error while waiting for instance attachment to elastic IP: %w", err)
+	}
+	if completed == nil || completed.State != egoscale.OperationStateSuccess {
+		return fmt.Errorf("instance attachment to elastic IP operation did not succeed")
+	}
+
+	return nil
 }
 
 func (c *cloud) DeleteInstance(ctx context.Context, id uuid.UUID) error {

@@ -18,6 +18,7 @@ func Test_instanceService_UpsertInstance(t *testing.T) {
 	machineID := uuid.New()
 	instanceID := uuid.New()
 	templateID := uuid.New()
+	elasticIPID := uuid.New()
 	instanceTypeID := uuid.New().String()
 	template := domain.InstanceTemplate{ID: templateID, Name: "ubuntu", SizeBytes: 15 * bytesPerGiB}
 	instanceType := domain.InstanceType{ID: instanceTypeID, Family: "standard", Size: "2"}
@@ -25,11 +26,12 @@ func Test_instanceService_UpsertInstance(t *testing.T) {
 	instance := domain.Instance{ID: instanceID, Labels: map[string]string{machineUIDLabel: machineID.String()}}
 
 	tests := []struct {
-		name       string
-		instanceID *uuid.UUID
-		cloud      fakeInstanceCloud
-		output     domain.Instance
-		err        error
+		name        string
+		instanceID  *uuid.UUID
+		elasticIPID *uuid.UUID
+		cloud       fakeInstanceCloud
+		output      domain.Instance
+		err         error
 	}{
 		{
 			name:       "reuses instance from status id",
@@ -50,6 +52,35 @@ func Test_instanceService_UpsertInstance(t *testing.T) {
 				},
 			},
 			output: instance,
+		},
+		{
+			name:        "attaches elastic ip to recovered instance",
+			elasticIPID: &elasticIPID,
+			cloud: fakeInstanceCloud{
+				listInstances: func(context.Context) ([]domain.Instance, error) {
+					return []domain.Instance{instance}, nil
+				},
+				attachInstanceToElasticIP: func(_ context.Context, gotInstanceID, gotElasticIPID uuid.UUID) error {
+					assert.Equal(t, instanceID, gotInstanceID)
+					assert.Equal(t, elasticIPID, gotElasticIPID)
+					return nil
+				},
+			},
+			output: instance,
+		},
+		{
+			name:        "returns elastic ip attachment error",
+			instanceID:  &instanceID,
+			elasticIPID: &elasticIPID,
+			cloud: fakeInstanceCloud{
+				getInstance: func(context.Context, uuid.UUID) (domain.Instance, error) {
+					return instance, nil
+				},
+				attachInstanceToElasticIP: func(context.Context, uuid.UUID, uuid.UUID) error {
+					return assert.AnError
+				},
+			},
+			err: assert.AnError,
 		},
 		{
 			name: "creates instance when none exists",
@@ -98,7 +129,9 @@ func Test_instanceService_UpsertInstance(t *testing.T) {
 	for _, ut := range tests {
 		t.Run(ut.name, func(t *testing.T) {
 			svc := instanceService{cloud: ut.cloud, logger: logr.Discard()}
-			output, err := svc.UpsertInstance(ctx, machineID, ut.instanceID, spec)
+			testSpec := spec
+			testSpec.ElasticIPID = ut.elasticIPID
+			output, err := svc.UpsertInstance(ctx, machineID, ut.instanceID, testSpec)
 
 			assert.ErrorIs(t, err, ut.err)
 			assert.Equal(t, ut.output, output)
@@ -454,13 +487,14 @@ func Test_instanceService_DeleteInstance(t *testing.T) {
 }
 
 type fakeInstanceCloud struct {
-	listInstances     func(context.Context) ([]domain.Instance, error)
-	listInstanceTypes func(context.Context) ([]domain.InstanceType, error)
-	getTemplate       func(context.Context, uuid.UUID) (domain.InstanceTemplate, error)
-	listTemplates     func(context.Context) ([]domain.InstanceTemplate, error)
-	createInstance    func(context.Context, domain.ResolvedInstanceSpec) (uuid.UUID, error)
-	getInstance       func(context.Context, uuid.UUID) (domain.Instance, error)
-	deleteInstance    func(context.Context, uuid.UUID) error
+	listInstances             func(context.Context) ([]domain.Instance, error)
+	listInstanceTypes         func(context.Context) ([]domain.InstanceType, error)
+	getTemplate               func(context.Context, uuid.UUID) (domain.InstanceTemplate, error)
+	listTemplates             func(context.Context) ([]domain.InstanceTemplate, error)
+	createInstance            func(context.Context, domain.ResolvedInstanceSpec) (uuid.UUID, error)
+	getInstance               func(context.Context, uuid.UUID) (domain.Instance, error)
+	attachInstanceToElasticIP func(context.Context, uuid.UUID, uuid.UUID) error
+	deleteInstance            func(context.Context, uuid.UUID) error
 }
 
 func (f fakeInstanceCloud) ListInstances(ctx context.Context) ([]domain.Instance, error) {
@@ -503,6 +537,13 @@ func (f fakeInstanceCloud) GetInstance(ctx context.Context, id uuid.UUID) (domai
 		panic("unexpected GetInstance")
 	}
 	return f.getInstance(ctx, id)
+}
+
+func (f fakeInstanceCloud) AttachInstanceToElasticIP(ctx context.Context, instanceID, elasticIPID uuid.UUID) error {
+	if f.attachInstanceToElasticIP == nil {
+		panic("unexpected AttachInstanceToElasticIP")
+	}
+	return f.attachInstanceToElasticIP(ctx, instanceID, elasticIPID)
 }
 
 func (f fakeInstanceCloud) DeleteInstance(ctx context.Context, id uuid.UUID) error {

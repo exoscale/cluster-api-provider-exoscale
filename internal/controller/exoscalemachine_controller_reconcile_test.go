@@ -42,6 +42,8 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 	machineUID := uuid.New()
 	instanceID := uuid.New()
 	templateID := uuid.New()
+	elasticIPID := uuid.New()
+	controlPlaneSecurityGroupID := uuid.New()
 	nodeSecurityGroupID := uuid.New()
 	dataSecretName := bootstrapSecretName
 	clusterProvisioned := true
@@ -57,7 +59,8 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 		Template:         templateID.String(),
 		InstanceType:     "standard-2",
 		SSHKey:           "ssh-key",
-		SecurityGroupIDs: []uuid.UUID{nodeSecurityGroupID},
+		SecurityGroupIDs: []uuid.UUID{controlPlaneSecurityGroupID},
+		ElasticIPID:      &elasticIPID,
 		UserData:         "#cloud-config",
 	}).Return(domain.Instance{ID: instanceID, State: "running", PublicIP: "1.2.3.4"}, nil)
 
@@ -89,8 +92,10 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 					},
 				},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
-					Initialization:    infrav1alpha1.ExoscaleClusterInitializationStatus{Provisioned: &clusterProvisioned},
-					SecurityGroupNode: &infrav1alpha1.SecurityGroupStatus{ID: nodeSecurityGroupID.String()},
+					Initialization:           infrav1alpha1.ExoscaleClusterInitializationStatus{Provisioned: &clusterProvisioned},
+					ControlPlaneEndpoint:     &infrav1alpha1.APIEndpointStatus{ID: elasticIPID.String()},
+					SecurityGroupControlPlan: &infrav1alpha1.SecurityGroupStatus{ID: controlPlaneSecurityGroupID.String()},
+					SecurityGroupNode:        &infrav1alpha1.SecurityGroupStatus{ID: nodeSecurityGroupID.String()},
 				},
 			},
 			&corev1.Secret{
@@ -110,7 +115,8 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 					Namespace: ns,
 					UID:       types.UID(machineUID.String()),
 					Labels: map[string]string{
-						clusterv1.ClusterNameLabel: clusterName,
+						clusterv1.ClusterNameLabel:         clusterName,
+						clusterv1.MachineControlPlaneLabel: "",
 					},
 				},
 				Spec: clusterv1.MachineSpec{
@@ -678,15 +684,23 @@ func Test_securityGroupIDs_rejectsInvalidIDs(t *testing.T) {
 	validID := uuid.New().String()
 
 	tests := map[string]struct {
-		cluster infrav1alpha1.ExoscaleCluster
-		machine infrav1alpha1.ExoscaleMachine
-		wantErr string
+		cluster      infrav1alpha1.ExoscaleCluster
+		machine      infrav1alpha1.ExoscaleMachine
+		controlPlane bool
+		wantErr      string
 	}{
 		"invalid node security group": {
 			cluster: infrav1alpha1.ExoscaleCluster{
 				Status: infrav1alpha1.ExoscaleClusterStatus{SecurityGroupNode: &infrav1alpha1.SecurityGroupStatus{ID: "bad-id"}},
 			},
 			wantErr: "invalid node security group ID",
+		},
+		"invalid control plane security group": {
+			cluster: infrav1alpha1.ExoscaleCluster{
+				Status: infrav1alpha1.ExoscaleClusterStatus{SecurityGroupControlPlan: &infrav1alpha1.SecurityGroupStatus{ID: "bad-id"}},
+			},
+			controlPlane: true,
+			wantErr:      "invalid control plane security group ID",
 		},
 		"invalid machine security group": {
 			cluster: infrav1alpha1.ExoscaleCluster{
@@ -699,11 +713,32 @@ func Test_securityGroupIDs_rejectsInvalidIDs(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			_, err := securityGroupIDs(&tc.cluster, &tc.machine)
+			_, err := securityGroupIDs(&tc.cluster, &tc.machine, tc.controlPlane)
 
 			assert.ErrorContains(t, err, tc.wantErr)
 		})
 	}
+}
+
+func Test_securityGroupIDs_selectsMachineRole(t *testing.T) {
+	t.Parallel()
+
+	controlPlaneID := uuid.New()
+	nodeID := uuid.New()
+	customID := uuid.New()
+	cluster := infrav1alpha1.ExoscaleCluster{Status: infrav1alpha1.ExoscaleClusterStatus{
+		SecurityGroupControlPlan: &infrav1alpha1.SecurityGroupStatus{ID: controlPlaneID.String()},
+		SecurityGroupNode:        &infrav1alpha1.SecurityGroupStatus{ID: nodeID.String()},
+	}}
+	machine := infrav1alpha1.ExoscaleMachine{Spec: infrav1alpha1.ExoscaleMachineSpec{SecurityGroups: []string{customID.String()}}}
+
+	controlPlaneIDs, err := securityGroupIDs(&cluster, &machine, true)
+	assert.NoError(t, err)
+	assert.Equal(t, []uuid.UUID{controlPlaneID, customID}, controlPlaneIDs)
+
+	nodeIDs, err := securityGroupIDs(&cluster, &machine, false)
+	assert.NoError(t, err)
+	assert.Equal(t, []uuid.UUID{nodeID, customID}, nodeIDs)
 }
 
 func newExoscaleMachineTestScheme(t *testing.T) *runtime.Scheme {

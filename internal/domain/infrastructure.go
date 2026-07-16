@@ -117,6 +117,7 @@ type InstanceSpec struct {
 	InstanceType     string
 	SSHKey           string
 	SecurityGroupIDs []uuid.UUID
+	ElasticIPID      *uuid.UUID
 	RootVolumeSizeGB *int64
 	UserData         string
 	Labels           map[string]string

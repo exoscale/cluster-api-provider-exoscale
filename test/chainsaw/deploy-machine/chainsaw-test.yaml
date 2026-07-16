@@ -130,6 +130,41 @@ spec:
                 name: ($machineName)
                 namespace: ($namespace)
               (spec.providerID == join('', ['exoscale://', status.instanceID])): true
+
+    - name: assert control plane networking
+      bindings:
+        - name: instanceID
+          value: (x_k8s_get($client, 'infrastructure.cluster.x-k8s.io/v1alpha1', 'ExoscaleMachine', $namespace, $machineName).status.instanceID)
+        - name: elasticIP
+          value: (x_k8s_get($client, 'infrastructure.cluster.x-k8s.io/v1alpha1', 'ExoscaleCluster', $namespace, $clusterName).status.controlPlaneEndpoint.host)
+        - name: controlPlaneSecurityGroup
+          value: (x_k8s_get($client, 'infrastructure.cluster.x-k8s.io/v1alpha1', 'ExoscaleCluster', $namespace, $clusterName).status.securityGroupControlPlane.name)
+        - name: nodeSecurityGroup
+          value: (x_k8s_get($client, 'infrastructure.cluster.x-k8s.io/v1alpha1', 'ExoscaleCluster', $namespace, $clusterName).status.securityGroupNode.name)
+      try:
+        - script:
+            timeout: 2m
+            env:
+              - name: INSTANCE_ID
+                value: ($instanceID)
+              - name: ELASTIC_IP
+                value: ($elasticIP)
+              - name: CONTROL_PLANE_SECURITY_GROUP
+                value: ($controlPlaneSecurityGroup)
+              - name: NODE_SECURITY_GROUP
+                value: ($nodeSecurityGroup)
+              - name: ZONE
+                value: ($zone)
+            content: |
+              instance=$(exo compute instance show "$INSTANCE_ID" --zone "$ZONE" -O json -Q)
+              printf '%s' "$instance" | jq -e \
+                --arg eip "$ELASTIC_IP" \
+                --arg controlPlane "$CONTROL_PLANE_SECURITY_GROUP" \
+                --arg node "$NODE_SECURITY_GROUP" \
+                '(.elastic_ips | index($eip) != null) and
+                 (.security_groups | index($controlPlane) != null) and
+                 (.security_groups | index($node) == null)'
+
     - name: assert capi machine registered infra machine
       try:
         - assert:

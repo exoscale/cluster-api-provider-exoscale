@@ -41,6 +41,7 @@ type instanceCloud interface {
 	ListTemplates(ctx context.Context) ([]domain.InstanceTemplate, error)
 	CreateInstance(ctx context.Context, spec domain.ResolvedInstanceSpec) (uuid.UUID, error)
 	GetInstance(ctx context.Context, id uuid.UUID) (domain.Instance, error)
+	AttachInstanceToElasticIP(ctx context.Context, instanceID, elasticIPID uuid.UUID) error
 	DeleteInstance(ctx context.Context, id uuid.UUID) error
 }
 
@@ -62,7 +63,7 @@ func (s *instanceService) UpsertInstance(ctx context.Context, machineID uuid.UUI
 	if instanceID != nil {
 		instance, err := s.cloud.GetInstance(ctx, *instanceID)
 		if err == nil {
-			return instance, nil
+			return s.ensureElasticIP(ctx, instance, spec.ElasticIPID)
 		}
 		if !errors.Is(err, domain.ErrInstanceNotFound) {
 			return domain.Instance{}, fmt.Errorf("error while fetching instance: %w", err)
@@ -73,7 +74,7 @@ func (s *instanceService) UpsertInstance(ctx context.Context, machineID uuid.UUI
 	instance, err := s.findInstanceByMachineID(ctx, machineID)
 	if err == nil {
 		s.logger.Info("Found an existing instance by Machine UID, reusing it", "instanceID", instance.ID.String())
-		return instance, nil
+		return s.ensureElasticIP(ctx, instance, spec.ElasticIPID)
 	}
 	if !errors.Is(err, domain.ErrInstanceNotFound) {
 		return domain.Instance{}, fmt.Errorf("error while searching for existing instance: %w", err)
@@ -94,6 +95,16 @@ func (s *instanceService) UpsertInstance(ctx context.Context, machineID uuid.UUI
 		return domain.Instance{}, fmt.Errorf("error while fetching new instance: %w", err)
 	}
 
+	return s.ensureElasticIP(ctx, instance, spec.ElasticIPID)
+}
+
+func (s *instanceService) ensureElasticIP(ctx context.Context, instance domain.Instance, elasticIPID *uuid.UUID) (domain.Instance, error) {
+	if elasticIPID == nil {
+		return instance, nil
+	}
+	if err := s.cloud.AttachInstanceToElasticIP(ctx, instance.ID, *elasticIPID); err != nil {
+		return domain.Instance{}, fmt.Errorf("attach instance to elastic IP: %w", err)
+	}
 	return instance, nil
 }
 

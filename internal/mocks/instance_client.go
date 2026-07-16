@@ -38,6 +38,80 @@ func (_m *InstanceClient) EXPECT() *InstanceClient_Expecter {
 	return &InstanceClient_Expecter{mock: &_m.Mock}
 }
 
+// AttachInstanceToElasticIP provides a mock function for the type InstanceClient
+func (_mock *InstanceClient) AttachInstanceToElasticIP(ctx context.Context, id v3.UUID, req v3.AttachInstanceToElasticIPRequest) (*v3.Operation, error) {
+	ret := _mock.Called(ctx, id, req)
+
+	if len(ret) == 0 {
+		panic("no return value specified for AttachInstanceToElasticIP")
+	}
+
+	var r0 *v3.Operation
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v3.UUID, v3.AttachInstanceToElasticIPRequest) (*v3.Operation, error)); ok {
+		return returnFunc(ctx, id, req)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v3.UUID, v3.AttachInstanceToElasticIPRequest) *v3.Operation); ok {
+		r0 = returnFunc(ctx, id, req)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*v3.Operation)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, v3.UUID, v3.AttachInstanceToElasticIPRequest) error); ok {
+		r1 = returnFunc(ctx, id, req)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// InstanceClient_AttachInstanceToElasticIP_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AttachInstanceToElasticIP'
+type InstanceClient_AttachInstanceToElasticIP_Call struct {
+	*mock.Call
+}
+
+// AttachInstanceToElasticIP is a helper method to define mock.On call
+//   - ctx context.Context
+//   - id v3.UUID
+//   - req v3.AttachInstanceToElasticIPRequest
+func (_e *InstanceClient_Expecter) AttachInstanceToElasticIP(ctx any, id any, req any) *InstanceClient_AttachInstanceToElasticIP_Call {
+	return &InstanceClient_AttachInstanceToElasticIP_Call{Call: _e.mock.On("AttachInstanceToElasticIP", ctx, id, req)}
+}
+
+func (_c *InstanceClient_AttachInstanceToElasticIP_Call) Run(run func(ctx context.Context, id v3.UUID, req v3.AttachInstanceToElasticIPRequest)) *InstanceClient_AttachInstanceToElasticIP_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 v3.UUID
+		if args[1] != nil {
+			arg1 = args[1].(v3.UUID)
+		}
+		var arg2 v3.AttachInstanceToElasticIPRequest
+		if args[2] != nil {
+			arg2 = args[2].(v3.AttachInstanceToElasticIPRequest)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *InstanceClient_AttachInstanceToElasticIP_Call) Return(operation *v3.Operation, err error) *InstanceClient_AttachInstanceToElasticIP_Call {
+	_c.Call.Return(operation, err)
+	return _c
+}
+
+func (_c *InstanceClient_AttachInstanceToElasticIP_Call) RunAndReturn(run func(ctx context.Context, id v3.UUID, req v3.AttachInstanceToElasticIPRequest) (*v3.Operation, error)) *InstanceClient_AttachInstanceToElasticIP_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreateInstance provides a mock function for the type InstanceClient
 func (_mock *InstanceClient) CreateInstance(ctx context.Context, req v3.CreateInstanceRequest) (*v3.Operation, error) {
 	ret := _mock.Called(ctx, req)

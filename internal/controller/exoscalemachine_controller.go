@@ -251,13 +251,27 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 		instanceID = &id
 	}
 
-	securityGroupIDs, err := securityGroupIDs(exoCluster, exoMachine)
+	isControlPlane := util.IsControlPlaneMachine(machine)
+	securityGroupIDs, err := securityGroupIDs(exoCluster, exoMachine, isControlPlane)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	if len(securityGroupIDs) == 0 {
-		log.Info("cluster node security group not yet available")
+		log.Info("Cluster machine security group not yet available", "controlPlane", isControlPlane)
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
+	}
+
+	var elasticIPID *uuid.UUID
+	if isControlPlane {
+		if exoCluster.Status.ControlPlaneEndpoint == nil {
+			log.Info("Cluster control plane Elastic IP not yet available")
+			return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
+		}
+		id, err := uuid.Parse(exoCluster.Status.ControlPlaneEndpoint.ID)
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("invalid control plane Elastic IP ID %q: %w", exoCluster.Status.ControlPlaneEndpoint.ID, err)
+		}
+		elasticIPID = &id
 	}
 
 	spec := domain.InstanceSpec{
@@ -266,6 +280,7 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 		InstanceType:     exoMachine.Spec.InstanceType,
 		SSHKey:           exoMachine.Spec.SSHKey,
 		SecurityGroupIDs: securityGroupIDs,
+		ElasticIPID:      elasticIPID,
 		RootVolumeSizeGB: exoMachine.Spec.RootVolumeSizeGB,
 		UserData:         userData,
 	}
@@ -357,15 +372,24 @@ func (r *ExoscaleMachineReconciler) bootstrapData(ctx context.Context, machine *
 func securityGroupIDs(
 	exoCluster *infrastructurev1alpha1.ExoscaleCluster,
 	exoMachine *infrastructurev1alpha1.ExoscaleMachine,
+	isControlPlane bool,
 ) ([]uuid.UUID, error) {
-	ids := make([]uuid.UUID, 0, len(exoMachine.Spec.SecurityGroups)+1)
-	if exoCluster.Status.SecurityGroupNode != nil {
-		id, err := uuid.Parse(exoCluster.Status.SecurityGroupNode.ID)
-		if err != nil {
-			return nil, fmt.Errorf("invalid node security group ID %q: %w", exoCluster.Status.SecurityGroupNode.ID, err)
-		}
-		ids = append(ids, id)
+	managedSecurityGroup := exoCluster.Status.SecurityGroupNode
+	role := "node"
+	if isControlPlane {
+		managedSecurityGroup = exoCluster.Status.SecurityGroupControlPlan
+		role = "control plane"
 	}
+	if managedSecurityGroup == nil {
+		return nil, nil
+	}
+
+	ids := make([]uuid.UUID, 0, len(exoMachine.Spec.SecurityGroups)+1)
+	id, err := uuid.Parse(managedSecurityGroup.ID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid %s security group ID %q: %w", role, managedSecurityGroup.ID, err)
+	}
+	ids = append(ids, id)
 
 	for _, rawID := range exoMachine.Spec.SecurityGroups {
 		id, err := uuid.Parse(rawID)

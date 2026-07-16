@@ -107,7 +107,6 @@ spec:
                     reason: Ready
                     status: "True"
                 instanceState: running
-                (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', instanceID)): true
                 addresses:
                   - type: ExternalIP
                     (address != ''): true
@@ -119,6 +118,8 @@ spec:
                 name: ($machineName)
                 namespace: ($namespace)
               (spec.providerID == join('', ['exoscale://', status.instanceID])): true
+              status:
+                (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', instanceID)): true
 
     - name: assert capi machine registered infra machine
       try:

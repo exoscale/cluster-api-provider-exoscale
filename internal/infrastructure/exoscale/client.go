@@ -82,6 +82,17 @@ func (c *cloud) waitForSuccess(ctx context.Context, op *egoscale.Operation) (*eg
 	return completed, nil
 }
 
+func parseOperationReferenceID(id egoscale.UUID) (uuid.UUID, error) {
+	parsed, err := uuid.Parse(id.String())
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if parsed == uuid.Nil {
+		return uuid.Nil, errors.New("operation reference ID is nil")
+	}
+	return parsed, nil
+}
+
 // CreateElasticIP creates a managed elastic IP and waits for the operation to complete.
 func (c *cloud) CreateElasticIP(ctx context.Context, healthCheckPort int32, description string) (uuid.UUID, error) {
 	op, err := c.exoClient.CreateElasticIP(ctx, egoscale.CreateElasticIPRequest{
@@ -103,7 +114,7 @@ func (c *cloud) CreateElasticIP(ctx context.Context, healthCheckPort int32, desc
 		return uuid.Nil, fmt.Errorf("elastic IP creation operation returned no reference")
 	}
 
-	id, err := uuid.Parse(completed.Reference.ID.String())
+	id, err := parseOperationReferenceID(completed.Reference.ID)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("unable to parse response from create elastic ip: %w", err)
 	}
@@ -213,7 +224,7 @@ func (c *cloud) CreateSecurityGroup(ctx context.Context, name string) (uuid.UUID
 		return uuid.Nil, fmt.Errorf("security group creation operation returned no reference")
 	}
 
-	id, err := uuid.Parse(completed.Reference.ID.String())
+	id, err := parseOperationReferenceID(completed.Reference.ID)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("unable to parse response from create security group: %w", err)
 	}
@@ -280,7 +291,7 @@ func (c *cloud) CreateSecurityGroupRule(ctx context.Context, sgID uuid.UUID, rul
 		return uuid.Nil, fmt.Errorf("security group rule creation operation returned no reference")
 	}
 
-	id, err := uuid.Parse(completed.Reference.ID.String())
+	id, err := parseOperationReferenceID(completed.Reference.ID)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("unable to parse response from create security group rule: %w", err)
 	}
@@ -483,7 +494,7 @@ func (c *cloud) CreateInstance(ctx context.Context, spec domain.ResolvedInstance
 		return uuid.Nil, fmt.Errorf("instance creation operation returned no reference")
 	}
 
-	id, err := uuid.Parse(completed.Reference.ID.String())
+	id, err := parseOperationReferenceID(completed.Reference.ID)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("unable to parse response from create instance: %w", err)
 	}

@@ -23,18 +23,13 @@ func Test_traceAPIRequest_omitsSensitiveData(t *testing.T) {
 	t.Parallel()
 
 	var output string
-	logger := funcr.New(func(_, args string) { output += args }, funcr.Options{})
+	logger := funcr.New(func(prefix, args string) { output += prefix + args }, funcr.Options{})
 	req, err := http.NewRequest(http.MethodPost, "https://api.example.test/v2/instance?token=query-secret", strings.NewReader("body-secret"))
 	assert.NoError(t, err)
 	req.Header.Set("Authorization", "header-secret")
 
 	assert.NoError(t, traceAPIRequest(logger)(context.Background(), req))
-	assert.Contains(t, output, "Exoscale API request")
-	assert.Contains(t, output, "POST")
-	assert.Contains(t, output, "/v2/instance")
-	assert.NotContains(t, output, "query-secret")
-	assert.NotContains(t, output, "header-secret")
-	assert.NotContains(t, output, "body-secret")
+	assert.Equal(t, `"level"=0 "msg"="Exoscale API request" "method"="POST" "path"="/v2/instance"`, output)
 }
 
 func Test_NewCloud_rejectsIncompleteCredentials(t *testing.T) {
@@ -176,6 +171,19 @@ func Test_cloud_CreateElasticIP(t *testing.T) {
 					Return(&egoscale.Operation{State: egoscale.OperationStateSuccess, Reference: &egoscale.OperationReference{ID: "not-a-uuid"}}, nil)
 			},
 			errText: "unable to parse response from create elastic ip",
+		},
+		{
+			name: "wait returned nil reference ID",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				op := &egoscale.Operation{}
+				m.EXPECT().CreateElasticIP(ctx, egoscale.CreateElasticIPRequest{
+					Description: description,
+					Healthcheck: &egoscale.ElasticIPHealthcheck{Mode: egoscale.ElasticIPHealthcheckModeTCP, Port: int64(healthCheckPort)},
+				}).Return(op, nil)
+				m.EXPECT().Wait(ctx, op, []egoscale.OperationState{egoscale.OperationStateSuccess}).
+					Return(&egoscale.Operation{State: egoscale.OperationStateSuccess, Reference: &egoscale.OperationReference{ID: egoscale.UUID(uuid.Nil.String())}}, nil)
+			},
+			errText: "operation reference ID is nil",
 		},
 	}
 
@@ -674,6 +682,17 @@ func Test_cloud_AttachInstanceToSecurityGroup(t *testing.T) {
 		assert.ErrorIs(t, client.AttachInstanceToSecurityGroup(ctx, instanceID, securityGroupID), assert.AnError)
 	})
 
+	t.Run("rejects nil completed operation", func(t *testing.T) {
+		exoClient := mocks.NewExoscaleClient(t)
+		instanceClient := mocks.NewInstanceClient(t)
+		instanceClient.EXPECT().AttachInstanceToSecurityGroup(ctx, egoscale.UUID(securityGroupID.String()), request).Return(op, nil)
+		exoClient.EXPECT().Wait(ctx, op, []egoscale.OperationState{egoscale.OperationStateSuccess}).Return(nil, nil)
+
+		client := cloud{exoClient: exoClient, instanceClient: instanceClient}
+
+		assert.ErrorContains(t, client.AttachInstanceToSecurityGroup(ctx, instanceID, securityGroupID), "did not succeed")
+	})
+
 	t.Run("rejects unsuccessful operation", func(t *testing.T) {
 		exoClient := mocks.NewExoscaleClient(t)
 		instanceClient := mocks.NewInstanceClient(t)
@@ -886,6 +905,25 @@ func Test_cloud_CreateInstance_errors(t *testing.T) {
 		_, err := client.CreateInstance(ctx, spec)
 
 		assert.ErrorContains(t, err, "unable to parse response from create instance")
+	})
+
+	t.Run("rejects nil operation reference ID", func(t *testing.T) {
+		t.Parallel()
+
+		op := &egoscale.Operation{}
+		exoClient := mocks.NewExoscaleClient(t)
+		instanceClient := mocks.NewInstanceClient(t)
+		instanceClient.EXPECT().CreateInstance(ctx, req).Return(op, nil)
+		exoClient.EXPECT().Wait(ctx, op, []egoscale.OperationState{egoscale.OperationStateSuccess}).Return(&egoscale.Operation{
+			State:     egoscale.OperationStateSuccess,
+			Reference: &egoscale.OperationReference{ID: egoscale.UUID(uuid.Nil.String())},
+		}, nil)
+
+		client := cloud{exoClient: exoClient, instanceClient: instanceClient}
+		id, err := client.CreateInstance(ctx, spec)
+
+		assert.Equal(t, uuid.Nil, id)
+		assert.ErrorContains(t, err, "operation reference ID is nil")
 	})
 
 	t.Run("rejects missing operation reference", func(t *testing.T) {
@@ -1257,6 +1295,16 @@ func Test_cloud_CreateSecurityGroup(t *testing.T) {
 			},
 			errText: "unable to parse response from create security group",
 		},
+		{
+			name: "wait returned nil reference ID",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				op := &egoscale.Operation{}
+				m.EXPECT().CreateSecurityGroup(ctx, egoscale.CreateSecurityGroupRequest{Name: name}).Return(op, nil)
+				m.EXPECT().Wait(ctx, op, []egoscale.OperationState{egoscale.OperationStateSuccess}).
+					Return(&egoscale.Operation{State: egoscale.OperationStateSuccess, Reference: &egoscale.OperationReference{ID: egoscale.UUID(uuid.Nil.String())}}, nil)
+			},
+			errText: "operation reference ID is nil",
+		},
 	}
 
 	for _, ut := range tests {
@@ -1541,6 +1589,20 @@ func Test_cloud_CreateSecurityGroupRule(t *testing.T) {
 					Return(&egoscale.Operation{State: egoscale.OperationStateSuccess, Reference: &egoscale.OperationReference{ID: "not-a-uuid"}}, nil)
 			},
 			errText: "unable to parse response from create security group rule",
+		},
+		{
+			name: "wait returned nil reference ID",
+			rule: baseRule,
+			exoClient: func(m *mocks.ExoscaleClient) {
+				op := &egoscale.Operation{}
+				m.EXPECT().AddRuleToSecurityGroup(ctx, egoscale.UUID(sgID.String()), egoscale.AddRuleToSecurityGroupRequest{
+					Description: baseRule.Description, FlowDirection: egoscale.AddRuleToSecurityGroupRequestFlowDirection(baseRule.FlowDirection),
+					Protocol: egoscale.AddRuleToSecurityGroupRequestProtocol(baseRule.Protocol), StartPort: baseRule.StartPort, EndPort: baseRule.EndPort,
+				}).Return(op, nil)
+				m.EXPECT().Wait(ctx, op, []egoscale.OperationState{egoscale.OperationStateSuccess}).
+					Return(&egoscale.Operation{State: egoscale.OperationStateSuccess, Reference: &egoscale.OperationReference{ID: egoscale.UUID(uuid.Nil.String())}}, nil)
+			},
+			errText: "operation reference ID is nil",
 		},
 	}
 

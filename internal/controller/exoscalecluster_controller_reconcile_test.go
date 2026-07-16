@@ -10,6 +10,7 @@ import (
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/mocks"
 	egoscale "github.com/exoscale/egoscale/v3"
 	"github.com/go-logr/logr"
+	"github.com/go-logr/logr/funcr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	v1 "k8s.io/api/core/v1"
@@ -23,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -384,6 +386,8 @@ func TestExoscaleClusterReconciler_Reconcile_error(t *testing.T) {
 		k8sClient      func(b *fake.ClientBuilder)
 		clusterService func(m *mocks.ClusterService)
 		check          func(t *testing.T, c client.Client)
+		newServiceErr  error
+		checkLog       bool
 		err            error
 		output         reconcile.Result
 	}{
@@ -474,6 +478,41 @@ func TestExoscaleClusterReconciler_Reconcile_error(t *testing.T) {
 			},
 			err:    errInvalidCreds,
 			output: reconcile.Result{},
+		},
+		{
+			name: "cluster service construction error omits credentials",
+			k8sClient: func(b *fake.ClientBuilder) {
+				b.WithObjects(
+					&clusterv1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: ns}},
+					&infrav1alpha1.ExoscaleCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      clusterName,
+							Namespace: ns,
+							OwnerReferences: []metav1.OwnerReference{{
+								APIVersion: clusterv1.GroupVersion.String(),
+								Kind:       "Cluster",
+								Name:       clusterName,
+							}},
+						},
+						Spec: infrav1alpha1.ExoscaleClusterSpec{
+							Zone: "ch-gva-2",
+							ExoscaleSecret: infrav1alpha1.ExoscaleSecretRef{
+								Name: secretName, ApiKey: "apikey", APISecret: "apisecret",
+							},
+						},
+					},
+					&v1.Secret{
+						ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: ns},
+						Data: map[string][]byte{
+							"apikey": []byte("my-api-key"), "apisecret": []byte("my-api-secret"),
+						},
+					},
+				)
+			},
+			newServiceErr: assert.AnError,
+			checkLog:      true,
+			err:           assert.AnError,
+			output:        reconcile.Result{},
 		},
 		{
 			name: "reconcileCluster returns error",
@@ -580,6 +619,9 @@ func TestExoscaleClusterReconciler_Reconcile_error(t *testing.T) {
 
 	for _, ut := range tests {
 		t.Run(ut.name, func(t *testing.T) {
+			var logOutput string
+			logger := funcr.New(func(prefix, args string) { logOutput += prefix + args }, funcr.Options{})
+			reconcileCtx := logf.IntoContext(ctx, logger)
 			builder := fake.NewClientBuilder().
 				WithScheme(scheme).
 				WithStatusSubresource(&infrav1alpha1.ExoscaleCluster{})
@@ -598,16 +640,24 @@ func TestExoscaleClusterReconciler_Reconcile_error(t *testing.T) {
 				NewClusterService: func(apikey, apiSecret string, _ egoscale.ZoneName, _ logr.Logger) (domain.ClusterService, error) {
 					assert.Equal(t, apikey, "my-api-key")
 					assert.Equal(t, apiSecret, "my-api-secret")
+					if ut.newServiceErr != nil {
+						return nil, ut.newServiceErr
+					}
 					return svc, nil
 				},
 			}
 
-			result, err := r.Reconcile(ctx, reconcile.Request{
+			result, err := r.Reconcile(reconcileCtx, reconcile.Request{
 				NamespacedName: types.NamespacedName{Name: clusterName, Namespace: ns},
 			})
 
 			assert.ErrorIs(t, err, ut.err)
 			assert.Equal(t, ut.output, result)
+			if ut.checkLog {
+				assert.Contains(t, logOutput, "unable to create cluster service")
+				assert.NotContains(t, logOutput, "my-api-key")
+				assert.NotContains(t, logOutput, "my-api-secret")
+			}
 
 			if ut.check != nil {
 				ut.check(t, r.Client)

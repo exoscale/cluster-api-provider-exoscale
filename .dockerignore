@@ -2,7 +2,7 @@
 # Ignore everything by default and re-include only needed files
 **
 
-# Re-include directories so nested Go files keep their paths
+# Keep parent directories visible so nested !**/*.go exceptions are included
 !**/
 
 # Re-include Go source files (but not *_test.go)

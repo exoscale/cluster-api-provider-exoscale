@@ -38,8 +38,8 @@ type ExoscaleMachineSpec struct {
 	InstanceType string `json:"instanceType"`
 
 	// sshKey is the name of a pre-existing SSH key registered in the Exoscale project.
-	// +required
-	SSHKey string `json:"sshKey"`
+	// +optional
+	SSHKey string `json:"sshKey,omitempty"`
 
 	// securityGroups lists UUIDs of Exoscale Security Groups to attach in addition
 	// to the cluster's node security group.

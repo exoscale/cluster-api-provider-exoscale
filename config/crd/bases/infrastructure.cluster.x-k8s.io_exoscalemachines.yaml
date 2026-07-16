@@ -137,7 +137,6 @@ spec:
                 type: string
             required:
             - instanceType
-            - sshKey
             - templateID
             type: object
           status:

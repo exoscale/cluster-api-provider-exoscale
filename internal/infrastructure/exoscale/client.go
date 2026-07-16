@@ -368,8 +368,10 @@ func (c *cloud) CreateInstance(ctx context.Context, spec domain.InstanceSpec) (u
 		Name:               spec.Name,
 		PublicIPAssignment: egoscale.PublicIPAssignmentInet4,
 		SecurityGroups:     securityGroups(spec.SecurityGroupIDs),
-		SSHKey:             &egoscale.SSHKey{Name: spec.SSHKey},
 		Template:           &egoscale.Template{ID: template.ID},
+	}
+	if spec.SSHKey != "" {
+		req.SSHKey = &egoscale.SSHKey{Name: spec.SSHKey}
 	}
 	if spec.UserData != "" {
 		req.UserData = base64.StdEncoding.EncodeToString([]byte(spec.UserData))

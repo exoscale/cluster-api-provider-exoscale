@@ -329,6 +329,7 @@ func Test_cloud_CreateInstance_diskSize(t *testing.T) {
 			},
 			createInstance: func(_ context.Context, req egoscale.CreateInstanceRequest) (*egoscale.Operation, error) {
 				assert.Equal(t, int64(30), req.DiskSize)
+				assert.Nil(t, req.SSHKey)
 				assert.Equal(t, &egoscale.Template{ID: template.ID}, req.Template)
 				return createOp, nil
 			},

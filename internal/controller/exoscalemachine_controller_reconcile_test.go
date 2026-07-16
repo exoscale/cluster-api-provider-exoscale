@@ -564,7 +564,7 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 func TestExoscaleMachineReconciler_Reconcile_waitsForNodeSecurityGroup(t *testing.T) {
 	t.Parallel()
 
-	ctx, r, client, exoscaleMachineName, ns := newReadyMachineReconciler(t, domain.Instance{}, nil)
+	ctx, r, client, exoscaleMachineName, ns := newReadyMachineReconciler(t, domain.Instance{}, nil, nil)
 
 	result, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}})
 
@@ -581,7 +581,7 @@ func TestExoscaleMachineReconciler_Reconcile_waitsForInstanceRunning(t *testing.
 	t.Parallel()
 
 	instanceID := uuid.New()
-	ctx, r, client, exoscaleMachineName, ns := newReadyMachineReconciler(t, domain.Instance{ID: instanceID, State: "starting"}, ptr(uuid.New()))
+	ctx, r, client, exoscaleMachineName, ns := newReadyMachineReconciler(t, domain.Instance{ID: instanceID, State: "starting"}, nil, ptr(uuid.New()))
 
 	result, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}})
 
@@ -597,6 +597,68 @@ func TestExoscaleMachineReconciler_Reconcile_waitsForInstanceRunning(t *testing.
 	assert.Nil(t, updated.Status.Initialization.Provisioned)
 }
 
+func TestExoscaleMachineReconciler_Reconcile_returnsInvalidStatusInstanceID(t *testing.T) {
+	t.Parallel()
+
+	ctx, r, client, exoscaleMachineName, ns := newReadyMachineReconciler(t, domain.Instance{}, nil, nil)
+	exoMachine := &infrav1alpha1.ExoscaleMachine{}
+	assert.NoError(t, client.Get(ctx, types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}, exoMachine))
+	exoMachine.Status.InstanceID = "not-a-uuid"
+	assert.NoError(t, client.Status().Update(ctx, exoMachine))
+
+	result, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}})
+
+	assert.Equal(t, reconcile.Result{}, result)
+	assert.ErrorContains(t, err, "invalid instanceID in status")
+}
+
+func TestExoscaleMachineReconciler_Reconcile_returnsInstanceServiceError(t *testing.T) {
+	t.Parallel()
+
+	nodeSecurityGroupID := uuid.New()
+	ctx, r, _, exoscaleMachineName, ns := newReadyMachineReconciler(t, domain.Instance{}, assert.AnError, &nodeSecurityGroupID)
+
+	result, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}})
+
+	assert.Equal(t, reconcile.Result{}, result)
+	assert.ErrorIs(t, err, assert.AnError)
+	assert.ErrorContains(t, err, "upsert instance")
+}
+
+func Test_securityGroupIDs_rejectsInvalidIDs(t *testing.T) {
+	t.Parallel()
+
+	validID := uuid.New().String()
+
+	tests := map[string]struct {
+		cluster infrav1alpha1.ExoscaleCluster
+		machine infrav1alpha1.ExoscaleMachine
+		wantErr string
+	}{
+		"invalid node security group": {
+			cluster: infrav1alpha1.ExoscaleCluster{
+				Status: infrav1alpha1.ExoscaleClusterStatus{SecurityGroupNode: &infrav1alpha1.SecurityGroupStatus{ID: "bad-id"}},
+			},
+			wantErr: "invalid node security group ID",
+		},
+		"invalid machine security group": {
+			cluster: infrav1alpha1.ExoscaleCluster{
+				Status: infrav1alpha1.ExoscaleClusterStatus{SecurityGroupNode: &infrav1alpha1.SecurityGroupStatus{ID: validID}},
+			},
+			machine: infrav1alpha1.ExoscaleMachine{Spec: infrav1alpha1.ExoscaleMachineSpec{SecurityGroups: []string{"bad-id"}}},
+			wantErr: "invalid ExoscaleMachine security group ID",
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, err := securityGroupIDs(&tc.cluster, &tc.machine)
+
+			assert.ErrorContains(t, err, tc.wantErr)
+		})
+	}
+}
+
 func newExoscaleMachineTestScheme(t *testing.T) *runtime.Scheme {
 	t.Helper()
 
@@ -607,7 +669,7 @@ func newExoscaleMachineTestScheme(t *testing.T) *runtime.Scheme {
 	return scheme
 }
 
-func newReadyMachineReconciler(t *testing.T, instance domain.Instance, nodeSecurityGroupID *uuid.UUID) (context.Context, *ExoscaleMachineReconciler, crclient.Client, string, string) {
+func newReadyMachineReconciler(t *testing.T, instance domain.Instance, upsertErr error, nodeSecurityGroupID *uuid.UUID) (context.Context, *ExoscaleMachineReconciler, crclient.Client, string, string) {
 	t.Helper()
 
 	const (
@@ -638,7 +700,7 @@ func newReadyMachineReconciler(t *testing.T, instance domain.Instance, nodeSecur
 			SSHKey:           "ssh-key",
 			SecurityGroupIDs: []uuid.UUID{*nodeSecurityGroupID},
 			UserData:         "#cloud-config",
-		}).Return(instance, nil)
+		}).Return(instance, upsertErr)
 	}
 
 	clientBuilder := fake.NewClientBuilder().

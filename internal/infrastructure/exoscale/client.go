@@ -430,8 +430,11 @@ func (c *cloud) CreateInstance(ctx context.Context, spec domain.ResolvedInstance
 	if completed == nil || completed.State != egoscale.OperationStateSuccess {
 		return uuid.Nil, fmt.Errorf("instance creation operation did not succeed")
 	}
+	if completed.Reference == nil {
+		return uuid.Nil, fmt.Errorf("instance creation operation returned no reference")
+	}
 
-	id, err := uuid.Parse(op.Reference.ID.String())
+	id, err := uuid.Parse(completed.Reference.ID.String())
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("unable to parse response from create instance: %w", err)
 	}

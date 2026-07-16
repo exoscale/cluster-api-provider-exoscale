@@ -280,7 +280,7 @@ func Test_cloud_CreateInstance(t *testing.T) {
 		UserData:           base64.StdEncoding.EncodeToString([]byte("#cloud-config")),
 	}).Return(createOp, nil)
 	exoClient.EXPECT().Wait(ctx, createOp, []egoscale.OperationState{egoscale.OperationStateSuccess}).
-		Return(&egoscale.Operation{State: egoscale.OperationStateSuccess}, nil)
+		Return(&egoscale.Operation{State: egoscale.OperationStateSuccess, Reference: createOp.Reference}, nil)
 
 	client := cloud{exoClient: exoClient, instanceClient: instanceClient}
 
@@ -534,13 +534,29 @@ func Test_cloud_CreateInstance_errors(t *testing.T) {
 		exoClient := mocks.NewExoscaleClient(t)
 		instanceClient := mocks.NewInstanceClient(t)
 		instanceClient.EXPECT().CreateInstance(ctx, req).Return(op, nil)
-		exoClient.EXPECT().Wait(ctx, op, []egoscale.OperationState{egoscale.OperationStateSuccess}).Return(&egoscale.Operation{State: egoscale.OperationStateSuccess}, nil)
+		exoClient.EXPECT().Wait(ctx, op, []egoscale.OperationState{egoscale.OperationStateSuccess}).Return(&egoscale.Operation{State: egoscale.OperationStateSuccess, Reference: op.Reference}, nil)
 
 		client := cloud{exoClient: exoClient, instanceClient: instanceClient}
 
 		_, err := client.CreateInstance(ctx, spec)
 
 		assert.ErrorContains(t, err, "unable to parse response from create instance")
+	})
+
+	t.Run("rejects missing operation reference", func(t *testing.T) {
+		t.Parallel()
+
+		op := &egoscale.Operation{}
+		exoClient := mocks.NewExoscaleClient(t)
+		instanceClient := mocks.NewInstanceClient(t)
+		instanceClient.EXPECT().CreateInstance(ctx, req).Return(op, nil)
+		exoClient.EXPECT().Wait(ctx, op, []egoscale.OperationState{egoscale.OperationStateSuccess}).Return(&egoscale.Operation{State: egoscale.OperationStateSuccess}, nil)
+
+		client := cloud{exoClient: exoClient, instanceClient: instanceClient}
+
+		_, err := client.CreateInstance(ctx, spec)
+
+		assert.ErrorContains(t, err, "returned no reference")
 	})
 
 	t.Run("rejects terminal create failure", func(t *testing.T) {

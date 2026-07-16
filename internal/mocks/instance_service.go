@@ -40,16 +40,16 @@ func (_m *InstanceService) EXPECT() *InstanceService_Expecter {
 }
 
 // DeleteInstance provides a mock function for the type InstanceService
-func (_mock *InstanceService) DeleteInstance(ctx context.Context, id uuid.UUID) error {
-	ret := _mock.Called(ctx, id)
+func (_mock *InstanceService) DeleteInstance(ctx context.Context, machineID *uuid.UUID, instanceID *uuid.UUID) error {
+	ret := _mock.Called(ctx, machineID, instanceID)
 
 	if len(ret) == 0 {
 		panic("no return value specified for DeleteInstance")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID) error); ok {
-		r0 = returnFunc(ctx, id)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *uuid.UUID, *uuid.UUID) error); ok {
+		r0 = returnFunc(ctx, machineID, instanceID)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -63,24 +63,30 @@ type InstanceService_DeleteInstance_Call struct {
 
 // DeleteInstance is a helper method to define mock.On call
 //   - ctx context.Context
-//   - id uuid.UUID
-func (_e *InstanceService_Expecter) DeleteInstance(ctx any, id any) *InstanceService_DeleteInstance_Call {
-	return &InstanceService_DeleteInstance_Call{Call: _e.mock.On("DeleteInstance", ctx, id)}
+//   - machineID *uuid.UUID
+//   - instanceID *uuid.UUID
+func (_e *InstanceService_Expecter) DeleteInstance(ctx any, machineID any, instanceID any) *InstanceService_DeleteInstance_Call {
+	return &InstanceService_DeleteInstance_Call{Call: _e.mock.On("DeleteInstance", ctx, machineID, instanceID)}
 }
 
-func (_c *InstanceService_DeleteInstance_Call) Run(run func(ctx context.Context, id uuid.UUID)) *InstanceService_DeleteInstance_Call {
+func (_c *InstanceService_DeleteInstance_Call) Run(run func(ctx context.Context, machineID *uuid.UUID, instanceID *uuid.UUID)) *InstanceService_DeleteInstance_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 uuid.UUID
+		var arg1 *uuid.UUID
 		if args[1] != nil {
-			arg1 = args[1].(uuid.UUID)
+			arg1 = args[1].(*uuid.UUID)
+		}
+		var arg2 *uuid.UUID
+		if args[2] != nil {
+			arg2 = args[2].(*uuid.UUID)
 		}
 		run(
 			arg0,
 			arg1,
+			arg2,
 		)
 	})
 	return _c
@@ -91,7 +97,7 @@ func (_c *InstanceService_DeleteInstance_Call) Return(err error) *InstanceServic
 	return _c
 }
 
-func (_c *InstanceService_DeleteInstance_Call) RunAndReturn(run func(ctx context.Context, id uuid.UUID) error) *InstanceService_DeleteInstance_Call {
+func (_c *InstanceService_DeleteInstance_Call) RunAndReturn(run func(ctx context.Context, machineID *uuid.UUID, instanceID *uuid.UUID) error) *InstanceService_DeleteInstance_Call {
 	_c.Call.Return(run)
 	return _c
 }

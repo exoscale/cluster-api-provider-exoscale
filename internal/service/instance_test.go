@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/domain"
 	"github.com/go-logr/logr"
@@ -103,6 +104,7 @@ func Test_instanceService_UpsertInstance(t *testing.T) {
 			assert.Equal(t, ut.output, output)
 		})
 	}
+
 }
 
 func Test_instanceService_resolveInstanceSpec(t *testing.T) {
@@ -180,8 +182,113 @@ func Test_instanceService_resolveInstanceSpec(t *testing.T) {
 			RootVolumeSizeGB: &tooSmall,
 		})
 
-		assert.ErrorContains(t, err, "rootVolumeSizeGB 10 is smaller than template size 15")
+		assert.ErrorContains(t, err, "rootVolumeSizeGB 10 is smaller than minimum size 15")
 	})
+
+	t.Run("uses the provider disk minimum for smaller templates", func(t *testing.T) {
+		t.Parallel()
+
+		smallTemplate := template
+		smallTemplate.SizeBytes = 5 * bytesPerGiB
+		svc := instanceService{cloud: fakeInstanceCloud{
+			listTemplates: func(context.Context) ([]domain.InstanceTemplate, error) {
+				return []domain.InstanceTemplate{smallTemplate}, nil
+			},
+			listInstanceTypes: func(context.Context) ([]domain.InstanceType, error) {
+				return []domain.InstanceType{instanceType}, nil
+			},
+		}}
+
+		output, err := svc.resolveInstanceSpec(ctx, domain.InstanceSpec{Template: "ubuntu", InstanceType: "standard-2"})
+
+		assert.NoError(t, err)
+		assert.Equal(t, minimumDiskSizeGB, output.DiskSizeGB)
+	})
+
+	t.Run("selects the newest template with a matching name", func(t *testing.T) {
+		t.Parallel()
+
+		older := template
+		older.CreatedAt = time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+		anotherOlder := older
+		anotherOlder.ID = uuid.New()
+		newer := template
+		newer.ID = uuid.New()
+		newer.CreatedAt = older.CreatedAt.Add(time.Hour)
+		svc := instanceService{cloud: fakeInstanceCloud{
+			listTemplates: func(context.Context) ([]domain.InstanceTemplate, error) {
+				return []domain.InstanceTemplate{older, anotherOlder, newer}, nil
+			},
+			listInstanceTypes: func(context.Context) ([]domain.InstanceType, error) {
+				return []domain.InstanceType{instanceType}, nil
+			},
+		}}
+
+		output, err := svc.resolveInstanceSpec(ctx, domain.InstanceSpec{Template: "ubuntu", InstanceType: "standard-2"})
+
+		assert.NoError(t, err)
+		assert.Equal(t, newer.ID, output.TemplateID)
+	})
+
+	t.Run("rejects a tie between the newest matching templates", func(t *testing.T) {
+		t.Parallel()
+
+		createdAt := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+		first := template
+		first.CreatedAt = createdAt
+		second := template
+		second.ID = uuid.New()
+		second.CreatedAt = createdAt
+		svc := instanceService{cloud: fakeInstanceCloud{
+			listTemplates: func(context.Context) ([]domain.InstanceTemplate, error) {
+				return []domain.InstanceTemplate{first, second}, nil
+			},
+		}}
+
+		_, err := svc.resolveTemplate(ctx, "ubuntu")
+
+		assert.ErrorContains(t, err, "multiple newest templates")
+	})
+
+	t.Run("rejects explicit disk size below the provider minimum", func(t *testing.T) {
+		t.Parallel()
+
+		smallTemplate := template
+		smallTemplate.SizeBytes = 5 * bytesPerGiB
+		tooSmall := int64(9)
+		svc := instanceService{cloud: fakeInstanceCloud{
+			listTemplates: func(context.Context) ([]domain.InstanceTemplate, error) {
+				return []domain.InstanceTemplate{smallTemplate}, nil
+			},
+			listInstanceTypes: func(context.Context) ([]domain.InstanceType, error) {
+				return []domain.InstanceType{instanceType}, nil
+			},
+		}}
+
+		_, err := svc.resolveInstanceSpec(ctx, domain.InstanceSpec{
+			Template:         "ubuntu",
+			InstanceType:     "standard-2",
+			RootVolumeSizeGB: &tooSmall,
+		})
+
+		assert.ErrorContains(t, err, "rootVolumeSizeGB 9 is smaller than minimum size 10")
+	})
+}
+
+func Test_instanceService_resolveInstanceType(t *testing.T) {
+	t.Parallel()
+
+	want := domain.InstanceType{ID: uuid.NewString(), Family: "standard", Size: "small"}
+	svc := instanceService{cloud: fakeInstanceCloud{
+		listInstanceTypes: func(context.Context) ([]domain.InstanceType, error) {
+			return []domain.InstanceType{want}, nil
+		},
+	}}
+
+	got, err := svc.resolveInstanceType(context.Background(), "small")
+
+	assert.NoError(t, err)
+	assert.Equal(t, want, got)
 }
 
 func Test_normalizeInstanceType(t *testing.T) {
@@ -206,19 +313,25 @@ func Test_instanceService_DeleteInstance(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
+	machineID := uuid.New()
 	id := uuid.New()
+	staleID := uuid.New()
+	instance := domain.Instance{ID: id, Labels: map[string]string{machineUIDLabel: machineID.String()}}
 
 	tests := []struct {
-		name  string
-		cloud fakeInstanceCloud
-		err   error
+		name       string
+		machineID  *uuid.UUID
+		instanceID *uuid.UUID
+		cloud      fakeInstanceCloud
+		err        error
 	}{
 		{
-			name: "deletes existing instance",
+			name:       "deletes instance from status id",
+			instanceID: &id,
 			cloud: fakeInstanceCloud{
 				getInstance: func(_ context.Context, gotID uuid.UUID) (domain.Instance, error) {
 					assert.Equal(t, id, gotID)
-					return domain.Instance{ID: id}, nil
+					return instance, nil
 				},
 				deleteInstance: func(_ context.Context, gotID uuid.UUID) error {
 					assert.Equal(t, id, gotID)
@@ -227,16 +340,51 @@ func Test_instanceService_DeleteInstance(t *testing.T) {
 			},
 		},
 		{
-			name: "missing instance is already deleted",
+			name:      "recovers instance from machine uid",
+			machineID: &machineID,
 			cloud: fakeInstanceCloud{
-				getInstance: func(_ context.Context, gotID uuid.UUID) (domain.Instance, error) {
+				listInstances: func(context.Context) ([]domain.Instance, error) {
+					return []domain.Instance{instance}, nil
+				},
+				deleteInstance: func(_ context.Context, gotID uuid.UUID) error {
 					assert.Equal(t, id, gotID)
-					return domain.Instance{}, domain.ErrInstanceNotFound
+					return nil
 				},
 			},
 		},
 		{
-			name: "returns get error",
+			name:       "falls back from stale status id to machine uid",
+			machineID:  &machineID,
+			instanceID: &staleID,
+			cloud: fakeInstanceCloud{
+				getInstance: func(_ context.Context, gotID uuid.UUID) (domain.Instance, error) {
+					assert.Equal(t, staleID, gotID)
+					return domain.Instance{}, domain.ErrInstanceNotFound
+				},
+				listInstances: func(context.Context) ([]domain.Instance, error) {
+					return []domain.Instance{instance}, nil
+				},
+				deleteInstance: func(_ context.Context, gotID uuid.UUID) error {
+					assert.Equal(t, id, gotID)
+					return nil
+				},
+			},
+		},
+		{
+			name:       "delete not found is already deleted",
+			instanceID: &id,
+			cloud: fakeInstanceCloud{
+				getInstance: func(context.Context, uuid.UUID) (domain.Instance, error) {
+					return instance, nil
+				},
+				deleteInstance: func(context.Context, uuid.UUID) error {
+					return domain.ErrInstanceNotFound
+				},
+			},
+		},
+		{
+			name:       "returns get error",
+			instanceID: &id,
 			cloud: fakeInstanceCloud{
 				getInstance: func(_ context.Context, gotID uuid.UUID) (domain.Instance, error) {
 					assert.Equal(t, id, gotID)
@@ -245,16 +393,41 @@ func Test_instanceService_DeleteInstance(t *testing.T) {
 			},
 			err: assert.AnError,
 		},
+		{
+			name:      "missing machine instance is already deleted",
+			machineID: &machineID,
+			cloud: fakeInstanceCloud{
+				listInstances: func(context.Context) ([]domain.Instance, error) {
+					return nil, nil
+				},
+			},
+		},
+		{name: "no identifiers is already deleted"},
 	}
 
 	for _, ut := range tests {
 		t.Run(ut.name, func(t *testing.T) {
 			svc := instanceService{cloud: ut.cloud, logger: logr.Discard()}
-			err := svc.DeleteInstance(ctx, id)
+			err := svc.DeleteInstance(ctx, ut.machineID, ut.instanceID)
 
 			assert.ErrorIs(t, err, ut.err)
 		})
 	}
+
+	t.Run("duplicate machine instances keep deletion pending when status exists", func(t *testing.T) {
+		svc := instanceService{cloud: fakeInstanceCloud{
+			getInstance: func(context.Context, uuid.UUID) (domain.Instance, error) {
+				return instance, nil
+			},
+			listInstances: func(context.Context) ([]domain.Instance, error) {
+				return []domain.Instance{instance, {ID: uuid.New(), Labels: instance.Labels}}, nil
+			},
+		}}
+
+		err := svc.DeleteInstance(ctx, &machineID, &id)
+
+		assert.ErrorContains(t, err, "multiple instances found")
+	})
 }
 
 type fakeInstanceCloud struct {

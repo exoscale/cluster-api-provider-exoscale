@@ -1,3 +1,5 @@
+# verifies no VM state is recorded while bootstrap data is unavailable,
+# and deletion still works.
 apiVersion: chainsaw.kyverno.io/v1alpha1
 kind: Test
 metadata:
@@ -7,14 +9,14 @@ spec:
     delete: 5m
     cleanup: 5m
   bindings:
-  - name: zone
-    value: ($values.zone || 'bg-sof-1')
-  - name: clusterName
-    value: (join('-', ['exo-mb', ($values.suffix || 'local')]))
-  - name: machineName
-    value: (join('-', ['machine-missing-bootstrap', ($values.suffix || 'local')]))
-  - name: namespace
-    value: default
+    - name: zone
+      value: ($values.zone || 'bg-sof-1')
+    - name: clusterName
+      value: (join('-', ['exo-mb', ($values.suffix || 'local')]))
+    - name: machineName
+      value: (join('-', ['machine-missing-bootstrap', ($values.suffix || 'local')]))
+    - name: namespace
+      value: default
   steps:
     - name: apply cluster
       try:

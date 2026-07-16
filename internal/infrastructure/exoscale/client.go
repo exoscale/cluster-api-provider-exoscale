@@ -418,8 +418,12 @@ func (c *cloud) CreateInstance(ctx context.Context, spec domain.ResolvedInstance
 		return uuid.Nil, fmt.Errorf("unable to create instance: %w", err)
 	}
 
-	if _, err := c.exoClient.Wait(ctx, op); err != nil {
+	completed, err := c.exoClient.Wait(ctx, op, egoscale.OperationStateSuccess)
+	if err != nil {
 		return uuid.Nil, fmt.Errorf("error while waiting for instance creation: %w", err)
+	}
+	if completed == nil || completed.State != egoscale.OperationStateSuccess {
+		return uuid.Nil, fmt.Errorf("instance creation operation did not succeed")
 	}
 
 	id, err := uuid.Parse(op.Reference.ID.String())
@@ -462,11 +466,18 @@ func (c *cloud) DeleteInstance(ctx context.Context, id uuid.UUID) error {
 
 	op, err := client.DeleteInstance(ctx, egoscale.UUID(id.String()))
 	if err != nil {
+		if errors.Is(err, egoscale.ErrNotFound) {
+			return domain.ErrInstanceNotFound
+		}
 		return fmt.Errorf("unable to delete instance: %w", err)
 	}
 
-	if _, err := c.exoClient.Wait(ctx, op); err != nil {
+	completed, err := c.exoClient.Wait(ctx, op, egoscale.OperationStateSuccess)
+	if err != nil {
 		return fmt.Errorf("error while waiting for instance deletion: %w", err)
+	}
+	if completed == nil || completed.State != egoscale.OperationStateSuccess {
+		return fmt.Errorf("instance deletion operation did not succeed")
 	}
 
 	return nil
@@ -500,7 +511,7 @@ func mapTemplate(template egoscale.Template) (domain.InstanceTemplate, error) {
 		return domain.InstanceTemplate{}, fmt.Errorf("unable to parse template id %q: %w", template.ID, err)
 	}
 
-	return domain.InstanceTemplate{ID: id, Name: template.Name, SizeBytes: template.Size}, nil
+	return domain.InstanceTemplate{ID: id, Name: template.Name, SizeBytes: template.Size, CreatedAt: template.CreatedAT}, nil
 }
 
 func ipString(ip net.IP) string {

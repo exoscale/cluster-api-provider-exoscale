@@ -20,6 +20,8 @@ const machineUIDLabel = "cluster-api-provider-exoscale/machine-uid"
 
 const bytesPerGiB int64 = 1024 * 1024 * 1024
 
+const minimumDiskSizeGB int64 = 10
+
 var _ domain.InstanceService = (*instanceService)(nil)
 
 // instanceService implements domain.InstanceService on top of the domain
@@ -110,10 +112,11 @@ func (s *instanceService) resolveInstanceSpec(ctx context.Context, spec domain.I
 	}
 
 	templateSizeGB := templateDiskSizeGB(template.SizeBytes)
-	diskSize := templateSizeGB
+	minimumSizeGB := max(templateSizeGB, minimumDiskSizeGB)
+	diskSize := minimumSizeGB
 	if spec.RootVolumeSizeGB != nil {
-		if *spec.RootVolumeSizeGB < templateSizeGB {
-			return domain.ResolvedInstanceSpec{}, fmt.Errorf("rootVolumeSizeGB %d is smaller than template size %d", *spec.RootVolumeSizeGB, templateSizeGB)
+		if *spec.RootVolumeSizeGB < minimumSizeGB {
+			return domain.ResolvedInstanceSpec{}, fmt.Errorf("rootVolumeSizeGB %d is smaller than minimum size %d", *spec.RootVolumeSizeGB, minimumSizeGB)
 		}
 		diskSize = *spec.RootVolumeSizeGB
 	}
@@ -143,10 +146,27 @@ func (s *instanceService) resolveTemplate(ctx context.Context, templateRef strin
 	if err != nil {
 		return domain.InstanceTemplate{}, fmt.Errorf("unable to list templates: %w", err)
 	}
-	for _, template := range templates {
-		if template.Name == templateRef {
-			return template, nil
+	var latest *domain.InstanceTemplate
+	ambiguousLatest := false
+	for i := range templates {
+		template := &templates[i]
+		if template.Name != templateRef {
+			continue
 		}
+		if latest == nil || template.CreatedAt.After(latest.CreatedAt) {
+			latest = template
+			ambiguousLatest = false
+			continue
+		}
+		if template.CreatedAt.Equal(latest.CreatedAt) {
+			ambiguousLatest = true
+		}
+	}
+	if latest != nil {
+		if ambiguousLatest {
+			return domain.InstanceTemplate{}, fmt.Errorf("multiple newest templates named %q have the same creation time", templateRef)
+		}
+		return *latest, nil
 	}
 
 	return domain.InstanceTemplate{}, fmt.Errorf("unable to find template %q", templateRef)
@@ -160,7 +180,8 @@ func (s *instanceService) resolveInstanceType(ctx context.Context, instanceType 
 
 	normalized := normalizeInstanceType(instanceType)
 	for _, candidate := range instanceTypes {
-		if candidate.ID == normalized || instanceTypeKey(candidate) == normalized {
+		if candidate.ID == normalized || instanceTypeKey(candidate) == normalized ||
+			(!strings.Contains(normalized, ".") && candidate.Family == "standard" && candidate.Size == normalized) {
 			return candidate, nil
 		}
 	}
@@ -199,16 +220,37 @@ func templateDiskSizeGB(size int64) int64 {
 	return (size + bytesPerGiB - 1) / bytesPerGiB
 }
 
-func (s *instanceService) DeleteInstance(ctx context.Context, id uuid.UUID) error {
-	if _, err := s.cloud.GetInstance(ctx, id); err != nil {
-		if errors.Is(err, domain.ErrInstanceNotFound) {
-			return nil
+func (s *instanceService) DeleteInstance(ctx context.Context, machineID, instanceID *uuid.UUID) error {
+	var instance domain.Instance
+	if instanceID != nil {
+		var err error
+		instance, err = s.cloud.GetInstance(ctx, *instanceID)
+		if err != nil && !errors.Is(err, domain.ErrInstanceNotFound) {
+			return err
 		}
-		return err
 	}
 
-	s.logger.Info("Delete instance", "instanceID", id.String())
-	return s.cloud.DeleteInstance(ctx, id)
+	if machineID != nil {
+		byMachineID, err := s.findInstanceByMachineID(ctx, *machineID)
+		if err != nil && !errors.Is(err, domain.ErrInstanceNotFound) {
+			return err
+		}
+		if err == nil {
+			if instance.ID != uuid.Nil && instance.ID != byMachineID.ID {
+				return fmt.Errorf("status instance %s differs from Machine UID instance %s", instance.ID, byMachineID.ID)
+			}
+			instance = byMachineID
+		}
+	}
+	if instance.ID == uuid.Nil {
+		return nil
+	}
+
+	s.logger.Info("Delete instance", "instanceID", instance.ID.String())
+	if err := s.cloud.DeleteInstance(ctx, instance.ID); err != nil && !errors.Is(err, domain.ErrInstanceNotFound) {
+		return err
+	}
+	return nil
 }
 
 func (s *instanceService) findInstanceByMachineID(ctx context.Context, machineID uuid.UUID) (domain.Instance, error) {
@@ -217,10 +259,17 @@ func (s *instanceService) findInstanceByMachineID(ctx context.Context, machineID
 		return domain.Instance{}, err
 	}
 
+	var match domain.Instance
 	for _, instance := range instances {
 		if instance.Labels[machineUIDLabel] == machineID.String() {
-			return instance, nil
+			if match.ID != uuid.Nil {
+				return domain.Instance{}, fmt.Errorf("multiple instances found for Machine UID %s", machineID)
+			}
+			match = instance
 		}
+	}
+	if match.ID != uuid.Nil {
+		return match, nil
 	}
 
 	return domain.Instance{}, domain.ErrInstanceNotFound

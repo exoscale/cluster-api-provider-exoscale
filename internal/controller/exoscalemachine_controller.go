@@ -26,6 +26,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -37,7 +38,9 @@ import (
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/conditions"
+	capicontrollerutil "sigs.k8s.io/cluster-api/util/controller"
 	capipatch "sigs.k8s.io/cluster-api/util/patch"
+	capipredicates "sigs.k8s.io/cluster-api/util/predicates"
 
 	infrastructurev1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/domain"
@@ -51,7 +54,7 @@ import (
 // reconciler that owns the lifecycle.
 const machineFinalizer = "exoscalemachine.infrastructure.cluster.x-k8s.io"
 
-// +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines;machines/status,verbs=get;list;watch
+// +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters;machines;machines/status,verbs=get;list;watch
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=exoscalemachines,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=exoscalemachines/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=exoscalemachines/finalizers,verbs=update
@@ -65,25 +68,9 @@ type ExoscaleMachineReconciler struct {
 
 func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
 	log := logf.FromContext(ctx)
-
 	exoMachine := &infrastructurev1alpha1.ExoscaleMachine{}
 	if err := r.Get(ctx, req.NamespacedName, exoMachine); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
-	}
-
-	machine, err := util.GetOwnerMachine(ctx, r.Client, exoMachine.ObjectMeta)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	if machine == nil {
-		log.Info("owner Machine not yet set, requeueing")
-		return ctrl.Result{}, nil
-	}
-
-	cluster, err := util.GetClusterFromMetadata(ctx, r.Client, machine.ObjectMeta)
-	if err != nil {
-		log.Info("Machine missing cluster label or cluster not found")
-		return ctrl.Result{}, nil
 	}
 
 	patchHelper, err := capipatch.NewHelper(exoMachine, r.Client)
@@ -95,6 +82,39 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			reterr = pErr
 		}
 	}()
+
+	deleting := !exoMachine.DeletionTimestamp.IsZero()
+	var machine *clusterv1.Machine
+	var machineID, instanceID *uuid.UUID
+	cluster, clusterErr := util.GetClusterFromMetadata(ctx, r.Client, exoMachine.ObjectMeta)
+	if deleting {
+		machineID, instanceID, err = deletionInstanceIDs(exoMachine)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if machineID == nil && instanceID == nil {
+			controllerutil.RemoveFinalizer(exoMachine, machineFinalizer)
+			return ctrl.Result{}, nil
+		}
+		if clusterErr != nil {
+			return ctrl.Result{}, clusterErr
+		}
+	} else if clusterErr != nil {
+		machine, err = util.GetOwnerMachine(ctx, r.Client, exoMachine.ObjectMeta)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if machine == nil {
+			log.Info("owner Machine not yet set, requeueing")
+			return ctrl.Result{}, nil
+		}
+		cluster, err = util.GetClusterFromMetadata(ctx, r.Client, machine.ObjectMeta)
+		if err != nil {
+			log.Info("Machine missing cluster label or cluster not found")
+			return ctrl.Result{}, nil
+		}
+	}
+
 	if annotations.IsPaused(cluster, exoMachine) {
 		log.Info("ExoscaleMachine or Cluster is paused")
 		conditions.Set(exoMachine, metav1.Condition{
@@ -107,12 +127,7 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 	conditions.Delete(exoMachine, clusterv1.PausedCondition)
 
-	if !exoMachine.DeletionTimestamp.IsZero() {
-		if exoMachine.Status.InstanceID == "" {
-			controllerutil.RemoveFinalizer(exoMachine, machineFinalizer)
-			return ctrl.Result{}, nil
-		}
-
+	if deleting {
 		exoCluster, err := r.getExoscaleCluster(ctx, cluster)
 		if err != nil {
 			return ctrl.Result{}, err
@@ -123,7 +138,17 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			return ctrl.Result{}, err
 		}
 
-		return ctrl.Result{}, r.reconcileDelete(ctx, exoMachine, instanceService)
+		return ctrl.Result{}, r.reconcileDelete(ctx, exoMachine, instanceService, machineID, instanceID)
+	}
+	if machine == nil {
+		machine, err = util.GetOwnerMachine(ctx, r.Client, exoMachine.ObjectMeta)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if machine == nil {
+			log.Info("owner Machine not yet set, requeueing")
+			return ctrl.Result{}, nil
+		}
 	}
 
 	exoCluster, err := r.getExoscaleCluster(ctx, cluster)
@@ -266,18 +291,45 @@ func (r *ExoscaleMachineReconciler) reconcileDelete(
 	ctx context.Context,
 	exoMachine *infrastructurev1alpha1.ExoscaleMachine,
 	instanceService domain.InstanceService,
+	machineID, instanceID *uuid.UUID,
 ) error {
-	instanceID, err := uuid.Parse(exoMachine.Status.InstanceID)
-	if err != nil {
-		return fmt.Errorf("invalid instanceID in status %q: %w", exoMachine.Status.InstanceID, err)
-	}
-
-	if err := instanceService.DeleteInstance(ctx, instanceID); err != nil && !errors.Is(err, domain.ErrInstanceNotFound) {
+	if err := instanceService.DeleteInstance(ctx, machineID, instanceID); err != nil && !errors.Is(err, domain.ErrInstanceNotFound) {
 		return fmt.Errorf("delete instance: %w", err)
 	}
 
 	controllerutil.RemoveFinalizer(exoMachine, machineFinalizer)
 	return nil
+}
+
+func deletionInstanceIDs(exoMachine *infrastructurev1alpha1.ExoscaleMachine) (*uuid.UUID, *uuid.UUID, error) {
+	var instanceID *uuid.UUID
+	if exoMachine.Status.InstanceID != "" {
+		id, err := uuid.Parse(exoMachine.Status.InstanceID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("invalid instanceID in status %q: %w", exoMachine.Status.InstanceID, err)
+		}
+		instanceID = &id
+	}
+
+	for _, ref := range exoMachine.OwnerReferences {
+		if ref.Kind != "Machine" {
+			continue
+		}
+		groupVersion, err := schema.ParseGroupVersion(ref.APIVersion)
+		if err != nil {
+			return nil, nil, fmt.Errorf("invalid owner API version %q: %w", ref.APIVersion, err)
+		}
+		if groupVersion.Group != clusterv1.GroupVersion.Group {
+			continue
+		}
+		machineID, err := uuid.Parse(string(ref.UID))
+		if err != nil {
+			return nil, nil, fmt.Errorf("invalid Machine owner UID %q: %w", ref.UID, err)
+		}
+		return &machineID, instanceID, nil
+	}
+
+	return nil, instanceID, nil
 }
 
 func (r *ExoscaleMachineReconciler) bootstrapData(ctx context.Context, machine *clusterv1.Machine) (string, error) {
@@ -323,7 +375,13 @@ func securityGroupIDs(
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ExoscaleMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
+	predicateLog := mgr.GetLogger().WithValues("controller", "exoscalemachine")
+	clusterToExoscaleMachines, err := util.ClusterToTypedObjectsMapper(mgr.GetClient(), &infrastructurev1alpha1.ExoscaleMachineList{}, mgr.GetScheme())
+	if err != nil {
+		return err
+	}
+
+	return capicontrollerutil.NewControllerManagedBy(mgr, predicateLog).
 		For(&infrastructurev1alpha1.ExoscaleMachine{}).
 		Watches(
 			&clusterv1.Machine{},
@@ -332,6 +390,11 @@ func (r *ExoscaleMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 					infrastructurev1alpha1.GroupVersion.WithKind("ExoscaleMachine"),
 				),
 			),
+		).
+		Watches(
+			&clusterv1.Cluster{},
+			handler.EnqueueRequestsFromMapFunc(clusterToExoscaleMachines),
+			capipredicates.ClusterPausedTransitionsOrInfrastructureProvisioned(mgr.GetScheme(), predicateLog),
 		).
 		Named("exoscalemachine").
 		Complete(r)

@@ -351,13 +351,11 @@ func TestExoscaleMachineReconciler_Reconcile_setsPausedCondition(t *testing.T) {
 	const (
 		ns                  = "default"
 		clusterName         = "test-cluster"
-		machineName         = "test-machine"
 		exoscaleClusterName = "test-exoscale-cluster"
 		exoscaleMachineName = "test-exoscale-machine"
 	)
 
 	ctx := context.Background()
-	machineUID := uuid.New()
 	templateID := uuid.New()
 
 	scheme := runtime.NewScheme()
@@ -379,25 +377,13 @@ func TestExoscaleMachineReconciler_Reconcile_setsPausedCondition(t *testing.T) {
 					},
 				},
 			},
-			&clusterv1.Machine{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      machineName,
-					Namespace: ns,
-					UID:       types.UID(machineUID.String()),
-					Labels: map[string]string{
-						clusterv1.ClusterNameLabel: clusterName,
-					},
-				},
-			},
 			&infrav1alpha1.ExoscaleMachine{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      exoscaleMachineName,
 					Namespace: ns,
+					Labels:    map[string]string{clusterv1.ClusterNameLabel: clusterName},
 					Annotations: map[string]string{
 						clusterv1.PausedAnnotation: "",
-					},
-					OwnerReferences: []metav1.OwnerReference{
-						{APIVersion: clusterv1.GroupVersion.String(), Kind: "Machine", Name: machineName},
 					},
 				},
 				Spec: infrav1alpha1.ExoscaleMachineSpec{
@@ -451,15 +437,20 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 
 	tests := []struct {
 		name             string
+		ownerReference   bool
+		ownerMachine     bool
 		statusInstanceID string
 		deleteErr        error
+		wantService      bool
 		wantErr          error
 		wantFinalizer    bool
 	}{
-		{name: "without instance id removes finalizer"},
-		{name: "with instance id deletes instance", statusInstanceID: instanceID.String()},
-		{name: "instance not found removes finalizer", statusInstanceID: instanceID.String(), deleteErr: domain.ErrInstanceNotFound},
-		{name: "delete error keeps finalizer", statusInstanceID: instanceID.String(), deleteErr: assert.AnError, wantErr: assert.AnError, wantFinalizer: true},
+		{name: "recovers instance by Machine UID", ownerReference: true, ownerMachine: true, wantService: true},
+		{name: "recovers instance when owner Machine is gone", ownerReference: true, wantService: true},
+		{name: "deletes instance from status without owner", statusInstanceID: instanceID.String(), wantService: true},
+		{name: "without either identifier removes finalizer"},
+		{name: "instance not found removes finalizer", ownerReference: true, statusInstanceID: instanceID.String(), deleteErr: domain.ErrInstanceNotFound, wantService: true},
+		{name: "delete error keeps finalizer", ownerReference: true, statusInstanceID: instanceID.String(), deleteErr: assert.AnError, wantService: true, wantErr: assert.AnError, wantFinalizer: true},
 	}
 
 	for _, tc := range tests {
@@ -468,71 +459,91 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 
 			scheme := newExoscaleMachineTestScheme(t)
 			instanceSvc := mocks.NewInstanceService(t)
-			if tc.statusInstanceID != "" {
-				instanceSvc.EXPECT().DeleteInstance(ctx, instanceID).Return(tc.deleteErr)
+			var expectedMachineID, expectedInstanceID *uuid.UUID
+			if tc.ownerReference {
+				expectedMachineID = &machineUID
 			}
+			if tc.statusInstanceID != "" {
+				expectedInstanceID = &instanceID
+			}
+			if tc.wantService {
+				instanceSvc.EXPECT().DeleteInstance(ctx, expectedMachineID, expectedInstanceID).Return(tc.deleteErr)
+			}
+
+			objects := []crclient.Object{
+				&clusterv1.Cluster{
+					ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: ns},
+					Spec: clusterv1.ClusterSpec{
+						InfrastructureRef: clusterv1.ContractVersionedObjectReference{
+							APIGroup: infrav1alpha1.GroupVersion.Group,
+							Kind:     "ExoscaleCluster",
+							Name:     exoscaleClusterName,
+						},
+					},
+				},
+				&infrav1alpha1.ExoscaleCluster{
+					ObjectMeta: metav1.ObjectMeta{Name: exoscaleClusterName, Namespace: ns},
+					Spec: infrav1alpha1.ExoscaleClusterSpec{
+						Zone: "ch-gva-2",
+						ExoscaleSecret: infrav1alpha1.ExoscaleSecretRef{
+							Name:      secretName,
+							ApiKey:    "apikey",
+							APISecret: "apisecret",
+						},
+					},
+				},
+				&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: ns},
+					Data: map[string][]byte{
+						"apikey":    []byte("my-api-key"),
+						"apisecret": []byte("my-api-secret"),
+					},
+				},
+			}
+			if tc.ownerMachine {
+				objects = append(objects, &clusterv1.Machine{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      machineName,
+						Namespace: ns,
+						UID:       types.UID(machineUID.String()),
+						Labels:    map[string]string{clusterv1.ClusterNameLabel: clusterName},
+					},
+				})
+			}
+
+			exoMachine := &infrav1alpha1.ExoscaleMachine{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              exoscaleMachineName,
+					Namespace:         ns,
+					Finalizers:        []string{machineFinalizer},
+					DeletionTimestamp: &deleteTime,
+					Labels:            map[string]string{clusterv1.ClusterNameLabel: clusterName},
+				},
+				Status: infrav1alpha1.ExoscaleMachineStatus{InstanceID: tc.statusInstanceID},
+			}
+			if tc.ownerReference {
+				exoMachine.OwnerReferences = []metav1.OwnerReference{{
+					APIVersion: clusterv1.GroupVersion.String(),
+					Kind:       "Machine",
+					Name:       machineName,
+					UID:        types.UID(machineUID.String()),
+				}}
+			}
+			objects = append(objects, exoMachine)
 
 			client := fake.NewClientBuilder().
 				WithScheme(scheme).
 				WithStatusSubresource(&infrav1alpha1.ExoscaleMachine{}).
-				WithObjects(
-					&clusterv1.Cluster{
-						ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: ns},
-						Spec: clusterv1.ClusterSpec{
-							InfrastructureRef: clusterv1.ContractVersionedObjectReference{
-								APIGroup: infrav1alpha1.GroupVersion.Group,
-								Kind:     "ExoscaleCluster",
-								Name:     exoscaleClusterName,
-							},
-						},
-					},
-					&infrav1alpha1.ExoscaleCluster{
-						ObjectMeta: metav1.ObjectMeta{Name: exoscaleClusterName, Namespace: ns},
-						Spec: infrav1alpha1.ExoscaleClusterSpec{
-							Zone: "ch-gva-2",
-							ExoscaleSecret: infrav1alpha1.ExoscaleSecretRef{
-								Name:      secretName,
-								ApiKey:    "apikey",
-								APISecret: "apisecret",
-							},
-						},
-					},
-					&corev1.Secret{
-						ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: ns},
-						Data: map[string][]byte{
-							"apikey":    []byte("my-api-key"),
-							"apisecret": []byte("my-api-secret"),
-						},
-					},
-					&clusterv1.Machine{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      machineName,
-							Namespace: ns,
-							UID:       types.UID(machineUID.String()),
-							Labels: map[string]string{
-								clusterv1.ClusterNameLabel: clusterName,
-							},
-						},
-					},
-					&infrav1alpha1.ExoscaleMachine{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:              exoscaleMachineName,
-							Namespace:         ns,
-							Finalizers:        []string{machineFinalizer},
-							DeletionTimestamp: &deleteTime,
-							OwnerReferences: []metav1.OwnerReference{
-								{APIVersion: clusterv1.GroupVersion.String(), Kind: "Machine", Name: machineName},
-							},
-						},
-						Status: infrav1alpha1.ExoscaleMachineStatus{InstanceID: tc.statusInstanceID},
-					},
-				).
+				WithObjects(objects...).
 				Build()
 
 			r := &ExoscaleMachineReconciler{
 				Client: client,
 				Scheme: scheme,
 				NewInstanceService: func(string, string, egoscale.ZoneName, logr.Logger) (domain.InstanceService, error) {
+					if !tc.wantService {
+						assert.Fail(t, "instance service should not be created without a deletion identifier")
+					}
 					return instanceSvc, nil
 				},
 			}
@@ -581,7 +592,7 @@ func TestExoscaleMachineReconciler_Reconcile_waitsForInstanceRunning(t *testing.
 	t.Parallel()
 
 	instanceID := uuid.New()
-	ctx, r, client, exoscaleMachineName, ns := newReadyMachineReconciler(t, domain.Instance{ID: instanceID, State: "starting"}, nil, ptr(uuid.New()))
+	ctx, r, client, exoscaleMachineName, ns := newReadyMachineReconciler(t, domain.Instance{ID: instanceID, State: "starting"}, nil, new(uuid.New()))
 
 	result, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}})
 
@@ -783,5 +794,3 @@ func newReadyMachineReconciler(t *testing.T, instance domain.Instance, upsertErr
 
 	return ctx, r, client, exoscaleMachineName, ns
 }
-
-func ptr[T any](v T) *T { return &v }

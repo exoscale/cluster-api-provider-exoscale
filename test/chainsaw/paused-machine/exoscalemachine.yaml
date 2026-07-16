@@ -3,16 +3,8 @@ kind: ExoscaleMachine
 metadata:
   name: ($machineName)
   namespace: ($namespace)
-  annotations:
-    cluster.x-k8s.io/paused: "true"
   labels:
     cluster.x-k8s.io/cluster-name: ($clusterName)
-  ownerReferences:
-    - apiVersion: cluster.x-k8s.io/v1beta2
-      kind: Machine
-      name: ($machineName)
-      uid: ($machineUID)
 spec:
   template: 11111111-2222-3333-4444-555555555555
   instanceType: small
-  sshKey: unused

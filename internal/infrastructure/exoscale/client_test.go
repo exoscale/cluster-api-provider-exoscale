@@ -279,8 +279,8 @@ func Test_cloud_CreateInstance(t *testing.T) {
 		Template:           &egoscale.Template{ID: egoscale.UUID(templateID.String())},
 		UserData:           base64.StdEncoding.EncodeToString([]byte("#cloud-config")),
 	}).Return(createOp, nil)
-	exoClient.EXPECT().Wait(ctx, createOp).
-		Return(&egoscale.Operation{}, nil)
+	exoClient.EXPECT().Wait(ctx, createOp, []egoscale.OperationState{egoscale.OperationStateSuccess}).
+		Return(&egoscale.Operation{State: egoscale.OperationStateSuccess}, nil)
 
 	client := cloud{exoClient: exoClient, instanceClient: instanceClient}
 
@@ -416,7 +416,7 @@ func Test_cloud_DeleteInstance(t *testing.T) {
 		exoClient := mocks.NewExoscaleClient(t)
 		instanceClient := mocks.NewInstanceClient(t)
 		instanceClient.EXPECT().DeleteInstance(ctx, egoscale.UUID(id.String())).Return(op, nil)
-		exoClient.EXPECT().Wait(ctx, op).Return(&egoscale.Operation{}, nil)
+		exoClient.EXPECT().Wait(ctx, op, []egoscale.OperationState{egoscale.OperationStateSuccess}).Return(&egoscale.Operation{State: egoscale.OperationStateSuccess}, nil)
 
 		client := cloud{exoClient: exoClient, instanceClient: instanceClient}
 
@@ -435,13 +435,37 @@ func Test_cloud_DeleteInstance(t *testing.T) {
 		assert.ErrorIs(t, client.DeleteInstance(ctx, id), assert.AnError)
 	})
 
+	t.Run("rejects terminal delete failure", func(t *testing.T) {
+		t.Parallel()
+
+		exoClient := mocks.NewExoscaleClient(t)
+		instanceClient := mocks.NewInstanceClient(t)
+		instanceClient.EXPECT().DeleteInstance(ctx, egoscale.UUID(id.String())).Return(op, nil)
+		exoClient.EXPECT().Wait(ctx, op, []egoscale.OperationState{egoscale.OperationStateSuccess}).Return(&egoscale.Operation{State: egoscale.OperationStateFailure}, nil)
+
+		client := cloud{exoClient: exoClient, instanceClient: instanceClient}
+
+		assert.ErrorContains(t, client.DeleteInstance(ctx, id), "did not succeed")
+	})
+
+	t.Run("maps delete not found", func(t *testing.T) {
+		t.Parallel()
+
+		instanceClient := mocks.NewInstanceClient(t)
+		instanceClient.EXPECT().DeleteInstance(ctx, egoscale.UUID(id.String())).Return(nil, egoscale.ErrNotFound)
+
+		client := cloud{instanceClient: instanceClient}
+
+		assert.ErrorIs(t, client.DeleteInstance(ctx, id), domain.ErrInstanceNotFound)
+	})
+
 	t.Run("returns wait error", func(t *testing.T) {
 		t.Parallel()
 
 		exoClient := mocks.NewExoscaleClient(t)
 		instanceClient := mocks.NewInstanceClient(t)
 		instanceClient.EXPECT().DeleteInstance(ctx, egoscale.UUID(id.String())).Return(op, nil)
-		exoClient.EXPECT().Wait(ctx, op).Return(nil, assert.AnError)
+		exoClient.EXPECT().Wait(ctx, op, []egoscale.OperationState{egoscale.OperationStateSuccess}).Return(nil, assert.AnError)
 
 		client := cloud{exoClient: exoClient, instanceClient: instanceClient}
 
@@ -494,7 +518,7 @@ func Test_cloud_CreateInstance_errors(t *testing.T) {
 		exoClient := mocks.NewExoscaleClient(t)
 		instanceClient := mocks.NewInstanceClient(t)
 		instanceClient.EXPECT().CreateInstance(ctx, req).Return(op, nil)
-		exoClient.EXPECT().Wait(ctx, op).Return(nil, assert.AnError)
+		exoClient.EXPECT().Wait(ctx, op, []egoscale.OperationState{egoscale.OperationStateSuccess}).Return(nil, assert.AnError)
 
 		client := cloud{exoClient: exoClient, instanceClient: instanceClient}
 
@@ -510,13 +534,29 @@ func Test_cloud_CreateInstance_errors(t *testing.T) {
 		exoClient := mocks.NewExoscaleClient(t)
 		instanceClient := mocks.NewInstanceClient(t)
 		instanceClient.EXPECT().CreateInstance(ctx, req).Return(op, nil)
-		exoClient.EXPECT().Wait(ctx, op).Return(&egoscale.Operation{}, nil)
+		exoClient.EXPECT().Wait(ctx, op, []egoscale.OperationState{egoscale.OperationStateSuccess}).Return(&egoscale.Operation{State: egoscale.OperationStateSuccess}, nil)
 
 		client := cloud{exoClient: exoClient, instanceClient: instanceClient}
 
 		_, err := client.CreateInstance(ctx, spec)
 
 		assert.ErrorContains(t, err, "unable to parse response from create instance")
+	})
+
+	t.Run("rejects terminal create failure", func(t *testing.T) {
+		t.Parallel()
+
+		op := &egoscale.Operation{Reference: &egoscale.OperationReference{ID: egoscale.UUID(instanceID.String())}}
+		exoClient := mocks.NewExoscaleClient(t)
+		instanceClient := mocks.NewInstanceClient(t)
+		instanceClient.EXPECT().CreateInstance(ctx, req).Return(op, nil)
+		exoClient.EXPECT().Wait(ctx, op, []egoscale.OperationState{egoscale.OperationStateSuccess}).Return(&egoscale.Operation{State: egoscale.OperationStateFailure}, nil)
+
+		client := cloud{exoClient: exoClient, instanceClient: instanceClient}
+
+		_, err := client.CreateInstance(ctx, spec)
+
+		assert.ErrorContains(t, err, "did not succeed")
 	})
 }
 
@@ -564,15 +604,17 @@ func Test_cloud_GetTemplate(t *testing.T) {
 
 	ctx := context.Background()
 	templateID := uuid.New()
+	createdAt := time.Now().UTC()
 
 	t.Run("maps template", func(t *testing.T) {
 		t.Parallel()
 
 		instanceClient := mocks.NewInstanceClient(t)
 		instanceClient.EXPECT().GetTemplate(ctx, egoscale.UUID(templateID.String())).Return(&egoscale.Template{
-			ID:   egoscale.UUID(templateID.String()),
-			Name: "ubuntu",
-			Size: 15,
+			ID:        egoscale.UUID(templateID.String()),
+			Name:      "ubuntu",
+			Size:      15,
+			CreatedAT: createdAt,
 		}, nil)
 
 		client := cloud{instanceClient: instanceClient}
@@ -580,7 +622,7 @@ func Test_cloud_GetTemplate(t *testing.T) {
 		output, err := client.GetTemplate(ctx, templateID)
 
 		assert.NoError(t, err)
-		assert.Equal(t, domain.InstanceTemplate{ID: templateID, Name: "ubuntu", SizeBytes: 15}, output)
+		assert.Equal(t, domain.InstanceTemplate{ID: templateID, Name: "ubuntu", SizeBytes: 15, CreatedAt: createdAt}, output)
 	})
 
 	t.Run("returns get error", func(t *testing.T) {
@@ -603,15 +645,17 @@ func Test_cloud_ListTemplates(t *testing.T) {
 
 	ctx := context.Background()
 	templateID := uuid.New()
+	createdAt := time.Now().UTC()
 
 	t.Run("maps templates", func(t *testing.T) {
 		t.Parallel()
 
 		instanceClient := mocks.NewInstanceClient(t)
 		instanceClient.EXPECT().ListTemplates(ctx).Return(&egoscale.ListTemplatesResponse{Templates: []egoscale.Template{{
-			ID:   egoscale.UUID(templateID.String()),
-			Name: "ubuntu",
-			Size: 15,
+			ID:        egoscale.UUID(templateID.String()),
+			Name:      "ubuntu",
+			Size:      15,
+			CreatedAT: createdAt,
 		}}}, nil)
 
 		client := cloud{instanceClient: instanceClient}
@@ -619,7 +663,7 @@ func Test_cloud_ListTemplates(t *testing.T) {
 		output, err := client.ListTemplates(ctx)
 
 		assert.NoError(t, err)
-		assert.Equal(t, []domain.InstanceTemplate{{ID: templateID, Name: "ubuntu", SizeBytes: 15}}, output)
+		assert.Equal(t, []domain.InstanceTemplate{{ID: templateID, Name: "ubuntu", SizeBytes: 15, CreatedAt: createdAt}}, output)
 	})
 
 	t.Run("returns list error", func(t *testing.T) {

@@ -10,4 +10,5 @@ metadata:
       kind: Machine
       name: ($machineName)
       uid: ($machineUID)
-spec: {}
+spec:
+  format: cloud-config

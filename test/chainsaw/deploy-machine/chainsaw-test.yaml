@@ -1,26 +1,30 @@
+# verifies the full real VM lifecycle:
+# - create VM,
+# - mark machine ready,
+# - set providerID, then
+# - delete VM.
 apiVersion: chainsaw.kyverno.io/v1alpha1
 kind: Test
 metadata:
   name: deploy-machine
 spec:
+  concurrent: false
   timeouts:
     delete: 10m
     cleanup: 10m
   bindings:
-  - name: zone
-    value: ($values.zone || 'bg-sof-1')
-  - name: clusterName
-    value: (join('-', ['exo-dm', ($values.suffix || 'local')]))
-  - name: machineName
-    value: (join('-', ['machine', ($values.suffix || 'local')]))
-  - name: namespace
-    value: default
-  - name: templateID
-    value: ($values.templateID)
-  - name: sshKey
-    value: ($values.sshKey)
-  - name: instanceType
-    value: ($values.instanceType || 'small')
+    - name: zone
+      value: ($values.zone || 'bg-sof-1')
+    - name: clusterName
+      value: (join('-', ['exo-dm', ($values.suffix || 'local')]))
+    - name: machineName
+      value: (join('-', ['machine', ($values.suffix || 'local')]))
+    - name: namespace
+      value: default
+    - name: template
+      value: ($values.template)
+    - name: instanceType
+      value: ($values.instanceType || 'small')
   steps:
     - name: apply cluster
       try:
@@ -45,6 +49,20 @@ spec:
             file: kubeadmconfig.yaml
         - apply:
             file: exoscalemachine.yaml
+
+    - name: assert requested machine inputs
+      try:
+        - assert:
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleMachine
+              metadata:
+                name: ($machineName)
+                namespace: ($namespace)
+              spec:
+                template: ($template)
+                instanceType: ($instanceType)
+                (sshKey == null): true
 
     - name: assert bootstrap data generated
       try:
@@ -98,6 +116,7 @@ spec:
               instance_id=$(kubectl get exoscalemachine "$MACHINE_NAME" -n default -o jsonpath='{.status.instanceID}')
               provider_id=$(kubectl get exoscalemachine "$MACHINE_NAME" -n default -o jsonpath='{.spec.providerID}')
               test "$provider_id" = "exoscale://$instance_id"
+              printf '%s' "$instance_id"
 
     - name: assert capi machine registered infra machine
       try:
@@ -120,3 +139,72 @@ spec:
               done
               kubectl get machine "$MACHINE_NAME" -n default -o yaml
               exit 1
+
+    - name: delete after status instance id is lost
+      try:
+        - script:
+            timeout: 2m
+            content: |
+              kubectl -n cluster-api-provider-exoscale-system scale deployment/cluster-api-provider-exoscale-controller-manager --replicas=0
+              kubectl -n cluster-api-provider-exoscale-system wait --for=delete pod -l control-plane=controller-manager --timeout=2m
+        - script:
+            timeout: 30s
+            env:
+              - name: MACHINE_NAME
+                value: ($machineName)
+            content: |
+              kubectl patch exoscalemachine "$MACHINE_NAME" -n default --subresource=status --type=merge -p '{"status":{"instanceID":null}}'
+              test -z "$(kubectl get exoscalemachine "$MACHINE_NAME" -n default -o jsonpath='{.status.instanceID}')"
+              kubectl delete exoscalemachine "$MACHINE_NAME" -n default --wait=false
+        - script:
+            timeout: 2m
+            content: |
+              kubectl -n cluster-api-provider-exoscale-system scale deployment/cluster-api-provider-exoscale-controller-manager --replicas=1
+              kubectl -n cluster-api-provider-exoscale-system rollout status deployment/cluster-api-provider-exoscale-controller-manager --timeout=2m
+        - script:
+            timeout: 10m
+            env:
+              - name: MACHINE_NAME
+                value: ($machineName)
+            content: |
+              kubectl wait --for=delete exoscalemachine/"$MACHINE_NAME" -n default --timeout=10m
+      catch:
+        - script:
+            timeout: 10m
+            env:
+              - name: INSTANCE_NAME
+                value: ($machineName)
+              - name: ZONE
+                value: ($zone)
+            content: |
+              set -eu
+              instances=$(exo compute instance list --zone "$ZONE" -O json -Q)
+              count=$(printf '%s' "$instances" | jq --arg name "$INSTANCE_NAME" '[.[] | select(.name == $name)] | length')
+              if [ "$count" -gt 0 ]; then
+                exo compute instance delete "$INSTANCE_NAME" --zone "$ZONE" --force -Q
+              fi
+      finally:
+        - script:
+            timeout: 2m
+            content: |
+              kubectl -n cluster-api-provider-exoscale-system scale deployment/cluster-api-provider-exoscale-controller-manager --replicas=1
+              kubectl -n cluster-api-provider-exoscale-system rollout status deployment/cluster-api-provider-exoscale-controller-manager --timeout=2m
+
+    - name: assert recovered instance was deleted
+      try:
+        - script:
+            timeout: 2m
+            env:
+              - name: INSTANCE_NAME
+                value: ($machineName)
+              - name: ZONE
+                value: ($zone)
+            content: |
+              set -eu
+              instances=$(exo compute instance list --zone "$ZONE" -O json -Q)
+              count=$(printf '%s' "$instances" | jq --arg name "$INSTANCE_NAME" '[.[] | select(.name == $name)] | length')
+              if [ "$count" -gt 0 ]; then
+                exo compute instance delete "$INSTANCE_NAME" --zone "$ZONE" --force -Q
+                echo "instance $INSTANCE_NAME still exists"
+                exit 1
+              fi

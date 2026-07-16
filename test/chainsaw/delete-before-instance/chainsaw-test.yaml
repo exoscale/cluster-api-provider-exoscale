@@ -1,3 +1,5 @@
+# verifies deletion does not get stuck
+# if reconcile failed before creating a VM.
 apiVersion: chainsaw.kyverno.io/v1alpha1
 kind: Test
 metadata:
@@ -7,23 +9,33 @@ spec:
     delete: 5m
     cleanup: 5m
   bindings:
-  - name: zone
-    value: ($values.zone || 'bg-sof-1')
-  - name: clusterName
-    value: (join('-', ['exo-dbi', ($values.suffix || 'local')]))
-  - name: machineName
-    value: (join('-', ['machine-delete-before-instance', ($values.suffix || 'local')]))
-  - name: bootstrapSecretName
-    value: (join('-', ['bootstrap-delete-before-instance', ($values.suffix || 'local')]))
-  - name: namespace
-    value: default
+    - name: zone
+      value: ($values.zone || 'bg-sof-1')
+    - name: clusterName
+      value: (join('-', ['exo-dbi', ($values.suffix || 'local')]))
+    - name: machineName
+      value: (join('-', ['machine-delete-before-instance', ($values.suffix || 'local')]))
+    - name: bootstrapSecretName
+      value: (join('-', ['bootstrap-delete-before-instance', ($values.suffix || 'local')]))
+    - name: namespace
+      value: default
   steps:
     - name: apply cluster
       try:
         - apply:
             file: cluster.yaml
 
-    - name: apply machine before cluster infrastructure
+    - name: mark cluster infrastructure ready
+      try:
+        - script:
+            timeout: 10s
+            env:
+              - name: CLUSTER_NAME
+                value: ($clusterName)
+            content: |
+              kubectl patch exoscalecluster "$CLUSTER_NAME" -n default --subresource=status --type=merge -p '{"status":{"initialization":{"provisioned":true}}}'
+
+    - name: apply machine with invalid security group
       try:
         - apply:
             file: machine.yaml

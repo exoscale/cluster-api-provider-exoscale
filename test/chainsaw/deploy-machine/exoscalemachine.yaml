@@ -11,6 +11,5 @@ metadata:
       name: ($machineName)
       uid: ($machineUID)
 spec:
-  template: ($templateID)
+  template: ($template)
   instanceType: ($instanceType)
-  sshKey: ($sshKey)

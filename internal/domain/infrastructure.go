@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"time"
 
 	infrav1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
 	egoscale "github.com/exoscale/egoscale/v3"
@@ -107,7 +108,7 @@ type Cluster struct {
 
 type InstanceService interface {
 	UpsertInstance(ctx context.Context, machineID uuid.UUID, instanceID *uuid.UUID, spec InstanceSpec) (Instance, error)
-	DeleteInstance(ctx context.Context, id uuid.UUID) error
+	DeleteInstance(ctx context.Context, machineID, instanceID *uuid.UUID) error
 }
 
 type InstanceSpec struct {
@@ -136,6 +137,7 @@ type InstanceTemplate struct {
 	ID        uuid.UUID
 	Name      string
 	SizeBytes int64
+	CreatedAt time.Time
 }
 
 type InstanceType struct {

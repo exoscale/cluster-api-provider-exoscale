@@ -7,6 +7,7 @@ import (
 
 	infrav1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/domain"
+	"github.com/exoscale/cluster-api-provider-exoscale/internal/mocks"
 	egoscale "github.com/exoscale/egoscale/v3"
 	"github.com/go-logr/logr"
 	"github.com/google/uuid"
@@ -48,20 +49,15 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 	_ = clusterv1.AddToScheme(scheme)
 	_ = infrav1alpha1.AddToScheme(scheme)
 
-	instanceSvc := instanceServiceStub{
-		upsert: func(_ context.Context, gotMachineID uuid.UUID, gotInstanceID *uuid.UUID, spec domain.InstanceSpec) (domain.Instance, error) {
-			assert.Equal(t, machineUID, gotMachineID)
-			assert.Nil(t, gotInstanceID)
-			assert.Equal(t, machineName, spec.Name)
-			assert.Equal(t, templateID, spec.TemplateID)
-			assert.Equal(t, "standard-2", spec.InstanceType)
-			assert.Equal(t, "ssh-key", spec.SSHKey)
-			assert.Equal(t, "#cloud-config", spec.UserData)
-			assert.Equal(t, []uuid.UUID{nodeSecurityGroupID}, spec.SecurityGroupIDs)
-
-			return domain.Instance{ID: instanceID, State: "running", PublicIP: "1.2.3.4"}, nil
-		},
-	}
+	instanceSvc := mocks.NewInstanceService(t)
+	instanceSvc.EXPECT().UpsertInstance(ctx, machineUID, (*uuid.UUID)(nil), domain.InstanceSpec{
+		Name:             machineName,
+		TemplateID:       templateID,
+		InstanceType:     "standard-2",
+		SSHKey:           "ssh-key",
+		SecurityGroupIDs: []uuid.UUID{nodeSecurityGroupID},
+		UserData:         "#cloud-config",
+	}).Return(domain.Instance{ID: instanceID, State: "running", PublicIP: "1.2.3.4"}, nil)
 
 	client := fake.NewClientBuilder().
 		WithScheme(scheme).
@@ -433,13 +429,3 @@ func TestExoscaleMachineReconciler_Reconcile_setsPausedCondition(t *testing.T) {
 		assert.Equal(t, clusterv1.PausedReason, paused.Reason)
 	}
 }
-
-type instanceServiceStub struct {
-	upsert func(context.Context, uuid.UUID, *uuid.UUID, domain.InstanceSpec) (domain.Instance, error)
-}
-
-func (s instanceServiceStub) UpsertInstance(ctx context.Context, machineID uuid.UUID, instanceID *uuid.UUID, spec domain.InstanceSpec) (domain.Instance, error) {
-	return s.upsert(ctx, machineID, instanceID, spec)
-}
-
-func (s instanceServiceStub) DeleteInstance(context.Context, uuid.UUID) error { return nil }

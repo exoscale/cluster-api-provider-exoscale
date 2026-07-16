@@ -30,6 +30,7 @@ packages:
       ElasticIPService:
       SecurityGroupService:
       ClusterService:
+      InstanceService:
   github.com/exoscale/cluster-api-provider-exoscale/internal/infrastructure/exoscale:
     config:
       dir: '{{.InterfaceDir}}/../../mocks'

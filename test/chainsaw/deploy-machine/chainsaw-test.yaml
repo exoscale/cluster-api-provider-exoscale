@@ -13,8 +13,6 @@ spec:
     value: (join('-', ['exo-dm', ($values.suffix || 'local')]))
   - name: machineName
     value: (join('-', ['machine', ($values.suffix || 'local')]))
-  - name: bootstrapSecretName
-    value: (join('-', ['bootstrap', ($values.suffix || 'local')]))
   - name: namespace
     value: default
   - name: templateID
@@ -44,7 +42,35 @@ spec:
               - name: machineUID
                 value: ($stdout)
         - apply:
+            file: kubeadmconfig.yaml
+        - apply:
             file: exoscalemachine.yaml
+
+    - name: assert bootstrap data generated
+      try:
+        - assert:
+            timeout: 5m
+            resource:
+              apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
+              kind: KubeadmConfig
+              metadata:
+                name: ($machineName)
+                namespace: ($namespace)
+              status:
+                initialization:
+                  dataSecretCreated: true
+                (dataSecretName != ''): true
+        - assert:
+            timeout: 2m
+            resource:
+              apiVersion: cluster.x-k8s.io/v1beta2
+              kind: Machine
+              metadata:
+                name: ($machineName)
+                namespace: ($namespace)
+              spec:
+                bootstrap:
+                  (dataSecretName != ''): true
 
     - name: assert machine ready
       try:

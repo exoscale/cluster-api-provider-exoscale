@@ -1,0 +1,13 @@
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
+kind: KubeadmConfig
+metadata:
+  name: ($machineName)
+  namespace: ($namespace)
+  labels:
+    cluster.x-k8s.io/cluster-name: ($clusterName)
+  ownerReferences:
+    - apiVersion: cluster.x-k8s.io/v1beta2
+      kind: Machine
+      name: ($machineName)
+      uid: ($machineUID)
+spec: {}

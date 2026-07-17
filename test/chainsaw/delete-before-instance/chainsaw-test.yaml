@@ -30,6 +30,17 @@ spec:
         - patch:
             subresource: status
             resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleCluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+              status:
+                securityGroupNode:
+                  id: 00000000-0000-0000-0000-000000000001
+        - patch:
+            subresource: status
+            resource:
               apiVersion: cluster.x-k8s.io/v1beta2
               kind: Cluster
               metadata:
@@ -38,6 +49,21 @@ spec:
               status:
                 initialization:
                   infrastructureProvisioned: true
+        - assert:
+            timeout: 2m
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleCluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+              status:
+                conditions:
+                  - type: Paused
+                    reason: Paused
+                    status: "True"
+                securityGroupNode:
+                  id: 00000000-0000-0000-0000-000000000001
         - assert:
             timeout: 2m
             resource:
@@ -65,7 +91,7 @@ spec:
         - apply:
             file: exoscalemachine.yaml
 
-    - name: assert stopped before instance
+    - name: assert stopped before instance upsert
       try:
         - assert:
             timeout: 2m
@@ -79,4 +105,21 @@ spec:
                   - exoscalemachine.infrastructure.cluster.x-k8s.io
               spec:
                 (providerID == null): true
-              (status.instanceID == null): true
+              status:
+                ready: false
+                conditions:
+                  - type: Ready
+                    reason: InternalError
+                    status: "False"
+                    (contains(message, 'invalid ExoscaleMachine security group ID "not-a-uuid"')): true
+                (instanceID == null): true
+
+    - name: delete before instance exists
+      try:
+        - delete:
+            timeout: 2m
+            ref:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleMachine
+              name: ($machineName)
+              namespace: ($namespace)

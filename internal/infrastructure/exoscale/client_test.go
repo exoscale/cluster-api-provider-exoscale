@@ -15,6 +15,42 @@ import (
 	"github.com/google/uuid"
 )
 
+func Test_cloud_waitForSuccess(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	op := &egoscale.Operation{State: egoscale.OperationStatePending}
+	tests := []struct {
+		name      string
+		completed *egoscale.Operation
+		waitErr   error
+		wantErr   string
+	}{
+		{name: "success", completed: &egoscale.Operation{State: egoscale.OperationStateSuccess}},
+		{name: "wait error", waitErr: assert.AnError, wantErr: assert.AnError.Error()},
+		{name: "nil operation", wantErr: "operation did not succeed"},
+		{name: "failed operation", completed: &egoscale.Operation{State: egoscale.OperationStateFailure}, wantErr: "operation did not succeed"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			exoClient := mocks.NewExoscaleClient(t)
+			exoClient.EXPECT().Wait(ctx, op, []egoscale.OperationState{egoscale.OperationStateSuccess}).Return(tc.completed, tc.waitErr)
+			client := cloud{exoClient: exoClient}
+
+			completed, err := client.waitForSuccess(ctx, op)
+
+			if tc.wantErr != "" {
+				assert.ErrorContains(t, err, tc.wantErr)
+				assert.Nil(t, completed)
+			} else {
+				assert.NoError(t, err)
+				assert.Same(t, tc.completed, completed)
+			}
+		})
+	}
+}
+
 func Test_cloud_CreateElasticIP(t *testing.T) {
 	t.Parallel()
 
@@ -28,24 +64,24 @@ func Test_cloud_CreateElasticIP(t *testing.T) {
 		exoClient func(m *mocks.ExoscaleClient)
 		output    uuid.UUID
 		err       error
+		errText   string
 	}{
 		{
 			name: "nominal",
 			exoClient: func(m *mocks.ExoscaleClient) {
+				op := &egoscale.Operation{}
 				m.EXPECT().CreateElasticIP(ctx, egoscale.CreateElasticIPRequest{
 					Description: description,
 					Healthcheck: &egoscale.ElasticIPHealthcheck{
 						Mode: egoscale.ElasticIPHealthcheckModeTCP,
 						Port: int64(healthCheckPort),
 					},
-				}).Return(
-					&egoscale.Operation{Reference: &egoscale.OperationReference{ID: egoscale.UUID(id.String())}},
-					nil,
-				)
+				}).Return(op, nil)
 				m.EXPECT().Wait(
 					ctx,
-					&egoscale.Operation{Reference: &egoscale.OperationReference{ID: egoscale.UUID(id.String())}},
-				).Return(&egoscale.Operation{}, nil)
+					op,
+					[]egoscale.OperationState{egoscale.OperationStateSuccess},
+				).Return(&egoscale.Operation{State: egoscale.OperationStateSuccess, Reference: &egoscale.OperationReference{ID: egoscale.UUID(id.String())}}, nil)
 			},
 			output: id,
 		},
@@ -78,9 +114,36 @@ func Test_cloud_CreateElasticIP(t *testing.T) {
 				m.EXPECT().Wait(
 					ctx,
 					&egoscale.Operation{Reference: &egoscale.OperationReference{ID: egoscale.UUID("123456")}},
-				).Return(&egoscale.Operation{}, assert.AnError)
+					[]egoscale.OperationState{egoscale.OperationStateSuccess},
+				).Return(nil, assert.AnError)
 			},
 			err: assert.AnError,
+		},
+		{
+			name: "wait returned no reference",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				op := &egoscale.Operation{}
+				m.EXPECT().CreateElasticIP(ctx, egoscale.CreateElasticIPRequest{
+					Description: description,
+					Healthcheck: &egoscale.ElasticIPHealthcheck{Mode: egoscale.ElasticIPHealthcheckModeTCP, Port: int64(healthCheckPort)},
+				}).Return(op, nil)
+				m.EXPECT().Wait(ctx, op, []egoscale.OperationState{egoscale.OperationStateSuccess}).
+					Return(&egoscale.Operation{State: egoscale.OperationStateSuccess}, nil)
+			},
+			errText: "returned no reference",
+		},
+		{
+			name: "wait returned invalid reference",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				op := &egoscale.Operation{}
+				m.EXPECT().CreateElasticIP(ctx, egoscale.CreateElasticIPRequest{
+					Description: description,
+					Healthcheck: &egoscale.ElasticIPHealthcheck{Mode: egoscale.ElasticIPHealthcheckModeTCP, Port: int64(healthCheckPort)},
+				}).Return(op, nil)
+				m.EXPECT().Wait(ctx, op, []egoscale.OperationState{egoscale.OperationStateSuccess}).
+					Return(&egoscale.Operation{State: egoscale.OperationStateSuccess, Reference: &egoscale.OperationReference{ID: "not-a-uuid"}}, nil)
+			},
+			errText: "unable to parse response from create elastic ip",
 		},
 	}
 
@@ -95,7 +158,11 @@ func Test_cloud_CreateElasticIP(t *testing.T) {
 
 			output, err := client.CreateElasticIP(ctx, int32(healthCheckPort), description)
 
-			assert.ErrorIs(t, err, ut.err)
+			if ut.errText != "" {
+				assert.ErrorContains(t, err, ut.errText)
+			} else {
+				assert.ErrorIs(t, err, ut.err)
+			}
 			assert.Equal(t, ut.output, output)
 		})
 	}
@@ -871,7 +938,8 @@ func Test_cloud_UpdateElasticIP(t *testing.T) {
 						Port: int64(eip.HealthCheckPort),
 					},
 				}).Return(&egoscale.Operation{}, nil)
-				m.EXPECT().Wait(ctx, &egoscale.Operation{}).Return(&egoscale.Operation{}, nil)
+				m.EXPECT().Wait(ctx, &egoscale.Operation{}, []egoscale.OperationState{egoscale.OperationStateSuccess}).
+					Return(&egoscale.Operation{State: egoscale.OperationStateSuccess}, nil)
 			},
 		},
 		{
@@ -897,7 +965,7 @@ func Test_cloud_UpdateElasticIP(t *testing.T) {
 						Port: int64(eip.HealthCheckPort),
 					},
 				}).Return(&egoscale.Operation{}, nil)
-				m.EXPECT().Wait(ctx, &egoscale.Operation{}).Return(&egoscale.Operation{}, assert.AnError)
+				m.EXPECT().Wait(ctx, &egoscale.Operation{}, []egoscale.OperationState{egoscale.OperationStateSuccess}).Return(nil, assert.AnError)
 			},
 			err: assert.AnError,
 		},
@@ -935,7 +1003,8 @@ func Test_cloud_DeleteElasticIP(t *testing.T) {
 			exoClient: func(m *mocks.ExoscaleClient) {
 				m.EXPECT().DeleteElasticIP(ctx, egoscale.UUID(id.String())).
 					Return(&egoscale.Operation{}, nil)
-				m.EXPECT().Wait(ctx, &egoscale.Operation{}).Return(&egoscale.Operation{}, nil)
+				m.EXPECT().Wait(ctx, &egoscale.Operation{}, []egoscale.OperationState{egoscale.OperationStateSuccess}).
+					Return(&egoscale.Operation{State: egoscale.OperationStateSuccess}, nil)
 			},
 		},
 		{
@@ -951,7 +1020,7 @@ func Test_cloud_DeleteElasticIP(t *testing.T) {
 			exoClient: func(m *mocks.ExoscaleClient) {
 				m.EXPECT().DeleteElasticIP(ctx, egoscale.UUID(id.String())).
 					Return(&egoscale.Operation{}, nil)
-				m.EXPECT().Wait(ctx, &egoscale.Operation{}).Return(&egoscale.Operation{}, assert.AnError)
+				m.EXPECT().Wait(ctx, &egoscale.Operation{}, []egoscale.OperationState{egoscale.OperationStateSuccess}).Return(nil, assert.AnError)
 			},
 			err: assert.AnError,
 		},
@@ -985,20 +1054,20 @@ func Test_cloud_CreateSecurityGroup(t *testing.T) {
 		exoClient func(m *mocks.ExoscaleClient)
 		output    uuid.UUID
 		err       error
+		errText   string
 	}{
 		{
 			name: "nominal",
 			exoClient: func(m *mocks.ExoscaleClient) {
+				op := &egoscale.Operation{}
 				m.EXPECT().CreateSecurityGroup(ctx, egoscale.CreateSecurityGroupRequest{
 					Name: name,
-				}).Return(
-					&egoscale.Operation{Reference: &egoscale.OperationReference{ID: egoscale.UUID(id.String())}},
-					nil,
-				)
+				}).Return(op, nil)
 				m.EXPECT().Wait(
 					ctx,
-					&egoscale.Operation{Reference: &egoscale.OperationReference{ID: egoscale.UUID(id.String())}},
-				).Return(&egoscale.Operation{}, nil)
+					op,
+					[]egoscale.OperationState{egoscale.OperationStateSuccess},
+				).Return(&egoscale.Operation{State: egoscale.OperationStateSuccess, Reference: &egoscale.OperationReference{ID: egoscale.UUID(id.String())}}, nil)
 			},
 			output: id,
 		},
@@ -1023,9 +1092,30 @@ func Test_cloud_CreateSecurityGroup(t *testing.T) {
 				m.EXPECT().Wait(
 					ctx,
 					&egoscale.Operation{Reference: &egoscale.OperationReference{ID: egoscale.UUID("123456")}},
-				).Return(&egoscale.Operation{}, assert.AnError)
+					[]egoscale.OperationState{egoscale.OperationStateSuccess},
+				).Return(nil, assert.AnError)
 			},
 			err: assert.AnError,
+		},
+		{
+			name: "wait returned no reference",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				op := &egoscale.Operation{}
+				m.EXPECT().CreateSecurityGroup(ctx, egoscale.CreateSecurityGroupRequest{Name: name}).Return(op, nil)
+				m.EXPECT().Wait(ctx, op, []egoscale.OperationState{egoscale.OperationStateSuccess}).
+					Return(&egoscale.Operation{State: egoscale.OperationStateSuccess}, nil)
+			},
+			errText: "returned no reference",
+		},
+		{
+			name: "wait returned invalid reference",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				op := &egoscale.Operation{}
+				m.EXPECT().CreateSecurityGroup(ctx, egoscale.CreateSecurityGroupRequest{Name: name}).Return(op, nil)
+				m.EXPECT().Wait(ctx, op, []egoscale.OperationState{egoscale.OperationStateSuccess}).
+					Return(&egoscale.Operation{State: egoscale.OperationStateSuccess, Reference: &egoscale.OperationReference{ID: "not-a-uuid"}}, nil)
+			},
+			errText: "unable to parse response from create security group",
 		},
 	}
 
@@ -1040,7 +1130,11 @@ func Test_cloud_CreateSecurityGroup(t *testing.T) {
 
 			output, err := client.CreateSecurityGroup(ctx, name)
 
-			assert.ErrorIs(t, err, ut.err)
+			if ut.errText != "" {
+				assert.ErrorContains(t, err, ut.errText)
+			} else {
+				assert.ErrorIs(t, err, ut.err)
+			}
 			assert.Equal(t, ut.output, output)
 		})
 	}
@@ -1122,8 +1216,8 @@ func Test_cloud_DeleteSecurityGroup(t *testing.T) {
 					DeleteSecurityGroup(ctx, egoscale.UUID(id.String())).
 					Return(&egoscale.Operation{}, nil)
 				m.EXPECT().
-					Wait(ctx, &egoscale.Operation{}).
-					Return(&egoscale.Operation{}, nil)
+					Wait(ctx, &egoscale.Operation{}, []egoscale.OperationState{egoscale.OperationStateSuccess}).
+					Return(&egoscale.Operation{State: egoscale.OperationStateSuccess}, nil)
 			},
 		},
 		{
@@ -1142,7 +1236,7 @@ func Test_cloud_DeleteSecurityGroup(t *testing.T) {
 					DeleteSecurityGroup(ctx, egoscale.UUID(id.String())).
 					Return(&egoscale.Operation{}, nil)
 				m.EXPECT().
-					Wait(ctx, &egoscale.Operation{}).Return(&egoscale.Operation{}, assert.AnError)
+					Wait(ctx, &egoscale.Operation{}, []egoscale.OperationState{egoscale.OperationStateSuccess}).Return(nil, assert.AnError)
 			},
 			err: assert.AnError,
 		},
@@ -1186,6 +1280,7 @@ func Test_cloud_CreateSecurityGroupRule(t *testing.T) {
 		exoClient func(m *mocks.ExoscaleClient)
 		output    uuid.UUID
 		err       error
+		errText   string
 	}{
 		{
 			name: "nominal - with network",
@@ -1198,6 +1293,7 @@ func Test_cloud_CreateSecurityGroupRule(t *testing.T) {
 				Network:       &network,
 			},
 			exoClient: func(m *mocks.ExoscaleClient) {
+				op := &egoscale.Operation{}
 				m.EXPECT().AddRuleToSecurityGroup(ctx, egoscale.UUID(sgID.String()), egoscale.AddRuleToSecurityGroupRequest{
 					Description:   baseRule.Description,
 					FlowDirection: egoscale.AddRuleToSecurityGroupRequestFlowDirection(baseRule.FlowDirection),
@@ -1205,14 +1301,12 @@ func Test_cloud_CreateSecurityGroupRule(t *testing.T) {
 					StartPort:     baseRule.StartPort,
 					EndPort:       baseRule.EndPort,
 					Network:       network,
-				}).Return(
-					&egoscale.Operation{Reference: &egoscale.OperationReference{ID: egoscale.UUID(ruleID.String())}},
-					nil,
-				)
+				}).Return(op, nil)
 				m.EXPECT().Wait(
 					ctx,
-					&egoscale.Operation{Reference: &egoscale.OperationReference{ID: egoscale.UUID(ruleID.String())}},
-				).Return(&egoscale.Operation{}, nil)
+					op,
+					[]egoscale.OperationState{egoscale.OperationStateSuccess},
+				).Return(&egoscale.Operation{State: egoscale.OperationStateSuccess, Reference: &egoscale.OperationReference{ID: egoscale.UUID(ruleID.String())}}, nil)
 			},
 			output: ruleID,
 		},
@@ -1227,6 +1321,7 @@ func Test_cloud_CreateSecurityGroupRule(t *testing.T) {
 				SecurityGroup: &sgID,
 			},
 			exoClient: func(m *mocks.ExoscaleClient) {
+				op := &egoscale.Operation{}
 				m.EXPECT().AddRuleToSecurityGroup(ctx, egoscale.UUID(sgID.String()), egoscale.AddRuleToSecurityGroupRequest{
 					Description:   baseRule.Description,
 					FlowDirection: egoscale.AddRuleToSecurityGroupRequestFlowDirection(baseRule.FlowDirection),
@@ -1234,14 +1329,12 @@ func Test_cloud_CreateSecurityGroupRule(t *testing.T) {
 					StartPort:     baseRule.StartPort,
 					EndPort:       baseRule.EndPort,
 					SecurityGroup: &egoscale.SecurityGroupResource{ID: egoscale.UUID(sgID.String())},
-				}).Return(
-					&egoscale.Operation{Reference: &egoscale.OperationReference{ID: egoscale.UUID(ruleID.String())}},
-					nil,
-				)
+				}).Return(op, nil)
 				m.EXPECT().Wait(
 					ctx,
-					&egoscale.Operation{Reference: &egoscale.OperationReference{ID: egoscale.UUID(ruleID.String())}},
-				).Return(&egoscale.Operation{}, nil)
+					op,
+					[]egoscale.OperationState{egoscale.OperationStateSuccess},
+				).Return(&egoscale.Operation{State: egoscale.OperationStateSuccess, Reference: &egoscale.OperationReference{ID: egoscale.UUID(ruleID.String())}}, nil)
 			},
 			output: ruleID,
 		},
@@ -1276,9 +1369,38 @@ func Test_cloud_CreateSecurityGroupRule(t *testing.T) {
 				m.EXPECT().Wait(
 					ctx,
 					&egoscale.Operation{Reference: &egoscale.OperationReference{ID: egoscale.UUID("123456")}},
-				).Return(&egoscale.Operation{}, assert.AnError)
+					[]egoscale.OperationState{egoscale.OperationStateSuccess},
+				).Return(nil, assert.AnError)
 			},
 			err: assert.AnError,
+		},
+		{
+			name: "wait returned no reference",
+			rule: baseRule,
+			exoClient: func(m *mocks.ExoscaleClient) {
+				op := &egoscale.Operation{}
+				m.EXPECT().AddRuleToSecurityGroup(ctx, egoscale.UUID(sgID.String()), egoscale.AddRuleToSecurityGroupRequest{
+					Description: baseRule.Description, FlowDirection: egoscale.AddRuleToSecurityGroupRequestFlowDirection(baseRule.FlowDirection),
+					Protocol: egoscale.AddRuleToSecurityGroupRequestProtocol(baseRule.Protocol), StartPort: baseRule.StartPort, EndPort: baseRule.EndPort,
+				}).Return(op, nil)
+				m.EXPECT().Wait(ctx, op, []egoscale.OperationState{egoscale.OperationStateSuccess}).
+					Return(&egoscale.Operation{State: egoscale.OperationStateSuccess}, nil)
+			},
+			errText: "returned no reference",
+		},
+		{
+			name: "wait returned invalid reference",
+			rule: baseRule,
+			exoClient: func(m *mocks.ExoscaleClient) {
+				op := &egoscale.Operation{}
+				m.EXPECT().AddRuleToSecurityGroup(ctx, egoscale.UUID(sgID.String()), egoscale.AddRuleToSecurityGroupRequest{
+					Description: baseRule.Description, FlowDirection: egoscale.AddRuleToSecurityGroupRequestFlowDirection(baseRule.FlowDirection),
+					Protocol: egoscale.AddRuleToSecurityGroupRequestProtocol(baseRule.Protocol), StartPort: baseRule.StartPort, EndPort: baseRule.EndPort,
+				}).Return(op, nil)
+				m.EXPECT().Wait(ctx, op, []egoscale.OperationState{egoscale.OperationStateSuccess}).
+					Return(&egoscale.Operation{State: egoscale.OperationStateSuccess, Reference: &egoscale.OperationReference{ID: "not-a-uuid"}}, nil)
+			},
+			errText: "unable to parse response from create security group rule",
 		},
 	}
 
@@ -1293,7 +1415,11 @@ func Test_cloud_CreateSecurityGroupRule(t *testing.T) {
 
 			output, err := client.CreateSecurityGroupRule(ctx, sgID, ut.rule)
 
-			assert.ErrorIs(t, err, ut.err)
+			if ut.errText != "" {
+				assert.ErrorContains(t, err, ut.errText)
+			} else {
+				assert.ErrorIs(t, err, ut.err)
+			}
 			assert.Equal(t, ut.output, output)
 		})
 	}
@@ -1318,8 +1444,8 @@ func Test_cloud_DeleteSecurityGroupRule(t *testing.T) {
 					DeleteRuleFromSecurityGroup(ctx, egoscale.UUID(sgID.String()), egoscale.UUID(ruleID.String())).
 					Return(&egoscale.Operation{}, nil)
 				m.EXPECT().
-					Wait(ctx, &egoscale.Operation{}).
-					Return(&egoscale.Operation{}, nil)
+					Wait(ctx, &egoscale.Operation{}, []egoscale.OperationState{egoscale.OperationStateSuccess}).
+					Return(&egoscale.Operation{State: egoscale.OperationStateSuccess}, nil)
 			},
 		},
 		{
@@ -1336,7 +1462,7 @@ func Test_cloud_DeleteSecurityGroupRule(t *testing.T) {
 			exoClient: func(m *mocks.ExoscaleClient) {
 				m.EXPECT().DeleteRuleFromSecurityGroup(ctx, egoscale.UUID(sgID.String()), egoscale.UUID(ruleID.String())).
 					Return(&egoscale.Operation{}, nil)
-				m.EXPECT().Wait(ctx, &egoscale.Operation{}).Return(&egoscale.Operation{}, assert.AnError)
+				m.EXPECT().Wait(ctx, &egoscale.Operation{}, []egoscale.OperationState{egoscale.OperationStateSuccess}).Return(nil, assert.AnError)
 			},
 			err: assert.AnError,
 		},

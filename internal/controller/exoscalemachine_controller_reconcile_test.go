@@ -682,7 +682,7 @@ func TestExoscaleMachineReconciler_Reconcile_waitsForInstanceRunning(t *testing.
 	assert.NoError(t, client.Get(ctx, types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}, updated))
 	assert.Equal(t, instanceID.String(), updated.Status.InstanceID)
 	assert.Equal(t, "starting", updated.Status.InstanceState)
-	assert.True(t, updated.Status.Ready)
+	assert.False(t, updated.Status.Ready)
 	ready := apimeta.FindStatusCondition(updated.Status.Conditions, clusterv1.ReadyCondition)
 	if assert.NotNil(t, ready) {
 		assert.Equal(t, metav1.ConditionFalse, ready.Status)

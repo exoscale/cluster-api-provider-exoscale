@@ -57,6 +57,17 @@ func NewCloud(apiKey, apisecret string, zone egoscale.ZoneName) (*cloud, error) 
 	return &cloud{exoClient: exoClient, instanceClient: exoClient}, nil
 }
 
+func (c *cloud) waitForSuccess(ctx context.Context, op *egoscale.Operation) (*egoscale.Operation, error) {
+	completed, err := c.exoClient.Wait(ctx, op, egoscale.OperationStateSuccess)
+	if err != nil {
+		return nil, err
+	}
+	if completed == nil || completed.State != egoscale.OperationStateSuccess {
+		return nil, errors.New("operation did not succeed")
+	}
+	return completed, nil
+}
+
 // CreateElasticIP creates a managed elastic IP and waits for the operation to complete.
 func (c *cloud) CreateElasticIP(ctx context.Context, healthCheckPort int32, description string) (uuid.UUID, error) {
 	op, err := c.exoClient.CreateElasticIP(ctx, egoscale.CreateElasticIPRequest{
@@ -70,11 +81,15 @@ func (c *cloud) CreateElasticIP(ctx context.Context, healthCheckPort int32, desc
 		return uuid.Nil, fmt.Errorf("unable to create elastic ip: %w", err)
 	}
 
-	if _, err := c.exoClient.Wait(ctx, op); err != nil {
+	completed, err := c.waitForSuccess(ctx, op)
+	if err != nil {
 		return uuid.Nil, fmt.Errorf("error while waiting for the elastic IP creation: %w", err)
 	}
+	if completed.Reference == nil {
+		return uuid.Nil, fmt.Errorf("elastic IP creation operation returned no reference")
+	}
 
-	id, err := uuid.Parse(op.Reference.ID.String())
+	id, err := uuid.Parse(completed.Reference.ID.String())
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("unable to parse response from create elastic ip: %w", err)
 	}
@@ -146,7 +161,8 @@ func (c *cloud) UpdateElasticIP(ctx context.Context, eip domain.ElasticIP) error
 		return fmt.Errorf("unable to update elastic ip: %w", err)
 	}
 
-	if _, err := c.exoClient.Wait(ctx, op); err != nil {
+	_, err = c.waitForSuccess(ctx, op)
+	if err != nil {
 		return fmt.Errorf("error while waiting for the elastic IP update: %w", err)
 	}
 
@@ -159,7 +175,8 @@ func (c *cloud) DeleteElasticIP(ctx context.Context, id uuid.UUID) error {
 		return fmt.Errorf("unable to delete elastic ip: %w", err)
 	}
 
-	if _, err := c.exoClient.Wait(ctx, op); err != nil {
+	_, err = c.waitForSuccess(ctx, op)
+	if err != nil {
 		return fmt.Errorf("error while waiting for the elastic IP deletion: %w", err)
 	}
 
@@ -174,11 +191,15 @@ func (c *cloud) CreateSecurityGroup(ctx context.Context, name string) (uuid.UUID
 		return uuid.Nil, fmt.Errorf("unable to create security group: %w", err)
 	}
 
-	if _, err := c.exoClient.Wait(ctx, op); err != nil {
+	completed, err := c.waitForSuccess(ctx, op)
+	if err != nil {
 		return uuid.Nil, fmt.Errorf("error while waiting for the security group creation: %w", err)
 	}
+	if completed.Reference == nil {
+		return uuid.Nil, fmt.Errorf("security group creation operation returned no reference")
+	}
 
-	id, err := uuid.Parse(op.Reference.ID.String())
+	id, err := uuid.Parse(completed.Reference.ID.String())
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("unable to parse response from create security group: %w", err)
 	}
@@ -207,7 +228,8 @@ func (c *cloud) DeleteSecurityGroup(ctx context.Context, id uuid.UUID) error {
 		return fmt.Errorf("unable to delete security group: %w", err)
 	}
 
-	if _, err := c.exoClient.Wait(ctx, op); err != nil {
+	_, err = c.waitForSuccess(ctx, op)
+	if err != nil {
 		return fmt.Errorf("error while waiting for the security group deletion: %w", err)
 	}
 
@@ -236,11 +258,15 @@ func (c *cloud) CreateSecurityGroupRule(ctx context.Context, sgID uuid.UUID, rul
 		return uuid.Nil, fmt.Errorf("unable to create security group rule: %w", err)
 	}
 
-	if _, err := c.exoClient.Wait(ctx, op); err != nil {
+	completed, err := c.waitForSuccess(ctx, op)
+	if err != nil {
 		return uuid.Nil, fmt.Errorf("error while waiting for security group rule creation: %w", err)
 	}
+	if completed.Reference == nil {
+		return uuid.Nil, fmt.Errorf("security group rule creation operation returned no reference")
+	}
 
-	id, err := uuid.Parse(op.Reference.ID.String())
+	id, err := uuid.Parse(completed.Reference.ID.String())
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("unable to parse response from create security group rule: %w", err)
 	}
@@ -254,7 +280,8 @@ func (c *cloud) DeleteSecurityGroupRule(ctx context.Context, sgID uuid.UUID, rul
 		return fmt.Errorf("unable to delete security group rule: %w", err)
 	}
 
-	if _, err := c.exoClient.Wait(ctx, op); err != nil {
+	_, err = c.waitForSuccess(ctx, op)
+	if err != nil {
 		return fmt.Errorf("error while waiting for security group rule deletion: %w", err)
 	}
 

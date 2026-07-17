@@ -466,9 +466,7 @@ func patchExoscaleMachine(ctx context.Context, patchHelper *capipatch.Helper, ex
 }
 
 func setMachineReady(exoMachine *infrastructurev1alpha1.ExoscaleMachine, status metav1.ConditionStatus, reason, message string) {
-	if status == metav1.ConditionTrue {
-		exoMachine.Status.Ready = true
-	}
+	exoMachine.Status.Ready = status == metav1.ConditionTrue
 	conditions.Set(exoMachine, metav1.Condition{
 		Type:    clusterv1.ReadyCondition,
 		Status:  status,

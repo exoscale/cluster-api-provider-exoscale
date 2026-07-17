@@ -82,8 +82,12 @@ func (c *cloud) waitForSuccess(ctx context.Context, op *egoscale.Operation) (*eg
 	return completed, nil
 }
 
-func parseOperationReferenceID(id egoscale.UUID) (uuid.UUID, error) {
-	parsed, err := uuid.Parse(id.String())
+func operationReferenceID(op *egoscale.Operation) (uuid.UUID, error) {
+	if op == nil || op.Reference == nil {
+		return uuid.Nil, errors.New("operation returned no reference")
+	}
+
+	parsed, err := uuid.Parse(op.Reference.ID.String())
 	if err != nil {
 		return uuid.Nil, err
 	}
@@ -110,11 +114,8 @@ func (c *cloud) CreateElasticIP(ctx context.Context, healthCheckPort int32, desc
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("error while waiting for the elastic IP creation: %w", err)
 	}
-	if completed.Reference == nil {
-		return uuid.Nil, fmt.Errorf("elastic IP creation operation returned no reference")
-	}
 
-	id, err := parseOperationReferenceID(completed.Reference.ID)
+	id, err := operationReferenceID(completed)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("unable to parse response from create elastic ip: %w", err)
 	}
@@ -220,11 +221,8 @@ func (c *cloud) CreateSecurityGroup(ctx context.Context, name string) (uuid.UUID
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("error while waiting for the security group creation: %w", err)
 	}
-	if completed.Reference == nil {
-		return uuid.Nil, fmt.Errorf("security group creation operation returned no reference")
-	}
 
-	id, err := parseOperationReferenceID(completed.Reference.ID)
+	id, err := operationReferenceID(completed)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("unable to parse response from create security group: %w", err)
 	}
@@ -287,11 +285,8 @@ func (c *cloud) CreateSecurityGroupRule(ctx context.Context, sgID uuid.UUID, rul
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("error while waiting for security group rule creation: %w", err)
 	}
-	if completed.Reference == nil {
-		return uuid.Nil, fmt.Errorf("security group rule creation operation returned no reference")
-	}
 
-	id, err := parseOperationReferenceID(completed.Reference.ID)
+	id, err := operationReferenceID(completed)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("unable to parse response from create security group rule: %w", err)
 	}
@@ -483,18 +478,12 @@ func (c *cloud) CreateInstance(ctx context.Context, spec domain.ResolvedInstance
 		return uuid.Nil, fmt.Errorf("unable to create instance: %w", err)
 	}
 
-	completed, err := c.exoClient.Wait(ctx, op, egoscale.OperationStateSuccess)
+	completed, err := c.waitForSuccess(ctx, op)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("error while waiting for instance creation: %w", err)
 	}
-	if completed == nil || completed.State != egoscale.OperationStateSuccess {
-		return uuid.Nil, fmt.Errorf("instance creation operation did not succeed")
-	}
-	if completed.Reference == nil {
-		return uuid.Nil, fmt.Errorf("instance creation operation returned no reference")
-	}
 
-	id, err := parseOperationReferenceID(completed.Reference.ID)
+	id, err := operationReferenceID(completed)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("unable to parse response from create instance: %w", err)
 	}
@@ -545,12 +534,9 @@ func (c *cloud) AttachInstanceToElasticIP(ctx context.Context, instanceID, elast
 		return fmt.Errorf("unable to attach instance to elastic IP: %w", err)
 	}
 
-	completed, err := c.exoClient.Wait(ctx, op, egoscale.OperationStateSuccess)
+	_, err = c.waitForSuccess(ctx, op)
 	if err != nil {
 		return fmt.Errorf("error while waiting for instance attachment to elastic IP: %w", err)
-	}
-	if completed == nil || completed.State != egoscale.OperationStateSuccess {
-		return fmt.Errorf("instance attachment to elastic IP operation did not succeed")
 	}
 
 	return nil
@@ -569,12 +555,9 @@ func (c *cloud) AttachInstanceToSecurityGroup(ctx context.Context, instanceID, s
 		return fmt.Errorf("unable to attach instance to security group: %w", err)
 	}
 
-	completed, err := c.exoClient.Wait(ctx, op, egoscale.OperationStateSuccess)
+	_, err = c.waitForSuccess(ctx, op)
 	if err != nil {
 		return fmt.Errorf("error while waiting for instance attachment to security group: %w", err)
-	}
-	if completed == nil || completed.State != egoscale.OperationStateSuccess {
-		return fmt.Errorf("instance attachment to security group operation did not succeed")
 	}
 
 	return nil
@@ -593,12 +576,9 @@ func (c *cloud) DetachInstanceFromSecurityGroup(ctx context.Context, instanceID,
 		return fmt.Errorf("unable to detach instance from security group: %w", err)
 	}
 
-	completed, err := c.exoClient.Wait(ctx, op, egoscale.OperationStateSuccess)
+	_, err = c.waitForSuccess(ctx, op)
 	if err != nil {
 		return fmt.Errorf("error while waiting for instance detachment from security group: %w", err)
-	}
-	if completed == nil || completed.State != egoscale.OperationStateSuccess {
-		return fmt.Errorf("instance detachment from security group operation did not succeed")
 	}
 
 	return nil
@@ -618,12 +598,9 @@ func (c *cloud) DeleteInstance(ctx context.Context, id uuid.UUID) error {
 		return fmt.Errorf("unable to delete instance: %w", err)
 	}
 
-	completed, err := c.exoClient.Wait(ctx, op, egoscale.OperationStateSuccess)
+	_, err = c.waitForSuccess(ctx, op)
 	if err != nil {
 		return fmt.Errorf("error while waiting for instance deletion: %w", err)
-	}
-	if completed == nil || completed.State != egoscale.OperationStateSuccess {
-		return fmt.Errorf("instance deletion operation did not succeed")
 	}
 
 	return nil

@@ -31,6 +31,69 @@ func newExoscaleMachineTestScheme(t *testing.T) *runtime.Scheme {
 	return scheme
 }
 
+func newMachinePrerequisiteReconciler(t *testing.T, clusterInfrastructureReady, bootstrapDataReady, paused bool) (context.Context, *ExoscaleMachineReconciler, crclient.Client, string, string) {
+	t.Helper()
+
+	const (
+		ns                  = "default"
+		clusterName         = "test-cluster"
+		machineName         = "test-machine"
+		exoscaleClusterName = "test-exoscale-cluster"
+		exoscaleMachineName = "test-exoscale-machine"
+		bootstrapSecretName = "bootstrap-data"
+	)
+
+	machine := &clusterv1.Machine{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      machineName,
+			Namespace: ns,
+			Labels:    map[string]string{clusterv1.ClusterNameLabel: clusterName},
+		},
+	}
+	if bootstrapDataReady {
+		machine.Spec.Bootstrap.DataSecretName = new(bootstrapSecretName)
+	}
+
+	exoMachine := &infrav1alpha1.ExoscaleMachine{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      exoscaleMachineName,
+			Namespace: ns,
+			OwnerReferences: []metav1.OwnerReference{
+				{APIVersion: clusterv1.GroupVersion.String(), Kind: "Machine", Name: machineName},
+			},
+		},
+	}
+	if paused {
+		exoMachine.Annotations = map[string]string{clusterv1.PausedAnnotation: ""}
+	}
+
+	scheme := newExoscaleMachineTestScheme(t)
+	client := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&infrav1alpha1.ExoscaleMachine{}).
+		WithObjects(
+			&clusterv1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: ns},
+				Spec: clusterv1.ClusterSpec{
+					InfrastructureRef: clusterv1.ContractVersionedObjectReference{
+						APIGroup: infrav1alpha1.GroupVersion.Group,
+						Kind:     "ExoscaleCluster",
+						Name:     exoscaleClusterName,
+					},
+				},
+				Status: clusterv1.ClusterStatus{
+					Initialization: clusterv1.ClusterInitializationStatus{InfrastructureProvisioned: &clusterInfrastructureReady},
+				},
+			},
+			&infrav1alpha1.ExoscaleCluster{ObjectMeta: metav1.ObjectMeta{Name: exoscaleClusterName, Namespace: ns}},
+			machine,
+			exoMachine,
+		).
+		Build()
+
+	return context.Background(), &ExoscaleMachineReconciler{Client: client, Scheme: scheme}, client, exoscaleMachineName, ns
+}
+
 func newReadyMachineReconciler(t *testing.T, instance domain.Instance, upsertErr error, nodeSecurityGroupID *uuid.UUID) (context.Context, *ExoscaleMachineReconciler, crclient.Client, string, string) {
 	t.Helper()
 

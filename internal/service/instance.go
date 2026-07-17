@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"slices"
 	"strings"
 
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/domain"
@@ -75,7 +76,7 @@ func (s *instanceService) UpsertInstance(ctx context.Context, machineID uuid.UUI
 		case err == nil:
 		case errors.Is(err, domain.ErrInstanceNotFound):
 			instance = domain.Instance{}
-			matches = removeInstance(matches, *instanceID)
+			matches = slices.DeleteFunc(matches, func(instance domain.Instance) bool { return instance.ID == *instanceID })
 			s.logger.Info("Status instance not found", "instanceID", instanceID.String())
 		default:
 			return domain.Instance{}, fmt.Errorf("error while fetching instance: %w", err)
@@ -323,7 +324,7 @@ func (s *instanceService) DeleteInstance(ctx context.Context, machineID, instanc
 			return err
 		}
 		instances = byMachineID
-		if statusInstance.ID != uuid.Nil && !containsInstance(instances, statusInstance.ID) {
+		if statusInstance.ID != uuid.Nil && !slices.ContainsFunc(instances, func(instance domain.Instance) bool { return instance.ID == statusInstance.ID }) {
 			instances = append(instances, statusInstance)
 		}
 	}
@@ -363,25 +364,6 @@ func oldestInstance(instances []domain.Instance) domain.Instance {
 		}
 	}
 	return oldest
-}
-
-func containsInstance(instances []domain.Instance, id uuid.UUID) bool {
-	for _, instance := range instances {
-		if instance.ID == id {
-			return true
-		}
-	}
-	return false
-}
-
-func removeInstance(instances []domain.Instance, id uuid.UUID) []domain.Instance {
-	filtered := instances[:0]
-	for _, instance := range instances {
-		if instance.ID != id {
-			filtered = append(filtered, instance)
-		}
-	}
-	return filtered
 }
 
 func labelsWithMachineID(labels map[string]string, machineID uuid.UUID) map[string]string {

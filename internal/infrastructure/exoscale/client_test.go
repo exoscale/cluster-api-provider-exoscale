@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/base64"
 	"net"
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,8 +14,27 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	egoscale "github.com/exoscale/egoscale/v3"
+	"github.com/go-logr/logr/funcr"
 	"github.com/google/uuid"
 )
+
+func Test_traceAPIRequest_omitsSensitiveData(t *testing.T) {
+	t.Parallel()
+
+	var output string
+	logger := funcr.New(func(_, args string) { output += args }, funcr.Options{})
+	req, err := http.NewRequest(http.MethodPost, "https://api.example.test/v2/instance?token=query-secret", strings.NewReader("body-secret"))
+	assert.NoError(t, err)
+	req.Header.Set("Authorization", "header-secret")
+
+	assert.NoError(t, traceAPIRequest(logger)(context.Background(), req))
+	assert.Contains(t, output, "Exoscale API request")
+	assert.Contains(t, output, "POST")
+	assert.Contains(t, output, "/v2/instance")
+	assert.NotContains(t, output, "query-secret")
+	assert.NotContains(t, output, "header-secret")
+	assert.NotContains(t, output, "body-secret")
+}
 
 func Test_cloud_waitForSuccess(t *testing.T) {
 	t.Parallel()

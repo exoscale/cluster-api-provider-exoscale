@@ -106,7 +106,7 @@ func Test_instanceService_UpsertInstance(t *testing.T) {
 						Name:         "machine-0",
 						TemplateID:   templateID,
 						InstanceType: instanceType,
-						DiskSizeGB:   15,
+						DiskSizeGB:   25,
 						Labels: map[string]string{
 							machineUIDLabel: machineID.String(),
 						},
@@ -298,7 +298,7 @@ func Test_instanceService_resolveInstanceSpec(t *testing.T) {
 			TemplateID:       templateID,
 			InstanceType:     instanceType,
 			SecurityGroupIDs: []uuid.UUID{securityGroupID},
-			DiskSizeGB:       15,
+			DiskSizeGB:       25,
 		}, output)
 	})
 
@@ -348,7 +348,7 @@ func Test_instanceService_resolveInstanceSpec(t *testing.T) {
 		assert.ErrorContains(t, err, "rootVolumeSizeGB 10 is smaller than minimum size 15")
 	})
 
-	t.Run("uses the provider disk minimum for smaller templates", func(t *testing.T) {
+	t.Run("adds default headroom to smaller templates", func(t *testing.T) {
 		t.Parallel()
 
 		smallTemplate := template
@@ -365,7 +365,7 @@ func Test_instanceService_resolveInstanceSpec(t *testing.T) {
 		output, err := svc.resolveInstanceSpec(ctx, domain.InstanceSpec{Template: "ubuntu", InstanceType: "standard-2"})
 
 		assert.NoError(t, err)
-		assert.Equal(t, minimumDiskSizeGB, output.DiskSizeGB)
+		assert.Equal(t, int64(15), output.DiskSizeGB)
 	})
 
 	t.Run("selects the newest template with a matching name", func(t *testing.T) {

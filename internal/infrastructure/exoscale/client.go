@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"maps"
 	"net"
+	"net/http"
 	"time"
 
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/domain"
 
 	egoscale "github.com/exoscale/egoscale/v3"
 	"github.com/exoscale/egoscale/v3/credentials"
+	"github.com/go-logr/logr"
 	"github.com/google/uuid"
 )
 
@@ -38,10 +40,15 @@ type instanceClient interface {
 	ListTemplates(ctx context.Context, opts ...egoscale.ListTemplatesOpt) (*egoscale.ListTemplatesResponse, error)
 }
 
-func NewCloud(apiKey, apisecret string, zone egoscale.ZoneName) (*cloud, error) {
+func NewCloud(apiKey, apisecret string, zone egoscale.ZoneName, logger logr.Logger, traceAPI bool) (*cloud, error) {
+	opts := []egoscale.ClientOpt{egoscale.ClientOptWithWaitTimeout(operationWaitTimeout)}
+	if traceAPI {
+		opts = append(opts, egoscale.ClientOptWithRequestInterceptors(traceAPIRequest(logger)))
+	}
+
 	exoClient, err := egoscale.NewClient(
 		credentials.NewStaticCredentials(apiKey, apisecret),
-		egoscale.ClientOptWithWaitTimeout(operationWaitTimeout),
+		opts...,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create exoscale client: %w", err)
@@ -55,6 +62,13 @@ func NewCloud(apiKey, apisecret string, zone egoscale.ZoneName) (*cloud, error) 
 	exoClient = exoClient.WithEndpoint(endpoint)
 
 	return &cloud{exoClient: exoClient, instanceClient: exoClient}, nil
+}
+
+func traceAPIRequest(logger logr.Logger) egoscale.RequestInterceptorFn {
+	return func(_ context.Context, req *http.Request) error {
+		logger.Info("Exoscale API request", "method", req.Method, "path", req.URL.EscapedPath())
+		return nil
+	}
 }
 
 func (c *cloud) waitForSuccess(ctx context.Context, op *egoscale.Operation) (*egoscale.Operation, error) {

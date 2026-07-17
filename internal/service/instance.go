@@ -22,6 +22,8 @@ const bytesPerGiB int64 = 1024 * 1024 * 1024
 
 const minimumDiskSizeGB int64 = 10
 
+const defaultDiskHeadroomGB int64 = 10
+
 var _ domain.InstanceService = (*instanceService)(nil)
 
 // instanceService implements domain.InstanceService on top of the domain
@@ -50,8 +52,8 @@ type instanceCloud interface {
 // NewInstanceService returns an InstanceService bound to the given Exoscale
 // zone and credentials. The underlying egoscale client is created lazily by
 // the Cloud adapter.
-func NewInstanceService(apiKey, apiSecret string, zone egoscale.ZoneName, logger logr.Logger) (domain.InstanceService, error) {
-	cloudClient, err := exoscale.NewCloud(apiKey, apiSecret, zone)
+func NewInstanceService(apiKey, apiSecret string, zone egoscale.ZoneName, logger logr.Logger, traceAPI bool) (domain.InstanceService, error) {
+	cloudClient, err := exoscale.NewCloud(apiKey, apiSecret, zone, logger, traceAPI)
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +191,7 @@ func (s *instanceService) resolveInstanceSpec(ctx context.Context, spec domain.I
 
 	templateSizeGB := templateDiskSizeGB(template.SizeBytes)
 	minimumSizeGB := max(templateSizeGB, minimumDiskSizeGB)
-	diskSize := minimumSizeGB
+	diskSize := templateSizeGB + defaultDiskHeadroomGB
 	if spec.RootVolumeSizeGB != nil {
 		if *spec.RootVolumeSizeGB < minimumSizeGB {
 			return domain.ResolvedInstanceSpec{}, fmt.Errorf("rootVolumeSizeGB %d is smaller than minimum size %d", *spec.RootVolumeSizeGB, minimumSizeGB)

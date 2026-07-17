@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	egoscale "github.com/exoscale/egoscale/v3"
+	"github.com/exoscale/egoscale/v3/credentials"
 	"github.com/go-logr/logr/funcr"
 	"github.com/google/uuid"
 )
@@ -34,6 +35,16 @@ func Test_traceAPIRequest_omitsSensitiveData(t *testing.T) {
 	assert.NotContains(t, output, "query-secret")
 	assert.NotContains(t, output, "header-secret")
 	assert.NotContains(t, output, "body-secret")
+}
+
+func Test_NewCloud_rejectsIncompleteCredentials(t *testing.T) {
+	t.Parallel()
+
+	client, err := NewCloud("key", "", egoscale.ZoneNameCHGva2, funcr.New(func(_, _ string) {}, funcr.Options{}), false)
+
+	assert.Nil(t, client)
+	assert.ErrorIs(t, err, credentials.ErrMissingIncomplete)
+	assert.ErrorContains(t, err, "unable to create exoscale client")
 }
 
 func Test_cloud_waitForSuccess(t *testing.T) {
@@ -268,6 +279,7 @@ func Test_cloud_ListElasticIPs(t *testing.T) {
 		exoClient func(m *mocks.ExoscaleClient)
 		output    []domain.ElasticIP
 		err       error
+		errText   string
 	}{
 		{
 			name: "nominal - empty list",
@@ -310,6 +322,15 @@ func Test_cloud_ListElasticIPs(t *testing.T) {
 			},
 			err: assert.AnError,
 		},
+		{
+			name: "invalid elastic IP ID",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().ListElasticIPS(ctx).Return(&egoscale.ListElasticIPSResponse{
+					ElasticIPS: []egoscale.ElasticIP{{ID: "not-a-uuid"}},
+				}, nil)
+			},
+			errText: "unable to parse elastic IP ID",
+		},
 	}
 
 	for _, ut := range tests {
@@ -323,7 +344,11 @@ func Test_cloud_ListElasticIPs(t *testing.T) {
 
 			output, err := client.ListElasticIPs(ctx)
 
-			assert.ErrorIs(t, err, ut.err)
+			if ut.errText != "" {
+				assert.ErrorContains(t, err, ut.errText)
+			} else {
+				assert.ErrorIs(t, err, ut.err)
+			}
 			assert.Equal(t, ut.output, output)
 		})
 	}
@@ -430,6 +455,37 @@ func Test_cloud_ListInstances(t *testing.T) {
 		assert.ErrorIs(t, err, assert.AnError)
 		assert.Nil(t, output)
 	})
+
+	t.Run("rejects invalid instance ID", func(t *testing.T) {
+		t.Parallel()
+
+		exoClient := mocks.NewInstanceClient(t)
+		exoClient.EXPECT().ListInstances(ctx).Return(&egoscale.ListInstancesResponse{
+			Instances: []egoscale.ListInstancesResponseInstances{{ID: "not-a-uuid"}},
+		}, nil)
+
+		output, err := (&cloud{instanceClient: exoClient}).ListInstances(ctx)
+
+		assert.Nil(t, output)
+		assert.ErrorContains(t, err, "unable to parse instance ID")
+	})
+
+	t.Run("rejects invalid instance security group ID", func(t *testing.T) {
+		t.Parallel()
+
+		exoClient := mocks.NewInstanceClient(t)
+		exoClient.EXPECT().ListInstances(ctx).Return(&egoscale.ListInstancesResponse{
+			Instances: []egoscale.ListInstancesResponseInstances{{
+				ID:             egoscale.UUID(id.String()),
+				SecurityGroups: []egoscale.SecurityGroup{{ID: "not-a-uuid"}},
+			}},
+		}, nil)
+
+		output, err := (&cloud{instanceClient: exoClient}).ListInstances(ctx)
+
+		assert.Nil(t, output)
+		assert.ErrorContains(t, err, "unable to parse instance security group ID")
+	})
 }
 
 func Test_cloud_GetInstance(t *testing.T) {
@@ -494,6 +550,20 @@ func Test_cloud_GetInstance(t *testing.T) {
 		_, err := client.GetInstance(ctx, id)
 
 		assert.ErrorIs(t, err, assert.AnError)
+	})
+
+	t.Run("rejects invalid instance security group ID", func(t *testing.T) {
+		t.Parallel()
+
+		exoClient := mocks.NewInstanceClient(t)
+		exoClient.EXPECT().GetInstance(ctx, egoscale.UUID(id.String())).Return(&egoscale.Instance{
+			SecurityGroups: []egoscale.SecurityGroup{{ID: "not-a-uuid"}},
+		}, nil)
+
+		output, err := (&cloud{instanceClient: exoClient}).GetInstance(ctx, id)
+
+		assert.Equal(t, domain.Instance{}, output)
+		assert.ErrorContains(t, err, "unable to parse instance security group ID")
 	})
 }
 
@@ -603,6 +673,18 @@ func Test_cloud_AttachInstanceToSecurityGroup(t *testing.T) {
 
 		assert.ErrorIs(t, client.AttachInstanceToSecurityGroup(ctx, instanceID, securityGroupID), assert.AnError)
 	})
+
+	t.Run("rejects unsuccessful operation", func(t *testing.T) {
+		exoClient := mocks.NewExoscaleClient(t)
+		instanceClient := mocks.NewInstanceClient(t)
+		instanceClient.EXPECT().AttachInstanceToSecurityGroup(ctx, egoscale.UUID(securityGroupID.String()), request).Return(op, nil)
+		exoClient.EXPECT().Wait(ctx, op, []egoscale.OperationState{egoscale.OperationStateSuccess}).
+			Return(&egoscale.Operation{State: egoscale.OperationStateFailure}, nil)
+
+		client := cloud{exoClient: exoClient, instanceClient: instanceClient}
+
+		assert.ErrorContains(t, client.AttachInstanceToSecurityGroup(ctx, instanceID, securityGroupID), "did not succeed")
+	})
 }
 
 func Test_cloud_DetachInstanceFromSecurityGroup(t *testing.T) {
@@ -636,6 +718,34 @@ func Test_cloud_DetachInstanceFromSecurityGroup(t *testing.T) {
 
 		assert.ErrorIs(t, client.DetachInstanceFromSecurityGroup(ctx, instanceID, securityGroupID), assert.AnError)
 	})
+
+	tests := []struct {
+		name      string
+		completed *egoscale.Operation
+		waitErr   error
+		errText   string
+	}{
+		{name: "returns wait error", waitErr: assert.AnError, errText: "error while waiting for instance detachment from security group"},
+		{name: "rejects nil operation", errText: "instance detachment from security group operation did not succeed"},
+		{name: "rejects unsuccessful operation", completed: &egoscale.Operation{State: egoscale.OperationStateFailure}, errText: "instance detachment from security group operation did not succeed"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			exoClient := mocks.NewExoscaleClient(t)
+			instanceClient := mocks.NewInstanceClient(t)
+			instanceClient.EXPECT().DetachInstanceFromSecurityGroup(ctx, egoscale.UUID(securityGroupID.String()), request).Return(op, nil)
+			exoClient.EXPECT().Wait(ctx, op, []egoscale.OperationState{egoscale.OperationStateSuccess}).Return(tc.completed, tc.waitErr)
+
+			client := cloud{exoClient: exoClient, instanceClient: instanceClient}
+			err := client.DetachInstanceFromSecurityGroup(ctx, instanceID, securityGroupID)
+
+			assert.ErrorContains(t, err, tc.errText)
+			if tc.waitErr != nil {
+				assert.ErrorIs(t, err, tc.waitErr)
+			}
+		})
+	}
 }
 
 func Test_cloud_DeleteInstance(t *testing.T) {
@@ -930,6 +1040,15 @@ func Test_cloud_ListTemplates(t *testing.T) {
 		assert.ErrorIs(t, err, assert.AnError)
 		assert.Nil(t, output)
 	})
+}
+
+func Test_mapTemplate_rejectsInvalidID(t *testing.T) {
+	t.Parallel()
+
+	template, err := mapTemplate(egoscale.Template{ID: "not-a-uuid"})
+
+	assert.Equal(t, domain.InstanceTemplate{}, template)
+	assert.ErrorContains(t, err, `unable to parse template id "not-a-uuid"`)
 }
 
 func Test_cloud_UpdateElasticIP(t *testing.T) {
@@ -1520,6 +1639,7 @@ func Test_cloud_ListSecurityGroupRules(t *testing.T) {
 		exoClient func(m *mocks.ExoscaleClient)
 		output    []domain.SecurityGroupRule
 		err       error
+		errText   string
 	}{
 		{
 			name: "nominal - empty rules",
@@ -1595,6 +1715,27 @@ func Test_cloud_ListSecurityGroupRules(t *testing.T) {
 			},
 			err: assert.AnError,
 		},
+		{
+			name: "invalid rule ID",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().GetSecurityGroup(ctx, egoscale.UUID(sgID.String())).Return(&egoscale.SecurityGroup{
+					Rules: []egoscale.SecurityGroupRule{{ID: "not-a-uuid"}},
+				}, nil)
+			},
+			errText: "unable to parse security group rule ID",
+		},
+		{
+			name: "invalid source security group ID",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().GetSecurityGroup(ctx, egoscale.UUID(sgID.String())).Return(&egoscale.SecurityGroup{
+					Rules: []egoscale.SecurityGroupRule{{
+						ID:            egoscale.UUID(ruleID1.String()),
+						SecurityGroup: &egoscale.SecurityGroupResource{ID: "not-a-uuid"},
+					}},
+				}, nil)
+			},
+			errText: "unable to parse security group rule source ID",
+		},
 	}
 
 	for _, ut := range tests {
@@ -1608,7 +1749,11 @@ func Test_cloud_ListSecurityGroupRules(t *testing.T) {
 
 			output, err := client.ListSecurityGroupRules(ctx, sgID)
 
-			assert.ErrorIs(t, err, ut.err)
+			if ut.errText != "" {
+				assert.ErrorContains(t, err, ut.errText)
+			} else {
+				assert.ErrorIs(t, err, ut.err)
+			}
 			assert.Equal(t, ut.output, output)
 		})
 	}

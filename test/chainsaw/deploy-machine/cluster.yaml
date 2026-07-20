@@ -28,7 +28,42 @@ metadata:
   name: ($clusterName)
   namespace: ($namespace)
 spec:
+  controlPlaneRef:
+    apiGroup: controlplane.cluster.x-k8s.io
+    kind: KubeadmControlPlane
+    name: ($clusterName)
   infrastructureRef:
     apiGroup: infrastructure.cluster.x-k8s.io
     kind: ExoscaleCluster
     name: ($clusterName)
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: ExoscaleMachineTemplate
+metadata:
+  name: ($clusterName)
+  namespace: ($namespace)
+spec:
+  template:
+    metadata:
+      labels:
+        e2e.cluster.x-k8s.io/template: ($clusterName)
+    spec:
+      template: ($template)
+      instanceType: ($instanceType)
+---
+apiVersion: controlplane.cluster.x-k8s.io/v1beta2
+kind: KubeadmControlPlane
+metadata:
+  name: ($clusterName)
+  namespace: ($namespace)
+spec:
+  replicas: 1
+  version: v1.32.0
+  machineTemplate:
+    spec:
+      infrastructureRef:
+        apiGroup: infrastructure.cluster.x-k8s.io
+        kind: ExoscaleMachineTemplate
+        name: ($clusterName)
+  kubeadmConfigSpec:
+    format: cloud-config

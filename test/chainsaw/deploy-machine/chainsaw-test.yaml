@@ -1,12 +1,9 @@
-# verifies the full real VM lifecycle:
-# - create VM,
-# - mark machine ready,
-# - set providerID, then
-# - delete VM.
+# verifies KubeadmControlPlane clones an ExoscaleMachineTemplate and CAPX
+# provisions the generated ExoscaleMachine and real VM.
 apiVersion: chainsaw.kyverno.io/v1alpha1
 kind: Test
 metadata:
-  name: deploy-machine
+  name: deploy-machine-template
 spec:
   concurrent: false
   timeouts:
@@ -17,8 +14,6 @@ spec:
       value: ($values.zone || 'bg-sof-1')
     - name: clusterName
       value: (join('-', ['exo-dm', ($values.suffix || 'local')]))
-    - name: machineName
-      value: (join('-', ['machine', ($values.suffix || 'local')]))
     - name: namespace
       value: default
     - name: template
@@ -26,43 +21,45 @@ spec:
     - name: instanceType
       value: ($values.instanceType || 'small')
   steps:
-    - name: apply cluster
+    - name: apply cluster and control plane
       try:
         - apply:
             file: cluster.yaml
 
-    - name: apply machine
-      try:
-        - apply:
-            file: machine.yaml
-            outputs:
-              - name: machine
-                match:
-                  apiVersion: cluster.x-k8s.io/v1beta2
-                  kind: Machine
-                  metadata:
-                    name: ($machineName)
-                value: (@)
-        - apply:
-            file: kubeadmconfig.yaml
-        - apply:
-            file: exoscalemachine.yaml
-
-    - name: assert requested machine inputs
+    - name: assert machine template is referenced
       try:
         - assert:
             resource:
               apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
-              kind: ExoscaleMachine
+              kind: ExoscaleMachineTemplate
               metadata:
-                name: ($machineName)
+                name: ($clusterName)
                 namespace: ($namespace)
               spec:
-                template: ($template)
-                instanceType: ($instanceType)
-                (sshKey == null): true
+                template:
+                  metadata:
+                    labels:
+                      e2e.cluster.x-k8s.io/template: ($clusterName)
+                  spec:
+                    template: ($template)
+                    instanceType: ($instanceType)
+                    (sshKey == null): true
+        - assert:
+            resource:
+              apiVersion: controlplane.cluster.x-k8s.io/v1beta2
+              kind: KubeadmControlPlane
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+              spec:
+                machineTemplate:
+                  spec:
+                    infrastructureRef:
+                      apiGroup: infrastructure.cluster.x-k8s.io
+                      kind: ExoscaleMachineTemplate
+                      name: ($clusterName)
 
-    - name: assert bootstrap data generated
+    - name: assert CAPI generated machine resources
       try:
         - assert:
             timeout: 5m
@@ -70,8 +67,10 @@ spec:
               apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
               kind: KubeadmConfig
               metadata:
-                name: ($machineName)
                 namespace: ($namespace)
+                labels:
+                  cluster.x-k8s.io/cluster-name: ($clusterName)
+                  cluster.x-k8s.io/control-plane: ""
               status:
                 initialization:
                   dataSecretCreated: true
@@ -82,13 +81,18 @@ spec:
               apiVersion: cluster.x-k8s.io/v1beta2
               kind: Machine
               metadata:
-                name: ($machineName)
                 namespace: ($namespace)
+                labels:
+                  cluster.x-k8s.io/cluster-name: ($clusterName)
+                  cluster.x-k8s.io/control-plane: ""
               spec:
                 bootstrap:
                   (dataSecretName != ''): true
+                infrastructureRef:
+                  apiGroup: infrastructure.cluster.x-k8s.io
+                  kind: ExoscaleMachine
 
-    - name: assert machine ready
+    - name: assert generated machine ready
       try:
         - assert:
             timeout: 10m
@@ -96,8 +100,14 @@ spec:
               apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
               kind: ExoscaleMachine
               metadata:
-                name: ($machineName)
                 namespace: ($namespace)
+                labels:
+                  cluster.x-k8s.io/cluster-name: ($clusterName)
+                  e2e.cluster.x-k8s.io/template: ($clusterName)
+              spec:
+                template: ($template)
+                instanceType: ($instanceType)
+                (sshKey == null): true
               status:
                 initialization:
                   provisioned: true
@@ -115,26 +125,28 @@ spec:
               apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
               kind: ExoscaleMachine
               metadata:
-                name: ($machineName)
                 namespace: ($namespace)
+                labels:
+                  cluster.x-k8s.io/cluster-name: ($clusterName)
+                  e2e.cluster.x-k8s.io/template: ($clusterName)
               (spec.providerID == join('', ['exoscale://', status.instanceID])): true
               status:
                 (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', instanceID)): true
 
-    - name: assert capi machine registered infra machine
+    - name: assert CAPI machine registered infrastructure
       try:
         - assert:
             timeout: 2m
-            bindings:
-              - name: infraMachine
-                value: (x_k8s_get($client, 'infrastructure.cluster.x-k8s.io/v1alpha1', 'ExoscaleMachine', $namespace, $machineName))
             resource:
               apiVersion: cluster.x-k8s.io/v1beta2
               kind: Machine
               metadata:
-                name: ($machineName)
                 namespace: ($namespace)
-              (spec.providerID == $infraMachine.spec.providerID): true
+                labels:
+                  cluster.x-k8s.io/cluster-name: ($clusterName)
+                  cluster.x-k8s.io/control-plane: ""
+              spec:
+                (providerID != ''): true
               status:
                 initialization:
                   infrastructureProvisioned: true
@@ -142,12 +154,12 @@ spec:
                   - type: ExternalIP
                     (address != ''): true
 
-    - name: delete CAPI machine
+    - name: delete control plane
       try:
         - delete:
             timeout: 10m
             ref:
-              apiVersion: cluster.x-k8s.io/v1beta2
-              kind: Machine
-              name: ($machineName)
+              apiVersion: controlplane.cluster.x-k8s.io/v1beta2
+              kind: KubeadmControlPlane
+              name: ($clusterName)
               namespace: ($namespace)

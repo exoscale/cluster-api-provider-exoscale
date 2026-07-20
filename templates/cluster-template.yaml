@@ -1,0 +1,104 @@
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: ExoscaleCluster
+metadata:
+  name: "${CLUSTER_NAME}"
+spec:
+  zone: "${EXOSCALE_ZONE}"
+---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: "${CLUSTER_NAME}"
+spec:
+  clusterNetwork:
+    pods:
+      cidrBlocks:
+        - 10.244.0.0/16
+    services:
+      cidrBlocks:
+        - 10.96.0.0/12
+    serviceDomain: cluster.local
+  controlPlaneRef:
+    apiGroup: controlplane.cluster.x-k8s.io
+    kind: KubeadmControlPlane
+    name: "${CLUSTER_NAME}"
+  infrastructureRef:
+    apiGroup: infrastructure.cluster.x-k8s.io
+    kind: ExoscaleCluster
+    name: "${CLUSTER_NAME}"
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: ExoscaleMachineTemplate
+metadata:
+  name: "${CLUSTER_NAME}"
+spec:
+  template:
+    spec:
+      template: "${EXOSCALE_TEMPLATE:=Linux Ubuntu 24.04 LTS 64-bit}"
+      instanceType: "${EXOSCALE_INSTANCE_TYPE:=small}"
+---
+apiVersion: controlplane.cluster.x-k8s.io/v1beta2
+kind: KubeadmControlPlane
+metadata:
+  name: "${CLUSTER_NAME}"
+spec:
+  replicas: ${CONTROL_PLANE_MACHINE_COUNT}
+  version: "${KUBERNETES_VERSION}"
+  machineTemplate:
+    spec:
+      infrastructureRef:
+        apiGroup: infrastructure.cluster.x-k8s.io
+        kind: ExoscaleMachineTemplate
+        name: "${CLUSTER_NAME}"
+  kubeadmConfigSpec:
+    format: cloud-config
+    initConfiguration:
+      nodeRegistration:
+        criSocket: unix:///run/containerd/containerd.sock
+        taints: []
+    files:
+      - path: /etc/modules-load.d/k8s.conf
+        owner: root:root
+        permissions: "0644"
+        content: |
+          overlay
+          br_netfilter
+      - path: /etc/sysctl.d/99-kubernetes-cri.conf
+        owner: root:root
+        permissions: "0644"
+        content: |
+          net.bridge.bridge-nf-call-iptables = 1
+          net.bridge.bridge-nf-call-ip6tables = 1
+          net.ipv4.ip_forward = 1
+    preKubeadmCommands:
+      - swapoff -a
+      - sed -ri '/\sswap\s/s/^#?/#/' /etc/fstab
+      - modprobe overlay
+      - modprobe br_netfilter
+      - sysctl --system
+      - apt-get update
+      - DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl gpg containerd
+      - mkdir -p /etc/containerd
+      - containerd config default > /etc/containerd/config.toml
+      - sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+      - systemctl enable --now containerd
+      - install -m 0755 -d /etc/apt/keyrings
+      - >-
+        kubernetes_version='${KUBERNETES_VERSION}';
+        kubernetes_version="$${kubernetes_version#v}";
+        kubernetes_minor="$${kubernetes_version%.*}";
+        curl -fsSL "https://pkgs.k8s.io/core:/stable:/v$${kubernetes_minor}/deb/Release.key"
+        | gpg --dearmor --yes -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg;
+        printf '%s\n'
+        "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v$${kubernetes_minor}/deb/ /"
+        > /etc/apt/sources.list.d/kubernetes.list;
+        apt-get update;
+        DEBIAN_FRONTEND=noninteractive apt-get install -y
+        "kubelet=$${kubernetes_version}-1.1" "kubeadm=$${kubernetes_version}-1.1";
+        apt-mark hold kubelet kubeadm
+      - >-
+        instance_id="$(curl --fail --silent --show-error --retry 30 --retry-delay 2
+        http://metadata.exoscale.com/latest/meta-data/instance-id | tr -d '\r\n')";
+        test -n "$instance_id";
+        printf 'KUBELET_EXTRA_ARGS=--provider-id=exoscale://%s\n' "$instance_id" > /etc/default/kubelet
+      - systemctl enable kubelet

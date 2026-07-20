@@ -1,5 +1,5 @@
-# verifies KubeadmControlPlane clones an ExoscaleMachineTemplate and CAPX
-# provisions the generated ExoscaleMachine and real VM.
+# verifies KubeadmControlPlane clones an ExoscaleMachineTemplate, CAPX
+# provisions the VM, and the resulting workload cluster runs a Pod.
 apiVersion: chainsaw.kyverno.io/v1alpha1
 kind: Test
 metadata:
@@ -25,72 +25,6 @@ spec:
       try:
         - apply:
             file: cluster.yaml
-
-    - name: assert machine template is referenced
-      try:
-        - assert:
-            resource:
-              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
-              kind: ExoscaleMachineTemplate
-              metadata:
-                name: ($clusterName)
-                namespace: ($namespace)
-              spec:
-                template:
-                  metadata:
-                    labels:
-                      e2e.cluster.x-k8s.io/template: ($clusterName)
-                  spec:
-                    template: ($template)
-                    instanceType: ($instanceType)
-                    (sshKey == null): true
-        - assert:
-            resource:
-              apiVersion: controlplane.cluster.x-k8s.io/v1beta2
-              kind: KubeadmControlPlane
-              metadata:
-                name: ($clusterName)
-                namespace: ($namespace)
-              spec:
-                machineTemplate:
-                  spec:
-                    infrastructureRef:
-                      apiGroup: infrastructure.cluster.x-k8s.io
-                      kind: ExoscaleMachineTemplate
-                      name: ($clusterName)
-
-    - name: assert CAPI generated machine resources
-      try:
-        - assert:
-            timeout: 5m
-            resource:
-              apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
-              kind: KubeadmConfig
-              metadata:
-                namespace: ($namespace)
-                labels:
-                  cluster.x-k8s.io/cluster-name: ($clusterName)
-                  cluster.x-k8s.io/control-plane: ""
-              status:
-                initialization:
-                  dataSecretCreated: true
-                (dataSecretName != ''): true
-        - assert:
-            timeout: 2m
-            resource:
-              apiVersion: cluster.x-k8s.io/v1beta2
-              kind: Machine
-              metadata:
-                namespace: ($namespace)
-                labels:
-                  cluster.x-k8s.io/cluster-name: ($clusterName)
-                  cluster.x-k8s.io/control-plane: ""
-              spec:
-                bootstrap:
-                  (dataSecretName != ''): true
-                infrastructureRef:
-                  apiGroup: infrastructure.cluster.x-k8s.io
-                  kind: ExoscaleMachine
 
     - name: assert generated machine ready
       try:
@@ -133,8 +67,132 @@ spec:
               status:
                 (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', instanceID)): true
 
-    - name: assert CAPI machine registered infrastructure
+    - name: load workload kubeconfig
       try:
+        - script:
+            timeout: 2m
+            shell: bash
+            shellArgs:
+              - -c
+            skipCommandOutput: true
+            skipLogOutput: true
+            env:
+              - name: CLUSTER_NAME
+                value: ($clusterName)
+              - name: NAMESPACE
+                value: ($namespace)
+            content: |
+              set -Eeuo pipefail
+              umask 077
+              rm -f workload.kubeconfig
+              for _ in $(seq 1 60); do
+                if kubectl --namespace "${NAMESPACE}" get secret "${CLUSTER_NAME}-kubeconfig" \
+                  --output=jsonpath='{.data.value}' 2>/dev/null | base64 --decode > workload.kubeconfig \
+                  && test -s workload.kubeconfig; then
+                  break
+                fi
+                sleep 2
+              done
+              test -s workload.kubeconfig
+              chmod 0600 workload.kubeconfig
+              for _ in $(seq 1 120); do
+                kubectl --kubeconfig=workload.kubeconfig get --raw=/readyz >/dev/null 2>&1 && break
+                sleep 10
+              done
+              kubectl --kubeconfig=workload.kubeconfig get --raw=/readyz >/dev/null
+      cleanup:
+        - script:
+            skipCommandOutput: true
+            skipLogOutput: true
+            content: rm -f workload.kubeconfig
+
+    - name: verify workload cluster
+      clusters:
+        workload:
+          kubeconfig: workload.kubeconfig
+      cluster: workload
+      try:
+        - assert:
+            timeout: 20m
+            resource:
+              apiVersion: v1
+              kind: Namespace
+              metadata:
+                name: kube-system
+        - apply:
+            timeout: 2m
+            file: https://github.com/flannel-io/flannel/releases/download/v0.28.7/kube-flannel.yml
+        - assert:
+            timeout: 10m
+            resource:
+              apiVersion: apps/v1
+              kind: DaemonSet
+              metadata:
+                name: kube-flannel-ds
+                namespace: kube-flannel
+              status:
+                numberReady: 1
+        - assert:
+            timeout: 10m
+            resource:
+              apiVersion: v1
+              kind: Node
+              status:
+                (conditions[?type == 'Ready']):
+                  - status: "True"
+        - assert:
+            resource:
+              apiVersion: v1
+              kind: Node
+              spec:
+                (regex_match('^exoscale://[0-9a-f-]{36}$', providerID)): true
+        - assert:
+            timeout: 5m
+            resource:
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: coredns
+                namespace: kube-system
+              status:
+                (availableReplicas > `0`): true
+        - apply:
+            resource:
+              apiVersion: v1
+              kind: Pod
+              metadata:
+                name: capi-smoke
+                namespace: default
+              spec:
+                containers:
+                  - name: pause
+                    image: registry.k8s.io/pause:3.10
+        - assert:
+            timeout: 5m
+            resource:
+              apiVersion: v1
+              kind: Pod
+              metadata:
+                name: capi-smoke
+                namespace: default
+              status:
+                phase: Running
+                (conditions[?type == 'Ready']):
+                  - status: "True"
+
+    - name: assert workload registered in CAPI
+      try:
+        - assert:
+            timeout: 2m
+            resource:
+              apiVersion: cluster.x-k8s.io/v1beta2
+              kind: Cluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+              status:
+                initialization:
+                  controlPlaneInitialized: true
         - assert:
             timeout: 2m
             resource:
@@ -150,16 +208,4 @@ spec:
               status:
                 initialization:
                   infrastructureProvisioned: true
-                addresses:
-                  - type: ExternalIP
-                    (address != ''): true
-
-    - name: delete control plane
-      try:
-        - delete:
-            timeout: 10m
-            ref:
-              apiVersion: controlplane.cluster.x-k8s.io/v1beta2
-              kind: KubeadmControlPlane
-              name: ($clusterName)
-              namespace: ($namespace)
+                (nodeRef.name != ''): true

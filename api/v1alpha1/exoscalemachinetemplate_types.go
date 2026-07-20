@@ -30,6 +30,7 @@ type ExoscaleMachineTemplateSpec struct {
 
 // ExoscaleMachineTemplateResource describes the data used to create an ExoscaleMachine.
 // +kubebuilder:validation:XValidation:rule="!has(self.spec.providerID)",message="providerID must not be set in an ExoscaleMachineTemplate"
+// +kubebuilder:validation:XValidation:rule="self.spec == oldSelf.spec",message="spec.template.spec is immutable"
 type ExoscaleMachineTemplateResource struct {
 	// metadata is copied to generated ExoscaleMachines.
 	// +optional

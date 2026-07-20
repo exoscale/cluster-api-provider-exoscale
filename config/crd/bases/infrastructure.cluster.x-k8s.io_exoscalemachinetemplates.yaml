@@ -157,6 +157,8 @@ spec:
                 x-kubernetes-validations:
                 - message: providerID must not be set in an ExoscaleMachineTemplate
                   rule: '!has(self.spec.providerID)'
+                - message: spec.template.spec is immutable
+                  rule: self.spec == oldSelf.spec
             required:
             - template
             type: object

@@ -432,12 +432,14 @@ func (r *ExoscaleMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				),
 			),
 		).
+		// Cluster readiness and pause changes can affect every infrastructure machine in the cluster.
 		Watches(
 			&clusterv1.Cluster{},
 			handler.EnqueueRequestsFromMapFunc(clusterToExoscaleMachines),
 			capipredicates.ClusterPausedTransitionsOrInfrastructureProvisioned(mgr.GetScheme(), predicateLog),
 			capipredicates.ResourceHasFilterLabel(mgr.GetScheme(), predicateLog, r.WatchFilter),
 		).
+		// ExoscaleCluster status provides the shared security group and endpoint IDs required by its machines.
 		Watches(
 			&infrastructurev1alpha1.ExoscaleCluster{},
 			handler.EnqueueRequestsFromMapFunc(exoscaleClusterToExoscaleMachines(mgr.GetClient(), clusterToExoscaleMachines)),

@@ -9,6 +9,8 @@ import (
 	"github.com/google/uuid"
 )
 
+const MachineUIDKey = "cluster-api-provider-exoscale/machine-uid"
+
 type ExoscaleClient interface {
 	Wait(ctx context.Context, op *egoscale.Operation, states ...egoscale.OperationState) (*egoscale.Operation, error)
 

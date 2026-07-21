@@ -15,10 +15,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// machineUIDLabel tags Exoscale compute instances so the controller can recover
-// the instance it created for a given CAPI Machine across reconcile restarts.
-const machineUIDLabel = "cluster-api-provider-exoscale/machine-uid"
-
 const bytesPerGiB int64 = 1024 * 1024 * 1024
 
 const minimumDiskSizeGiB int64 = 10
@@ -110,7 +106,7 @@ func (s *instanceService) UpsertInstance(ctx context.Context, machineID domain.M
 			return domain.Instance{}, fmt.Errorf("error while fetching new instance: %w", err)
 		}
 	}
-	if instance.Labels[machineUIDLabel] != machineID.String() {
+	if instance.Labels[domain.MachineUIDKey] != machineID.String() {
 		return domain.Instance{}, fmt.Errorf("instance %s is not owned by Machine UID %s", instance.ID, machineID)
 	}
 
@@ -293,7 +289,7 @@ func (s *instanceService) DeleteInstance(ctx context.Context, machineID *domain.
 			if machineID == nil {
 				return fmt.Errorf("cannot verify status instance %s without a Machine UID", statusInstance.ID)
 			}
-			if statusInstance.Labels[machineUIDLabel] != machineID.String() {
+			if statusInstance.Labels[domain.MachineUIDKey] != machineID.String() {
 				return fmt.Errorf("status instance %s is not owned by Machine UID %s", statusInstance.ID, machineID)
 			}
 		}
@@ -324,14 +320,14 @@ func (s *instanceService) DeleteInstance(ctx context.Context, machineID *domain.
 }
 
 func (s *instanceService) findInstancesByMachineID(ctx context.Context, machineID domain.MachineID) ([]domain.Instance, error) {
-	instances, err := s.cloud.ListInstances(ctx, machineUIDLabel+"="+machineID.String())
+	instances, err := s.cloud.ListInstances(ctx, domain.MachineUIDKey+"="+machineID.String())
 	if err != nil {
 		return nil, err
 	}
 
 	var matches []domain.Instance
 	for _, instance := range instances {
-		if instance.Labels[machineUIDLabel] == machineID.String() {
+		if instance.Labels[domain.MachineUIDKey] == machineID.String() {
 			matches = append(matches, instance)
 		}
 	}
@@ -351,6 +347,6 @@ func oldestInstance(instances []domain.Instance) domain.Instance {
 func labelsWithMachineID(labels map[string]string, machineID domain.MachineID) map[string]string {
 	out := make(map[string]string, len(labels)+1)
 	maps.Copy(out, labels)
-	out[machineUIDLabel] = machineID.String()
+	out[domain.MachineUIDKey] = machineID.String()
 	return out
 }

@@ -24,7 +24,8 @@ func Test_instanceService_UpsertInstance(t *testing.T) {
 	template := domain.InstanceTemplate{ID: templateID, Name: "ubuntu", SizeBytes: 15 * bytesPerGiB}
 	instanceType := domain.InstanceType{ID: instanceTypeID, Family: "standard", Size: "small"}
 	spec := domain.InstanceSpec{Name: "machine-0", Template: "ubuntu", InstanceType: "standard.small"}
-	instance := domain.Instance{ID: instanceID, Labels: map[string]string{machineUIDLabel: machineID.String()}}
+	instance := domain.Instance{ID: instanceID, Labels: map[string]string{domain.MachineUIDKey: machineID.String()}}
+	foreignInstance := domain.Instance{ID: instanceID, Labels: map[string]string{domain.MachineUIDKey: uuid.NewString()}}
 
 	tests := []struct {
 		name        string
@@ -108,7 +109,7 @@ func Test_instanceService_UpsertInstance(t *testing.T) {
 						InstanceType: instanceType,
 						DiskSizeGiB:  25,
 						Labels: map[string]string{
-							machineUIDLabel: machineID.String(),
+							domain.MachineUIDKey: machineID.String(),
 						},
 					}, spec)
 					return instanceID, nil
@@ -142,7 +143,20 @@ func Test_instanceService_UpsertInstance(t *testing.T) {
 					return nil, nil
 				},
 				getInstance: func(context.Context, uuid.UUID) (domain.Instance, error) {
-					return domain.Instance{ID: instanceID, Labels: map[string]string{machineUIDLabel: uuid.NewString()}}, nil
+					return foreignInstance, nil
+				},
+			},
+			err: errNotOwned,
+		},
+		{
+			name:       "rejects status instance without ownership label",
+			instanceID: &instanceID,
+			cloud: fakeInstanceCloud{
+				listInstances: func(context.Context) ([]domain.Instance, error) {
+					return nil, nil
+				},
+				getInstance: func(context.Context, uuid.UUID) (domain.Instance, error) {
+					return domain.Instance{ID: instanceID}, nil
 				},
 			},
 			err: errNotOwned,
@@ -497,7 +511,7 @@ func Test_instanceService_DeleteInstance(t *testing.T) {
 	machineID := domain.MachineID(uuid.NewString())
 	id := uuid.New()
 	staleID := uuid.New()
-	instance := domain.Instance{ID: id, Labels: map[string]string{machineUIDLabel: machineID.String()}}
+	instance := domain.Instance{ID: id, Labels: map[string]string{domain.MachineUIDKey: machineID.String()}}
 
 	tests := []struct {
 		name       string
@@ -643,7 +657,7 @@ func Test_instanceService_DeleteInstance(t *testing.T) {
 	t.Run("rejects status instance owned by another machine", func(t *testing.T) {
 		svc := instanceService{cloud: fakeInstanceCloud{
 			getInstance: func(context.Context, uuid.UUID) (domain.Instance, error) {
-				return domain.Instance{ID: id, Labels: map[string]string{machineUIDLabel: uuid.NewString()}}, nil
+				return domain.Instance{ID: id, Labels: map[string]string{domain.MachineUIDKey: uuid.NewString()}}, nil
 			},
 		}}
 

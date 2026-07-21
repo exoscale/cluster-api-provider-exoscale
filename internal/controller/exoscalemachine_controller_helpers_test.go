@@ -48,6 +48,27 @@ func TestExoscaleMachineReconciler_getExoscaleCluster(t *testing.T) {
 	})
 }
 
+func TestEnsureMachineID(t *testing.T) {
+	t.Parallel()
+
+	machine := &clusterv1.Machine{ObjectMeta: metav1.ObjectMeta{UID: "current-uid"}}
+	exoMachine := &infrav1alpha1.ExoscaleMachine{}
+
+	machineID, added, err := ensureMachineID(exoMachine, machine)
+
+	assert.NoError(t, err)
+	assert.True(t, added)
+	assert.Equal(t, domain.MachineID("current-uid"), machineID)
+	assert.Equal(t, "current-uid", exoMachine.Annotations[domain.MachineUIDKey])
+
+	exoMachine.Annotations[domain.MachineUIDKey] = "pre-move-uid"
+	machineID, added, err = ensureMachineID(exoMachine, machine)
+
+	assert.NoError(t, err)
+	assert.False(t, added)
+	assert.Equal(t, domain.MachineID("pre-move-uid"), machineID)
+}
+
 func TestInstanceName(t *testing.T) {
 	t.Parallel()
 

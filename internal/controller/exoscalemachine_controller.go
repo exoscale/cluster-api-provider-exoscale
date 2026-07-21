@@ -21,6 +21,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -249,18 +250,9 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 		return ctrl.Result{}, err
 	}
 
-	machineID := domain.MachineID(machine.UID)
-	if machineID == "" {
-		return ctrl.Result{}, fmt.Errorf("machine UID is empty")
-	}
-
-	var instanceID *uuid.UUID
-	if exoMachine.Status.InstanceID != "" {
-		id, err := uuid.Parse(exoMachine.Status.InstanceID)
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("invalid instanceID in status %q: %w", exoMachine.Status.InstanceID, err)
-		}
-		instanceID = &id
+	instanceID, err := exoscaleMachineInstanceID(exoMachine)
+	if err != nil {
+		return ctrl.Result{}, err
 	}
 
 	isControlPlane := util.IsControlPlaneMachine(machine)
@@ -291,6 +283,15 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 	machineRole := "worker"
 	if isControlPlane {
 		machineRole = "control-plane"
+	}
+	machineID, annotationAdded, err := ensureMachineID(exoMachine, machine)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if annotationAdded {
+		if err := patchHelper.Patch(ctx, exoMachine); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 
 	spec := domain.InstanceSpec{
@@ -354,13 +355,13 @@ func (r *ExoscaleMachineReconciler) reconcileDelete(
 }
 
 func deletionInstanceIDs(exoMachine *infrastructurev1alpha1.ExoscaleMachine) (*domain.MachineID, *uuid.UUID, error) {
-	var instanceID *uuid.UUID
-	if exoMachine.Status.InstanceID != "" {
-		id, err := uuid.Parse(exoMachine.Status.InstanceID)
-		if err != nil {
-			return nil, nil, fmt.Errorf("invalid instanceID in status %q: %w", exoMachine.Status.InstanceID, err)
-		}
-		instanceID = &id
+	instanceID, err := exoscaleMachineInstanceID(exoMachine)
+	if err != nil {
+		return nil, nil, err
+	}
+	if machineUID := exoMachine.Annotations[domain.MachineUIDKey]; machineUID != "" {
+		machineID := domain.MachineID(machineUID)
+		return &machineID, instanceID, nil
 	}
 
 	for _, ref := range exoMachine.OwnerReferences {
@@ -382,6 +383,44 @@ func deletionInstanceIDs(exoMachine *infrastructurev1alpha1.ExoscaleMachine) (*d
 	}
 
 	return nil, instanceID, nil
+}
+
+func ensureMachineID(exoMachine *infrastructurev1alpha1.ExoscaleMachine, machine *clusterv1.Machine) (domain.MachineID, bool, error) {
+	if machineUID := exoMachine.Annotations[domain.MachineUIDKey]; machineUID != "" {
+		return domain.MachineID(machineUID), false, nil
+	}
+	if machine.UID == "" {
+		return "", false, fmt.Errorf("machine UID is empty")
+	}
+	if exoMachine.Annotations == nil {
+		exoMachine.Annotations = map[string]string{}
+	}
+	exoMachine.Annotations[domain.MachineUIDKey] = string(machine.UID)
+	return domain.MachineID(machine.UID), true, nil
+}
+
+func exoscaleMachineInstanceID(exoMachine *infrastructurev1alpha1.ExoscaleMachine) (*uuid.UUID, error) {
+	if exoMachine.Status.InstanceID != "" {
+		id, err := uuid.Parse(exoMachine.Status.InstanceID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid instanceID in status %q: %w", exoMachine.Status.InstanceID, err)
+		}
+		return &id, nil
+	}
+	if exoMachine.Spec.ProviderID == nil {
+		return nil, nil
+	}
+
+	rawID, ok := strings.CutPrefix(*exoMachine.Spec.ProviderID, "exoscale://")
+	if !ok {
+		return nil, fmt.Errorf("invalid providerID %q", *exoMachine.Spec.ProviderID)
+	}
+	rawID = strings.TrimPrefix(rawID, "/")
+	id, err := uuid.Parse(rawID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid providerID %q: %w", *exoMachine.Spec.ProviderID, err)
+	}
+	return &id, nil
 }
 
 func (r *ExoscaleMachineReconciler) bootstrapData(ctx context.Context, machine *clusterv1.Machine) (string, error) {

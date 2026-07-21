@@ -171,6 +171,7 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 	updated := &infrav1alpha1.ExoscaleMachine{}
 	assert.NoError(t, client.Get(ctx, types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}, updated))
 	assert.Equal(t, instanceID.String(), updated.Status.InstanceID)
+	assert.Equal(t, machineUID.String(), updated.Annotations[domain.MachineUIDKey])
 	assert.Equal(t, []clusterv1.MachineAddress{
 		{Type: clusterv1.MachineExternalIP, Address: "1.2.3.4"},
 		{Type: clusterv1.MachineInternalIP, Address: "10.0.0.1"},

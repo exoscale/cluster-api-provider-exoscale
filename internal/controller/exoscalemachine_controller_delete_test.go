@@ -187,6 +187,10 @@ func Test_deletionInstanceIDs(t *testing.T) {
 
 	instanceID := uuid.New()
 	machineID := domain.MachineID("not-a-uuid")
+	preMoveMachineID := domain.MachineID("pre-move-uid")
+	providerID := "exoscale://" + instanceID.String()
+	legacyProviderID := "exoscale:///" + instanceID.String()
+	invalidProviderID := "bad-id"
 	tests := []struct {
 		name           string
 		machine        infrav1alpha1.ExoscaleMachine
@@ -198,6 +202,21 @@ func Test_deletionInstanceIDs(t *testing.T) {
 			name:    "invalid status instance ID",
 			machine: infrav1alpha1.ExoscaleMachine{Status: infrav1alpha1.ExoscaleMachineStatus{InstanceID: "bad-id"}},
 			wantErr: "invalid instanceID in status",
+		},
+		{
+			name:           "recovers instance ID from provider ID after move",
+			machine:        infrav1alpha1.ExoscaleMachine{Spec: infrav1alpha1.ExoscaleMachineSpec{ProviderID: &providerID}},
+			wantInstanceID: &instanceID,
+		},
+		{
+			name:           "accepts provider ID with path separator",
+			machine:        infrav1alpha1.ExoscaleMachine{Spec: infrav1alpha1.ExoscaleMachineSpec{ProviderID: &legacyProviderID}},
+			wantInstanceID: &instanceID,
+		},
+		{
+			name:    "invalid provider ID",
+			machine: infrav1alpha1.ExoscaleMachine{Spec: infrav1alpha1.ExoscaleMachineSpec{ProviderID: &invalidProviderID}},
+			wantErr: "invalid providerID",
 		},
 		{
 			name: "invalid owner API version",
@@ -212,6 +231,16 @@ func Test_deletionInstanceIDs(t *testing.T) {
 				APIVersion: clusterv1.GroupVersion.String(), Kind: "Machine", UID: types.UID(machineID),
 			}}}},
 			wantMachineID: &machineID,
+		},
+		{
+			name: "uses persisted pre-move Machine UID",
+			machine: infrav1alpha1.ExoscaleMachine{ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{domain.MachineUIDKey: preMoveMachineID.String()},
+				OwnerReferences: []metav1.OwnerReference{{
+					APIVersion: clusterv1.GroupVersion.String(), Kind: "Machine", UID: types.UID(machineID),
+				}},
+			}},
+			wantMachineID: &preMoveMachineID,
 		},
 		{
 			name: "ignores malformed non-Machine owner",

@@ -295,10 +295,9 @@ func TestExoscaleMachineReconciler_reconcileNormal_controlPlaneEndpoint(t *testi
 	tests := []struct {
 		name     string
 		endpoint *infrav1alpha1.APIEndpointStatus
-		wantWait bool
 		wantErr  string
 	}{
-		{name: "waits for endpoint", wantWait: true},
+		{name: "requires endpoint", wantErr: "control plane Elastic IP is not available"},
 		{name: "rejects invalid endpoint ID", endpoint: &infrav1alpha1.APIEndpointStatus{ID: "bad-id"}, wantErr: "invalid control plane Elastic IP ID"},
 	}
 
@@ -334,9 +333,6 @@ func TestExoscaleMachineReconciler_reconcileNormal_controlPlaneEndpoint(t *testi
 				return
 			}
 			assert.NoError(t, err)
-			if tc.wantWait {
-				assert.Equal(t, 15*time.Second, result.RequeueAfter)
-			}
 			ready := apimeta.FindStatusCondition(exoMachine.Status.Conditions, clusterv1.ReadyCondition)
 			if assert.NotNil(t, ready) {
 				assert.Equal(t, metav1.ConditionFalse, ready.Status)

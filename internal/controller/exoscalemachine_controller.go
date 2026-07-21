@@ -275,9 +275,7 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 	var elasticIPID *uuid.UUID
 	if isControlPlane {
 		if exoCluster.Status.ControlPlaneEndpoint == nil {
-			log.Info("Cluster control plane Elastic IP not yet available")
-			setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.NotReadyReason, "Waiting for control plane Elastic IP")
-			return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
+			return ctrl.Result{}, fmt.Errorf("cluster control plane Elastic IP is not available")
 		}
 		id, err := uuid.Parse(exoCluster.Status.ControlPlaneEndpoint.ID)
 		if err != nil {

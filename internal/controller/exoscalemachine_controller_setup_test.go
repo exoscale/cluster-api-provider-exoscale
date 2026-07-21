@@ -6,7 +6,6 @@ import (
 
 	infrav1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
 	"github.com/go-logr/logr"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -24,39 +23,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
-
-func TestExoscaleMachineReconciler_Reconcile_ignoresDifferentWatchFilter(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-	instanceID := uuid.New()
-	deletionTime := metav1.Now()
-	scheme := newExoscaleMachineTestScheme(t)
-	exoMachine := &infrav1alpha1.ExoscaleMachine{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:              "filtered-machine",
-			Namespace:         "default",
-			Labels:            map[string]string{clusterv1.WatchLabel: "other"},
-			Finalizers:        []string{machineFinalizer},
-			DeletionTimestamp: &deletionTime,
-		},
-		Status: infrav1alpha1.ExoscaleMachineStatus{InstanceID: instanceID.String()},
-	}
-	client := fake.NewClientBuilder().
-		WithScheme(scheme).
-		WithStatusSubresource(&infrav1alpha1.ExoscaleMachine{}).
-		WithObjects(exoMachine).
-		Build()
-	r := &ExoscaleMachineReconciler{Client: client, Scheme: scheme, WatchFilter: "mine"}
-
-	result, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: crclient.ObjectKeyFromObject(exoMachine)})
-
-	assert.NoError(t, err)
-	assert.Equal(t, reconcile.Result{}, result)
-	updated := &infrav1alpha1.ExoscaleMachine{}
-	assert.NoError(t, client.Get(ctx, crclient.ObjectKeyFromObject(exoMachine), updated))
-	assert.Contains(t, updated.Finalizers, machineFinalizer)
-}
 
 func TestExoscaleClusterToExoscaleMachines(t *testing.T) {
 	t.Parallel()

@@ -40,7 +40,6 @@ import (
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	capicontrollerutil "sigs.k8s.io/cluster-api/util/controller"
-	capilabels "sigs.k8s.io/cluster-api/util/labels"
 	capipatch "sigs.k8s.io/cluster-api/util/patch"
 	capipredicates "sigs.k8s.io/cluster-api/util/predicates"
 
@@ -74,9 +73,6 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	exoMachine := &infrastructurev1alpha1.ExoscaleMachine{}
 	if err := r.Get(ctx, req.NamespacedName, exoMachine); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
-	}
-	if r.WatchFilter != "" && !capilabels.HasWatchLabel(exoMachine, r.WatchFilter) {
-		return ctrl.Result{}, nil
 	}
 
 	patchHelper, err := capipatch.NewHelper(exoMachine, r.Client)

@@ -82,9 +82,12 @@ setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
 	esac
 
 .PHONY: test-e2e
-test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expected an isolated environment using Kind.
-	KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v
-	$(MAKE) cleanup-test-e2e
+test-e2e: setup-test-e2e manifests generate fmt vet clusterctl ## Run the e2e tests. Expected an isolated environment using Kind.
+	@status=0; \
+		"$(CLUSTERCTL)" init --infrastructure - && \
+		KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v || status=$$?; \
+		$(MAKE) cleanup-test-e2e KIND_CLUSTER=$(KIND_CLUSTER); \
+		exit $$status
 
 CHAINSAW_VALUES_SUFFIX ?=
 CHAINSAW_VALUES_ZONE ?=
@@ -215,8 +218,13 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 
 .PHONY: deploy
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG}
-	"$(KUSTOMIZE)" build config/default | "$(KUBECTL)" apply -f -
+	@tmp="$$(mktemp -d)"; \
+		trap 'rm -rf "$$tmp"' EXIT; \
+		ln -s "$(CURDIR)/config/default" "$$tmp/base"; \
+		printf 'apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n  - base\n' > "$$tmp/kustomization.yaml"; \
+		cd "$$tmp"; \
+		"$(KUSTOMIZE)" edit set image controller=${IMG}; \
+		"$(KUSTOMIZE)" build --load-restrictor LoadRestrictionsNone . | "$(KUBECTL)" apply -f -
 
 .PHONY: undeploy
 undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.

@@ -245,7 +245,7 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 
 	machineID := domain.MachineID(machine.UID)
 	if machineID == "" {
-		return ctrl.Result{}, fmt.Errorf("Machine UID is empty")
+		return ctrl.Result{}, fmt.Errorf("machine UID is empty")
 	}
 
 	var instanceID *uuid.UUID

@@ -16,7 +16,6 @@ import (
 	"github.com/exoscale/egoscale/v3/credentials"
 	"github.com/go-logr/logr"
 	"github.com/google/uuid"
-	"github.com/hashicorp/go-retryablehttp"
 )
 
 var _ domain.Cloud = (*cloud)(nil)
@@ -39,47 +38,6 @@ type instanceClient interface {
 	ListInstanceTypes(ctx context.Context) (*egoscale.ListInstanceTypesResponse, error)
 	GetTemplate(ctx context.Context, id egoscale.UUID) (*egoscale.Template, error)
 	ListTemplates(ctx context.Context, opts ...egoscale.ListTemplatesOpt) (*egoscale.ListTemplatesResponse, error)
-}
-
-type metadataRoundTripper struct {
-	next   http.RoundTripper
-	logger logr.Logger
-}
-
-func (t metadataRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	started := time.Now()
-	resp, err := t.next.RoundTrip(req)
-	duration := time.Since(started).Round(time.Millisecond)
-	fields := []any{
-		"method", req.Method,
-		"host", req.URL.Host,
-		"path", req.URL.EscapedPath(),
-		"status", 0,
-		"duration", duration,
-	}
-	if err != nil {
-		t.logger.Error(err, fmt.Sprintf("HTTP %s %s%s -> NETWORK ERROR (%s)", req.Method, req.URL.Host, req.URL.EscapedPath(), duration), fields...)
-		return nil, err
-	}
-
-	fields[7] = resp.StatusCode
-	statusText := http.StatusText(resp.StatusCode)
-	if resp.StatusCode >= http.StatusBadRequest {
-		fields = append(fields, "httpError", statusText)
-	}
-	t.logger.Info(
-		fmt.Sprintf("HTTP %s %s%s -> %d %s (%s)", req.Method, req.URL.Host, req.URL.EscapedPath(), resp.StatusCode, statusText, duration),
-		fields...,
-	)
-	return resp, nil
-}
-
-func metadataHTTPClient(logger logr.Logger) *http.Client {
-	retryClient := retryablehttp.NewClient()
-	retryClient.Logger = nil
-	httpClient := retryClient.StandardClient()
-	httpClient.Transport = metadataRoundTripper{next: httpClient.Transport, logger: logger}
-	return httpClient
 }
 
 func NewCloud(apiKey, apisecret string, zone egoscale.ZoneName) (*cloud, error) {

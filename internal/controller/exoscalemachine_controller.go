@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"time"
@@ -281,7 +282,7 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 	}
 
 	spec := domain.InstanceSpec{
-		Name:              machine.Name,
+		Name:              instanceName(machine.Namespace, machine.Name),
 		Template:          exoMachine.Spec.Template,
 		InstanceType:      exoMachine.Spec.InstanceType,
 		SSHKey:            exoMachine.Spec.SSHKey,
@@ -310,6 +311,15 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 	setMachineReady(exoMachine, metav1.ConditionTrue, clusterv1.ReadyReason, "Instance is running")
 
 	return ctrl.Result{}, nil
+}
+
+func instanceName(namespace, name string) string {
+	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(namespace+"\x00"+name)))[:8]
+	base := namespace + "-" + name
+	if len(base) > 255-len(hash)-1 {
+		base = base[:255-len(hash)-1]
+	}
+	return base + "-" + hash
 }
 
 func (r *ExoscaleMachineReconciler) reconcileDelete(

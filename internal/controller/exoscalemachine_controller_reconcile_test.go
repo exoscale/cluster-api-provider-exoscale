@@ -54,7 +54,7 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 
 	instanceSvc := mocks.NewInstanceService(t)
 	instanceSvc.EXPECT().UpsertInstance(ctx, domain.MachineID(machineUID.String()), (*uuid.UUID)(nil), domain.InstanceSpec{
-		Name:             machineName,
+		Name:             instanceName(ns, machineName),
 		Template:         templateID.String(),
 		InstanceType:     "standard.small",
 		SSHKey:           "ssh-key",

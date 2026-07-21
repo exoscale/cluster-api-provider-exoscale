@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	infrav1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
@@ -45,6 +46,13 @@ func TestExoscaleMachineReconciler_getExoscaleCluster(t *testing.T) {
 		assert.ErrorContains(t, err, `unable to fetch ExoscaleCluster "missing"`)
 		assert.True(t, apierrors.IsNotFound(err))
 	})
+}
+
+func TestInstanceName(t *testing.T) {
+	t.Parallel()
+
+	assert.NotEqual(t, instanceName("a-b", "c"), instanceName("a", "b-c"))
+	assert.Len(t, instanceName(strings.Repeat("a", 63), strings.Repeat("b", 253)), 255)
 }
 
 func TestExoscaleMachineReconciler_instanceService(t *testing.T) {

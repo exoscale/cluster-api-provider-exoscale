@@ -119,6 +119,7 @@ func TestExoscaleMachineReconciler_bootstrapData(t *testing.T) {
 	ctx := context.Background()
 	missingName := "missing"
 	emptyName := "empty"
+	emptyValueName := "empty-value"
 	tests := []struct {
 		name         string
 		secretName   *string
@@ -133,6 +134,15 @@ func TestExoscaleMachineReconciler_bootstrapData(t *testing.T) {
 			secretName: &emptyName,
 			secret:     &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: emptyName, Namespace: "default"}},
 			wantErr:    `bootstrap data secret "empty" has no value key`,
+		},
+		{
+			name:       "requires non-empty value",
+			secretName: &emptyValueName,
+			secret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: emptyValueName, Namespace: "default"},
+				Data:       map[string][]byte{"value": {}},
+			},
+			wantErr: `bootstrap data secret "empty-value" has an empty value`,
 		},
 	}
 

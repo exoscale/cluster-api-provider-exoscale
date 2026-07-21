@@ -378,6 +378,9 @@ func (r *ExoscaleMachineReconciler) bootstrapData(ctx context.Context, machine *
 	if !ok {
 		return "", fmt.Errorf("bootstrap data secret %q has no value key", *machine.Spec.Bootstrap.DataSecretName)
 	}
+	if len(data) == 0 {
+		return "", fmt.Errorf("bootstrap data secret %q has an empty value", *machine.Spec.Bootstrap.DataSecretName)
+	}
 	return string(data), nil
 }
 

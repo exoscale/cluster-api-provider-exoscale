@@ -44,6 +44,7 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 	elasticIPID := uuid.New()
 	controlPlaneSecurityGroupID := uuid.New()
 	nodeSecurityGroupID := uuid.New()
+	clusterID := uuid.NewString()
 	dataSecretName := bootstrapSecretName
 	clusterProvisioned := true
 
@@ -61,6 +62,10 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 		SecurityGroupIDs: []uuid.UUID{controlPlaneSecurityGroupID},
 		ElasticIPID:      &elasticIPID,
 		UserData:         "#cloud-config",
+		Labels: map[string]string{
+			instanceClusterIDLabel: clusterID,
+			instanceRoleLabel:      "control-plane",
+		},
 	}).Return(domain.Instance{ID: instanceID, State: "running", PublicIP: "1.2.3.4", PrivateIP: "10.0.0.1"}, nil)
 
 	client := fake.NewClientBuilder().
@@ -91,6 +96,7 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 					},
 				},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
+					ID:                       &clusterID,
 					Initialization:           infrav1alpha1.ExoscaleClusterInitializationStatus{Provisioned: &clusterProvisioned},
 					ControlPlaneEndpoint:     &infrav1alpha1.APIEndpointStatus{ID: elasticIPID.String()},
 					SecurityGroupControlPlan: &infrav1alpha1.SecurityGroupStatus{ID: controlPlaneSecurityGroupID.String()},

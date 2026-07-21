@@ -56,6 +56,11 @@ import (
 // reconciler that owns the lifecycle.
 const machineFinalizer = "exoscalemachine.infrastructure.cluster.x-k8s.io"
 
+const (
+	instanceClusterIDLabel = "cluster-api-provider-exoscale/cluster-id"
+	instanceRoleLabel      = "cluster-api-provider-exoscale/machine-role"
+)
+
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters;machines;machines/status,verbs=get;list;watch
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=exoscalemachines,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=exoscalemachines/status,verbs=get;update;patch
@@ -280,6 +285,13 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 		}
 		elasticIPID = &id
 	}
+	if exoCluster.Status.ID == nil {
+		return ctrl.Result{}, fmt.Errorf("cluster ID is not available")
+	}
+	machineRole := "worker"
+	if isControlPlane {
+		machineRole = "control-plane"
+	}
 
 	spec := domain.InstanceSpec{
 		Name:              instanceName(machine.Namespace, machine.Name),
@@ -290,6 +302,10 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 		ElasticIPID:       elasticIPID,
 		RootVolumeSizeGiB: exoMachine.Spec.RootVolumeSizeGiB,
 		UserData:          userData,
+		Labels: map[string]string{
+			instanceClusterIDLabel: *exoCluster.Status.ID,
+			instanceRoleLabel:      machineRole,
+		},
 	}
 
 	instance, err := instanceService.UpsertInstance(ctx, machineID, instanceID, spec)

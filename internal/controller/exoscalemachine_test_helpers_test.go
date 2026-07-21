@@ -110,6 +110,7 @@ func newReadyMachineReconciler(t *testing.T, instance domain.Instance, upsertErr
 	ctx := context.Background()
 	machineUID := uuid.New()
 	templateID := uuid.New()
+	clusterID := uuid.NewString()
 	dataSecretName := bootstrapSecretName
 	clusterProvisioned := true
 	scheme := newExoscaleMachineTestScheme(t)
@@ -125,6 +126,10 @@ func newReadyMachineReconciler(t *testing.T, instance domain.Instance, upsertErr
 			SSHKey:           "ssh-key",
 			SecurityGroupIDs: []uuid.UUID{*nodeSecurityGroupID},
 			UserData:         "#cloud-config",
+			Labels: map[string]string{
+				instanceClusterIDLabel: clusterID,
+				instanceRoleLabel:      "worker",
+			},
 		}).Return(instance, upsertErr)
 	}
 
@@ -156,6 +161,7 @@ func newReadyMachineReconciler(t *testing.T, instance domain.Instance, upsertErr
 					},
 				},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
+					ID:                &clusterID,
 					Initialization:    infrav1alpha1.ExoscaleClusterInitializationStatus{Provisioned: &clusterProvisioned},
 					SecurityGroupNode: securityGroupNode,
 				},

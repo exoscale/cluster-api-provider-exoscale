@@ -116,15 +116,15 @@ type MachineID string
 func (id MachineID) String() string { return string(id) }
 
 type InstanceSpec struct {
-	Name             string
-	Template         string
-	InstanceType     string
-	SSHKey           string
-	SecurityGroupIDs []uuid.UUID
-	ElasticIPID      *uuid.UUID
-	RootVolumeSizeGB *int64
-	UserData         string
-	Labels           map[string]string
+	Name              string
+	Template          string
+	InstanceType      string
+	SSHKey            string
+	SecurityGroupIDs  []uuid.UUID
+	ElasticIPID       *uuid.UUID
+	RootVolumeSizeGiB *int64
+	UserData          string
+	Labels            map[string]string
 }
 
 type ResolvedInstanceSpec struct {
@@ -133,7 +133,7 @@ type ResolvedInstanceSpec struct {
 	InstanceType     InstanceType
 	SSHKey           string
 	SecurityGroupIDs []uuid.UUID
-	DiskSizeGB       int64
+	DiskSizeGiB      int64
 	UserData         string
 	Labels           map[string]string
 }

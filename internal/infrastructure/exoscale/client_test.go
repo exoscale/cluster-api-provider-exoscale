@@ -401,7 +401,7 @@ func Test_cloud_CreateInstance(t *testing.T) {
 		InstanceType:     domain.InstanceType{ID: instanceTypeID.String(), Family: "standard", Size: "2"},
 		SSHKey:           "ssh-key",
 		SecurityGroupIDs: []uuid.UUID{securityGroupID},
-		DiskSizeGB:       20,
+		DiskSizeGiB:      20,
 		UserData:         "#cloud-config",
 		Labels:           map[string]string{"machine": "uid"},
 	}
@@ -760,7 +760,7 @@ func Test_cloud_CreateInstance_errors(t *testing.T) {
 	spec := domain.ResolvedInstanceSpec{
 		TemplateID:   templateID,
 		InstanceType: domain.InstanceType{ID: instanceTypeID, Family: "standard", Size: "2"},
-		DiskSizeGB:   10,
+		DiskSizeGiB:  10,
 	}
 	req := egoscale.CreateInstanceRequest{
 		DiskSize: int64(10),

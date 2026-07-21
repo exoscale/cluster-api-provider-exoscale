@@ -74,8 +74,8 @@ spec:
                   exoscale://<instance-uuid>. Set by the controller after the instance is created.
                   CAPI uses this field to match the InfraMachine to the Node object.
                 type: string
-              rootVolumeSizeGB:
-                description: rootVolumeSizeGB overrides the disk size declared by
+              rootVolumeSizeGiB:
+                description: rootVolumeSizeGiB overrides the disk size declared by
                   the template.
                 format: int64
                 maximum: 10000

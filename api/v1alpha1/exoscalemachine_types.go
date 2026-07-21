@@ -49,11 +49,11 @@ type ExoscaleMachineSpec struct {
 	// +optional
 	SecurityGroups []string `json:"securityGroups,omitempty"`
 
-	// rootVolumeSizeGB overrides the disk size declared by the template.
+	// rootVolumeSizeGiB overrides the disk size declared by the template.
 	// +optional
 	// +kubebuilder:validation:Minimum=10
 	// +kubebuilder:validation:Maximum=10000
-	RootVolumeSizeGB *int64 `json:"rootVolumeSizeGB,omitempty"`
+	RootVolumeSizeGiB *int64 `json:"rootVolumeSizeGiB,omitempty"`
 
 	// providerID is the cloud-provider identifier for this instance in the form
 	// exoscale://<instance-uuid>. Set by the controller after the instance is created.

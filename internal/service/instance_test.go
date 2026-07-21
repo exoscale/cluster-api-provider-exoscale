@@ -106,7 +106,7 @@ func Test_instanceService_UpsertInstance(t *testing.T) {
 						Name:         "machine-0",
 						TemplateID:   templateID,
 						InstanceType: instanceType,
-						DiskSizeGB:   25,
+						DiskSizeGiB:  25,
 						Labels: map[string]string{
 							machineUIDLabel: machineID.String(),
 						},
@@ -273,7 +273,7 @@ func Test_instanceService_resolveInstanceSpec(t *testing.T) {
 	securityGroupID := uuid.New()
 	template := domain.InstanceTemplate{ID: templateID, Name: "ubuntu", SizeBytes: 15 * bytesPerGiB}
 	instanceType := domain.InstanceType{ID: instanceTypeID, Family: "standard", Size: "small"}
-	rootVolumeSizeGB := int64(20)
+	rootVolumeSizeGiB := int64(20)
 
 	t.Run("resolves template name and default disk", func(t *testing.T) {
 		t.Parallel()
@@ -298,7 +298,7 @@ func Test_instanceService_resolveInstanceSpec(t *testing.T) {
 			TemplateID:       templateID,
 			InstanceType:     instanceType,
 			SecurityGroupIDs: []uuid.UUID{securityGroupID},
-			DiskSizeGB:       25,
+			DiskSizeGiB:      25,
 		}, output)
 	})
 
@@ -316,13 +316,13 @@ func Test_instanceService_resolveInstanceSpec(t *testing.T) {
 		}}
 
 		output, err := svc.resolveInstanceSpec(ctx, domain.InstanceSpec{
-			Template:         templateID.String(),
-			InstanceType:     "standard.small",
-			RootVolumeSizeGB: &rootVolumeSizeGB,
+			Template:          templateID.String(),
+			InstanceType:      "standard.small",
+			RootVolumeSizeGiB: &rootVolumeSizeGiB,
 		})
 
 		assert.NoError(t, err)
-		assert.Equal(t, int64(20), output.DiskSizeGB)
+		assert.Equal(t, int64(20), output.DiskSizeGiB)
 		assert.Equal(t, templateID, output.TemplateID)
 	})
 
@@ -340,12 +340,12 @@ func Test_instanceService_resolveInstanceSpec(t *testing.T) {
 		}}
 
 		_, err := svc.resolveInstanceSpec(ctx, domain.InstanceSpec{
-			Template:         "ubuntu",
-			InstanceType:     "standard.small",
-			RootVolumeSizeGB: &tooSmall,
+			Template:          "ubuntu",
+			InstanceType:      "standard.small",
+			RootVolumeSizeGiB: &tooSmall,
 		})
 
-		assert.ErrorContains(t, err, "rootVolumeSizeGB 10 is smaller than minimum size 15")
+		assert.ErrorContains(t, err, "rootVolumeSizeGiB 10 is smaller than minimum size 15")
 	})
 
 	t.Run("adds default headroom to smaller templates", func(t *testing.T) {
@@ -365,7 +365,27 @@ func Test_instanceService_resolveInstanceSpec(t *testing.T) {
 		output, err := svc.resolveInstanceSpec(ctx, domain.InstanceSpec{Template: "ubuntu", InstanceType: "standard.small"})
 
 		assert.NoError(t, err)
-		assert.Equal(t, int64(15), output.DiskSizeGB)
+		assert.Equal(t, int64(15), output.DiskSizeGiB)
+	})
+
+	t.Run("rounds template bytes up to GiB", func(t *testing.T) {
+		t.Parallel()
+
+		fractionalTemplate := template
+		fractionalTemplate.SizeBytes++
+		svc := instanceService{cloud: fakeInstanceCloud{
+			listTemplates: func(context.Context) ([]domain.InstanceTemplate, error) {
+				return []domain.InstanceTemplate{fractionalTemplate}, nil
+			},
+			listInstanceTypes: func(context.Context) ([]domain.InstanceType, error) {
+				return []domain.InstanceType{instanceType}, nil
+			},
+		}}
+
+		output, err := svc.resolveInstanceSpec(ctx, domain.InstanceSpec{Template: "ubuntu", InstanceType: "standard.small"})
+
+		assert.NoError(t, err)
+		assert.Equal(t, int64(26), output.DiskSizeGiB)
 	})
 
 	t.Run("selects the newest template with a matching name", func(t *testing.T) {
@@ -429,12 +449,12 @@ func Test_instanceService_resolveInstanceSpec(t *testing.T) {
 		}}
 
 		_, err := svc.resolveInstanceSpec(ctx, domain.InstanceSpec{
-			Template:         "ubuntu",
-			InstanceType:     "standard.small",
-			RootVolumeSizeGB: &tooSmall,
+			Template:          "ubuntu",
+			InstanceType:      "standard.small",
+			RootVolumeSizeGiB: &tooSmall,
 		})
 
-		assert.ErrorContains(t, err, "rootVolumeSizeGB 9 is smaller than minimum size 10")
+		assert.ErrorContains(t, err, "rootVolumeSizeGiB 9 is smaller than minimum size 10")
 	})
 }
 

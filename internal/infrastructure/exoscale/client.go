@@ -455,7 +455,7 @@ func (c *cloud) CreateInstance(ctx context.Context, spec domain.ResolvedInstance
 	}
 
 	req := egoscale.CreateInstanceRequest{
-		DiskSize: spec.DiskSizeGB,
+		DiskSize: spec.DiskSizeGiB,
 		InstanceType: &egoscale.InstanceType{
 			ID:     egoscale.UUID(spec.InstanceType.ID),
 			Family: egoscale.InstanceTypeFamily(spec.InstanceType.Family),

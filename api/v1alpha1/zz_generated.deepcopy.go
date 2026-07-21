@@ -285,8 +285,8 @@ func (in *ExoscaleMachineSpec) DeepCopyInto(out *ExoscaleMachineSpec) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
-	if in.RootVolumeSizeGB != nil {
-		in, out := &in.RootVolumeSizeGB, &out.RootVolumeSizeGB
+	if in.RootVolumeSizeGiB != nil {
+		in, out := &in.RootVolumeSizeGiB, &out.RootVolumeSizeGiB
 		*out = new(int64)
 		**out = **in
 	}

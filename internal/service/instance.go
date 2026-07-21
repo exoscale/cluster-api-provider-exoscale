@@ -21,9 +21,9 @@ const machineUIDLabel = "cluster-api-provider-exoscale/machine-uid"
 
 const bytesPerGiB int64 = 1024 * 1024 * 1024
 
-const minimumDiskSizeGB int64 = 10
+const minimumDiskSizeGiB int64 = 10
 
-const defaultDiskHeadroomGB int64 = 10
+const defaultDiskHeadroomGiB int64 = 10
 
 var _ domain.InstanceService = (*instanceService)(nil)
 
@@ -196,14 +196,14 @@ func (s *instanceService) resolveInstanceSpec(ctx context.Context, spec domain.I
 		return domain.ResolvedInstanceSpec{}, err
 	}
 
-	templateSizeGB := templateDiskSizeGB(template.SizeBytes)
-	minimumSizeGB := max(templateSizeGB, minimumDiskSizeGB)
-	diskSize := templateSizeGB + defaultDiskHeadroomGB
-	if spec.RootVolumeSizeGB != nil {
-		if *spec.RootVolumeSizeGB < minimumSizeGB {
-			return domain.ResolvedInstanceSpec{}, fmt.Errorf("rootVolumeSizeGB %d is smaller than minimum size %d", *spec.RootVolumeSizeGB, minimumSizeGB)
+	templateSizeGiB := templateDiskSizeGiB(template.SizeBytes)
+	minimumSizeGiB := max(templateSizeGiB, minimumDiskSizeGiB)
+	diskSize := templateSizeGiB + defaultDiskHeadroomGiB
+	if spec.RootVolumeSizeGiB != nil {
+		if *spec.RootVolumeSizeGiB < minimumSizeGiB {
+			return domain.ResolvedInstanceSpec{}, fmt.Errorf("rootVolumeSizeGiB %d is smaller than minimum size %d", *spec.RootVolumeSizeGiB, minimumSizeGiB)
 		}
-		diskSize = *spec.RootVolumeSizeGB
+		diskSize = *spec.RootVolumeSizeGiB
 	}
 
 	return domain.ResolvedInstanceSpec{
@@ -212,7 +212,7 @@ func (s *instanceService) resolveInstanceSpec(ctx context.Context, spec domain.I
 		InstanceType:     instanceType,
 		SSHKey:           spec.SSHKey,
 		SecurityGroupIDs: uniqueUUIDs(spec.SecurityGroupIDs),
-		DiskSizeGB:       diskSize,
+		DiskSizeGiB:      diskSize,
 		UserData:         spec.UserData,
 		Labels:           spec.Labels,
 	}, nil
@@ -277,7 +277,7 @@ func (s *instanceService) resolveInstanceType(ctx context.Context, instanceType 
 	return domain.InstanceType{}, fmt.Errorf("unable to find instance type %q", instanceType)
 }
 
-func templateDiskSizeGB(size int64) int64 {
+func templateDiskSizeGiB(size int64) int64 {
 	return (size + bytesPerGiB - 1) / bytesPerGiB
 }
 

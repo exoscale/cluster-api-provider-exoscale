@@ -281,14 +281,14 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 	}
 
 	spec := domain.InstanceSpec{
-		Name:             machine.Name,
-		Template:         exoMachine.Spec.Template,
-		InstanceType:     exoMachine.Spec.InstanceType,
-		SSHKey:           exoMachine.Spec.SSHKey,
-		SecurityGroupIDs: securityGroupIDs,
-		ElasticIPID:      elasticIPID,
-		RootVolumeSizeGB: exoMachine.Spec.RootVolumeSizeGB,
-		UserData:         userData,
+		Name:              machine.Name,
+		Template:          exoMachine.Spec.Template,
+		InstanceType:      exoMachine.Spec.InstanceType,
+		SSHKey:            exoMachine.Spec.SSHKey,
+		SecurityGroupIDs:  securityGroupIDs,
+		ElasticIPID:       elasticIPID,
+		RootVolumeSizeGiB: exoMachine.Spec.RootVolumeSizeGiB,
+		UserData:          userData,
 	}
 
 	instance, err := instanceService.UpsertInstance(ctx, machineID, instanceID, spec)

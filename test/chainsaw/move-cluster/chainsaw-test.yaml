@@ -1,0 +1,217 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: move-cluster
+spec:
+  timeouts:
+    delete: 10m
+    cleanup: 10m
+  bindings:
+    - name: zone
+      value: ($values.zone || 'bg-sof-1')
+    - name: clusterName
+      value: (join('-', ['capi-move-cluster', ($values.suffix || 'local')]))
+    - name: targetClusterName
+      value: (join('-', ['capx-move-target', ($values.suffix || 'local')]))
+    - name: namespace
+      value: default
+    - name: image
+      value: ($values.image || 'controller:latest')
+  steps:
+    - name: create target management cluster
+      try:
+        - script:
+            timeout: 10m
+            env:
+              - name: CAPX_IMAGE
+                value: ($image)
+              - name: TARGET_CLUSTER_NAME
+                value: ($targetClusterName)
+              - name: CLUSTER_NAME
+                value: ($clusterName)
+            content: |
+              set -eu
+              kind create cluster --name "$TARGET_CLUSTER_NAME" --kubeconfig ./target.kubeconfig
+              kind load docker-image --name "$TARGET_CLUSTER_NAME" "$CAPX_IMAGE"
+
+              ../../../bin/clusterctl init --kubeconfig ./target.kubeconfig --infrastructure -
+
+              rendered="$(mktemp)"
+              ../../../bin/kustomize build ../../../config/e2e-chainsaw > "$rendered"
+              kubectl --kubeconfig ./target.kubeconfig apply -f "$rendered"
+              rm -f "$rendered"
+              kubectl --kubeconfig ./target.kubeconfig \
+                --namespace cluster-api-provider-exoscale-system \
+                set image deployment/cluster-api-provider-exoscale-controller-manager manager="$CAPX_IMAGE"
+              kubectl --kubeconfig ./target.kubeconfig \
+                --namespace cluster-api-provider-exoscale-system \
+                wait deployment/cluster-api-provider-exoscale-controller-manager \
+                --for=condition=Available --timeout=5m
+
+              api_key="$(kubectl get secret exoscale --namespace default -o go-template='{{index .data "apikey" | base64decode}}')"
+              api_secret="$(kubectl get secret exoscale --namespace default -o go-template='{{index .data "apisecret" | base64decode}}')"
+              kubectl --kubeconfig ./target.kubeconfig --namespace default create secret generic exoscale \
+                --from-literal=apikey="$api_key" \
+                --from-literal=apisecret="$api_secret"
+      cleanup:
+        - script:
+            timeout: 10m
+            env:
+              - name: TARGET_CLUSTER_NAME
+                value: ($targetClusterName)
+              - name: CLUSTER_NAME
+                value: ($clusterName)
+            content: |
+              set -eu
+              if [ -f ./target.kubeconfig ]; then
+                kubectl --kubeconfig ./target.kubeconfig --namespace default \
+                  delete cluster "$CLUSTER_NAME" --ignore-not-found --wait --timeout=5m
+              fi
+              kind delete cluster --name "$TARGET_CLUSTER_NAME" || true
+              rm -f ./target.kubeconfig
+
+    - name: create source cluster
+      try:
+        - apply:
+            file: ../deploy-cluster/exoscalecluster.yaml
+        - apply:
+            file: ../deploy-cluster/cluster.yaml
+
+    - name: move cluster and verify recovered cloud resources
+      try:
+        - assert:
+            timeout: 5m
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleCluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+              (status.id == metadata.annotations."cluster-api-provider-exoscale/cluster-id"): true
+              (regex_match('^[0-9a-f-]{36}$', status.id)): true
+              status:
+                initialization:
+                  provisioned: true
+                conditions:
+                  - type: Ready
+                    reason: ReconcileSuccess
+                    status: "True"
+                controlPlaneEndpoint:
+                  (regex_match('^[0-9a-f-]{36}$', id)): true
+                securityGroupControlPlane:
+                  (regex_match('^[0-9a-f-]{36}$', id)): true
+                securityGroupNode:
+                  (regex_match('^[0-9a-f-]{36}$', id)): true
+        - assert:
+            timeout: 2m
+            resource:
+              apiVersion: cluster.x-k8s.io/v1beta2
+              kind: Cluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+              status:
+                initialization:
+                  infrastructureProvisioned: true
+        - script:
+            timeout: 10s
+            env:
+              - name: CLUSTER_NAME
+                value: ($clusterName)
+            content: |
+              # The test installs CAPX directly, so add clusterctl's provider discovery label.
+              kubectl label customresourcedefinition \
+                exoscaleclusters.infrastructure.cluster.x-k8s.io \
+                exoscalemachines.infrastructure.cluster.x-k8s.io \
+                clusterctl.cluster.x-k8s.io= --overwrite
+
+              # This focused fixture has no control plane, so satisfy clusterctl's move preflight.
+              transition_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+              kubectl patch cluster "$CLUSTER_NAME" --namespace default --subresource=status \
+                --type=merge \
+                --patch="{\"status\":{\"conditions\":[{\"type\":\"ControlPlaneInitialized\",\"status\":\"True\",\"reason\":\"TestControlPlaneInitialized\",\"message\":\"Set by focused move test\",\"lastTransitionTime\":\"$transition_time\"}]}}"
+        - script:
+            timeout: 10s
+            env:
+              - name: CLUSTER_NAME
+                value: ($clusterName)
+            content: |
+              kubectl get exoscalecluster "$CLUSTER_NAME" --namespace default \
+                -o jsonpath='{.status.id} {.status.controlPlaneEndpoint.id} {.status.securityGroupControlPlane.id} {.status.securityGroupNode.id}'
+            outputs:
+              - name: clusterID
+                value: (split($stdout, ' ')[0])
+              - name: elasticIPID
+                value: (split($stdout, ' ')[1])
+              - name: controlPlaneSecurityGroupID
+                value: (split($stdout, ' ')[2])
+              - name: nodeSecurityGroupID
+                value: (split($stdout, ' ')[3])
+        - script:
+            timeout: 5m
+            content: |
+              ../../../bin/clusterctl move \
+                --namespace default \
+                --to-kubeconfig ./target.kubeconfig
+        - assert:
+            clusters:
+              target:
+                kubeconfig: ./target.kubeconfig
+            cluster: target
+            timeout: 5m
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleCluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+                annotations:
+                  cluster-api-provider-exoscale/cluster-id: ($clusterID)
+              status:
+                id: ($clusterID)
+                initialization:
+                  provisioned: true
+                conditions:
+                  - type: Ready
+                    reason: ReconcileSuccess
+                    status: "True"
+                controlPlaneEndpoint:
+                  id: ($elasticIPID)
+                securityGroupControlPlane:
+                  id: ($controlPlaneSecurityGroupID)
+                securityGroupNode:
+                  id: ($nodeSecurityGroupID)
+
+    - name: delete moved cluster
+      clusters:
+        target:
+          kubeconfig: ./target.kubeconfig
+      cluster: target
+      try:
+        - script:
+            timeout: 3m
+            env:
+              - name: CLUSTER_NAME
+                value: ($clusterName)
+            content: |
+              set -eu
+              namespace=cluster-api-provider-exoscale-system
+              deployment=cluster-api-provider-exoscale-controller-manager
+              trap 'kubectl --namespace "$namespace" scale deployment/"$deployment" --replicas=1 >/dev/null 2>&1 || true' EXIT
+
+              kubectl --namespace "$namespace" scale deployment/"$deployment" --replicas=0
+              kubectl --namespace "$namespace" wait pod \
+                --selector=control-plane=controller-manager --for=delete --timeout=2m
+              kubectl patch exoscalecluster "$CLUSTER_NAME" --namespace default --subresource=status \
+                --type=json \
+                --patch='[{"op":"remove","path":"/status/controlPlaneEndpoint"},{"op":"remove","path":"/status/securityGroupControlPlane"},{"op":"remove","path":"/status/securityGroupNode"}]'
+              kubectl delete cluster "$CLUSTER_NAME" --namespace default --wait=false
+              kubectl wait exoscalecluster/"$CLUSTER_NAME" --namespace default \
+                --for=jsonpath='{.metadata.deletionTimestamp}' --timeout=1m
+        - delete:
+            timeout: 10m
+            ref:
+              apiVersion: cluster.x-k8s.io/v1beta2
+              kind: Cluster
+              name: ($clusterName)
+              namespace: ($namespace)

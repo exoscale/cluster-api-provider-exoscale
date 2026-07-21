@@ -22,9 +22,6 @@ spec:
     - jsonPath: .metadata.labels.cluster\.x-k8s\.io/cluster-name
       name: Cluster
       type: string
-    - jsonPath: .status.instanceState
-      name: State
-      type: string
     - jsonPath: .status.ready
       name: Ready
       type: string
@@ -223,10 +220,6 @@ spec:
                 description: instanceID is the Exoscale instance UUID assigned after
                   creation.
                 pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
-                type: string
-              instanceState:
-                description: instanceState is the Exoscale instance state (e.g. "running",
-                  "stopped").
                 type: string
               ready:
                 description: ready is true when the Exoscale instance is running and

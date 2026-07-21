@@ -297,8 +297,6 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 	}
 
 	exoMachine.Status.InstanceID = instance.ID.String()
-	exoMachine.Status.InstanceState = instance.State
-
 	if instance.State != "running" {
 		log.Info("instance not yet running", "state", instance.State)
 		setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.NotReadyReason, fmt.Sprintf("Instance state is %s", instance.State))

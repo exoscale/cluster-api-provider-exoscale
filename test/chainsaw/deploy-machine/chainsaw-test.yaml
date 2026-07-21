@@ -106,7 +106,6 @@ spec:
                   - type: Ready
                     reason: Ready
                     status: "True"
-                instanceState: running
                 addresses:
                   - type: ExternalIP
                     (address != ''): true

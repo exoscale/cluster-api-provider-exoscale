@@ -88,10 +88,6 @@ type ExoscaleMachineStatus struct {
 	// +kubebuilder:validation:Pattern=`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
 	InstanceID string `json:"instanceID,omitempty"`
 
-	// instanceState is the Exoscale instance state (e.g. "running", "stopped").
-	// +optional
-	InstanceState string `json:"instanceState,omitempty"`
-
 	// addresses are the network addresses of the instance (public and private IPs).
 	// +optional
 	// +listType=atomic
@@ -117,7 +113,6 @@ type ExoscaleMachineStatus struct {
 // +kubebuilder:resource:path=exoscalemachines,scope=Namespaced,categories=cluster-api,shortName=exom
 // +kubebuilder:storageversion
 // +kubebuilder:printcolumn:name="Cluster",type=string,JSONPath=`.metadata.labels.cluster\.x-k8s\.io/cluster-name`
-// +kubebuilder:printcolumn:name="State",type=string,JSONPath=`.status.instanceState`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.ready`
 // +kubebuilder:printcolumn:name="ProviderID",type=string,JSONPath=`.spec.providerID`
 // +kubebuilder:printcolumn:name="Machine",type=string,JSONPath=`.metadata.ownerReferences[?(@.kind=="Machine")].name`

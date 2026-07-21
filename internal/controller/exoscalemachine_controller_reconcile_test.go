@@ -165,7 +165,6 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 	updated := &infrav1alpha1.ExoscaleMachine{}
 	assert.NoError(t, client.Get(ctx, types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}, updated))
 	assert.Equal(t, instanceID.String(), updated.Status.InstanceID)
-	assert.Equal(t, "running", updated.Status.InstanceState)
 	assert.Equal(t, []clusterv1.MachineAddress{
 		{Type: clusterv1.MachineExternalIP, Address: "1.2.3.4"},
 		{Type: clusterv1.MachineInternalIP, Address: "10.0.0.1"},
@@ -264,7 +263,6 @@ func TestExoscaleMachineReconciler_Reconcile_prerequisites(t *testing.T) {
 			}
 			assert.Nil(t, updated.Spec.ProviderID)
 			assert.Empty(t, updated.Status.InstanceID)
-			assert.Empty(t, updated.Status.InstanceState)
 			assert.Empty(t, updated.Status.Addresses)
 			assert.Nil(t, updated.Status.Initialization.Provisioned)
 		})
@@ -363,7 +361,6 @@ func TestExoscaleMachineReconciler_Reconcile_waitsForInstanceRunning(t *testing.
 	updated := &infrav1alpha1.ExoscaleMachine{}
 	assert.NoError(t, client.Get(ctx, types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}, updated))
 	assert.Equal(t, instanceID.String(), updated.Status.InstanceID)
-	assert.Equal(t, "starting", updated.Status.InstanceState)
 	assert.False(t, updated.Status.Ready)
 	ready := apimeta.FindStatusCondition(updated.Status.Conditions, clusterv1.ReadyCondition)
 	if assert.NotNil(t, ready) {

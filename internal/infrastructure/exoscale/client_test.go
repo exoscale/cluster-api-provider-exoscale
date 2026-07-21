@@ -38,7 +38,7 @@ func Test_metadataRoundTripper(t *testing.T) {
 	}{
 		{name: "success", status: http.StatusAccepted, wantMessage: "-> 202 Accepted"},
 		{name: "HTTP error", status: http.StatusConflict, wantMessage: "-> 409 Conflict", wantHTTPError: "Conflict"},
-		{name: "network error", err: assert.AnError, wantMessage: "-> NETWORK ERROR"},
+		{name: "request error", err: assert.AnError, wantMessage: "-> REQUEST ERROR"},
 	}
 
 	for _, tc := range tests {

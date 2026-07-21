@@ -30,7 +30,7 @@ func (t metadataRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 		"duration", duration,
 	}
 	if err != nil {
-		t.logger.Error(err, fmt.Sprintf("HTTP %s %s%s -> NETWORK ERROR (%s)", req.Method, req.URL.Host, req.URL.EscapedPath(), duration), fields...)
+		t.logger.Error(err, fmt.Sprintf("HTTP %s %s%s -> REQUEST ERROR (%s)", req.Method, req.URL.Host, req.URL.EscapedPath(), duration), fields...)
 		return nil, err
 	}
 

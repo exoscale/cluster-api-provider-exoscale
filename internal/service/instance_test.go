@@ -646,7 +646,7 @@ type fakeInstanceCloud struct {
 	deleteInstance                  func(context.Context, uuid.UUID) error
 }
 
-func (f fakeInstanceCloud) ListInstances(ctx context.Context) ([]domain.Instance, error) {
+func (f fakeInstanceCloud) ListInstances(ctx context.Context, _ string) ([]domain.Instance, error) {
 	if f.listInstances == nil {
 		panic("unexpected ListInstances")
 	}

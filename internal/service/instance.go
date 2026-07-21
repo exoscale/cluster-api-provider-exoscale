@@ -38,7 +38,7 @@ type instanceService struct {
 // instanceCloud is declared locally so the service can be unit-tested with a
 // small fake without pulling in the full egoscale SDK.
 type instanceCloud interface {
-	ListInstances(ctx context.Context) ([]domain.Instance, error)
+	ListInstances(ctx context.Context, label string) ([]domain.Instance, error)
 	ListInstanceTypes(ctx context.Context) ([]domain.InstanceType, error)
 	GetTemplate(ctx context.Context, id uuid.UUID) (domain.InstanceTemplate, error)
 	ListTemplates(ctx context.Context) ([]domain.InstanceTemplate, error)
@@ -324,7 +324,7 @@ func (s *instanceService) DeleteInstance(ctx context.Context, machineID *domain.
 }
 
 func (s *instanceService) findInstancesByMachineID(ctx context.Context, machineID domain.MachineID) ([]domain.Instance, error) {
-	instances, err := s.cloud.ListInstances(ctx)
+	instances, err := s.cloud.ListInstances(ctx, machineUIDLabel+"="+machineID.String())
 	if err != nil {
 		return nil, err
 	}

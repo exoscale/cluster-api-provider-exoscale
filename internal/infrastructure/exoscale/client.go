@@ -352,13 +352,13 @@ func (c *cloud) ListSecurityGroupRules(ctx context.Context, sgID uuid.UUID) ([]d
 	return rules, nil
 }
 
-func (c *cloud) ListInstances(ctx context.Context) ([]domain.Instance, error) {
+func (c *cloud) ListInstances(ctx context.Context, label string) ([]domain.Instance, error) {
 	client, err := c.instances()
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := client.ListInstances(ctx)
+	resp, err := client.ListInstances(ctx, egoscale.ListInstancesWithLabels(label))
 	if err != nil {
 		return nil, fmt.Errorf("unable to list instances: %w", err)
 	}

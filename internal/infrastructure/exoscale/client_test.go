@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/exoscale/egoscale/v3/credentials"
 	"github.com/go-logr/logr/funcr"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/mock"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -431,6 +433,7 @@ func Test_cloud_ListInstances(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
+	label := "machine=uid"
 	id := uuid.New()
 	securityGroupID := uuid.New()
 	createdAt := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)
@@ -439,7 +442,15 @@ func Test_cloud_ListInstances(t *testing.T) {
 		t.Parallel()
 
 		exoClient := mocks.NewInstanceClient(t)
-		exoClient.EXPECT().ListInstances(ctx).
+		labelOption := mock.MatchedBy(func(opts []egoscale.ListInstancesOpt) bool {
+			if len(opts) != 1 {
+				return false
+			}
+			values := url.Values{}
+			opts[0](values)
+			return values.Get("labels") == label
+		})
+		exoClient.EXPECT().ListInstances(ctx, labelOption).
 			Return(&egoscale.ListInstancesResponse{Instances: []egoscale.ListInstancesResponseInstances{{
 				ID:             egoscale.UUID(id.String()),
 				Name:           "machine-0",
@@ -452,7 +463,7 @@ func Test_cloud_ListInstances(t *testing.T) {
 
 		client := cloud{instanceClient: exoClient}
 
-		output, err := client.ListInstances(ctx)
+		output, err := client.ListInstances(ctx, label)
 
 		assert.NoError(t, err)
 		assert.Equal(t, []domain.Instance{{
@@ -470,11 +481,11 @@ func Test_cloud_ListInstances(t *testing.T) {
 		t.Parallel()
 
 		exoClient := mocks.NewInstanceClient(t)
-		exoClient.EXPECT().ListInstances(ctx).Return(nil, assert.AnError)
+		exoClient.EXPECT().ListInstances(ctx, mock.Anything).Return(nil, assert.AnError)
 
 		client := cloud{instanceClient: exoClient}
 
-		output, err := client.ListInstances(ctx)
+		output, err := client.ListInstances(ctx, label)
 
 		assert.ErrorIs(t, err, assert.AnError)
 		assert.Nil(t, output)
@@ -484,11 +495,11 @@ func Test_cloud_ListInstances(t *testing.T) {
 		t.Parallel()
 
 		exoClient := mocks.NewInstanceClient(t)
-		exoClient.EXPECT().ListInstances(ctx).Return(&egoscale.ListInstancesResponse{
+		exoClient.EXPECT().ListInstances(ctx, mock.Anything).Return(&egoscale.ListInstancesResponse{
 			Instances: []egoscale.ListInstancesResponseInstances{{ID: "not-a-uuid"}},
 		}, nil)
 
-		output, err := (&cloud{instanceClient: exoClient}).ListInstances(ctx)
+		output, err := (&cloud{instanceClient: exoClient}).ListInstances(ctx, label)
 
 		assert.Nil(t, output)
 		assert.ErrorContains(t, err, "unable to parse instance ID")
@@ -498,14 +509,14 @@ func Test_cloud_ListInstances(t *testing.T) {
 		t.Parallel()
 
 		exoClient := mocks.NewInstanceClient(t)
-		exoClient.EXPECT().ListInstances(ctx).Return(&egoscale.ListInstancesResponse{
+		exoClient.EXPECT().ListInstances(ctx, mock.Anything).Return(&egoscale.ListInstancesResponse{
 			Instances: []egoscale.ListInstancesResponseInstances{{
 				ID:             egoscale.UUID(id.String()),
 				SecurityGroups: []egoscale.SecurityGroup{{ID: "not-a-uuid"}},
 			}},
 		}, nil)
 
-		output, err := (&cloud{instanceClient: exoClient}).ListInstances(ctx)
+		output, err := (&cloud{instanceClient: exoClient}).ListInstances(ctx, label)
 
 		assert.Nil(t, output)
 		assert.ErrorContains(t, err, "unable to parse instance security group ID")

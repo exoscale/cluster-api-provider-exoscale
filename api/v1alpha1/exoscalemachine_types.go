@@ -33,9 +33,11 @@ type ExoscaleMachineSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	Template string `json:"template"`
 
-	// instanceType is the Exoscale service offering (e.g. "standard-2", "gpu-plus").
+	// instanceType is an Exoscale instance type UUID or a value in [family.]size
+	// format (e.g. "small", "memory.large", "cpu.extra-large").
+	// The family defaults to "standard" when omitted.
 	// +required
-	// +kubebuilder:validation:Enum=small;medium;large;extra-large;huge;gpu-plus;gpu-2plus;dev;startup-2;startup-4;startup-8;startup-16;standard;standard-2;standard-4;standard-8;standard-12;standard-16;standard-20;standard-24;standard-32;memory;memory-2;memory-4;memory-8;memory-12;memory-16;memory-20;memory-24;compute;compute-2;compute-4;compute-8;compute-12;compute-16;compute-20;compute-24
+	// +kubebuilder:validation:MinLength=1
 	InstanceType string `json:"instanceType"`
 
 	// sshKey is the name of a pre-existing SSH key registered in the Exoscale project.

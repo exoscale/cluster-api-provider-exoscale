@@ -121,7 +121,7 @@ func newReadyMachineReconciler(t *testing.T, instance domain.Instance, upsertErr
 		instanceSvc.EXPECT().UpsertInstance(ctx, machineUID, (*uuid.UUID)(nil), domain.InstanceSpec{
 			Name:             machineName,
 			Template:         templateID.String(),
-			InstanceType:     "standard-2",
+			InstanceType:     "standard.small",
 			SSHKey:           "ssh-key",
 			SecurityGroupIDs: []uuid.UUID{*nodeSecurityGroupID},
 			UserData:         "#cloud-config",
@@ -194,7 +194,7 @@ func newReadyMachineReconciler(t *testing.T, instance domain.Instance, upsertErr
 				},
 				Spec: infrav1alpha1.ExoscaleMachineSpec{
 					Template:     templateID.String(),
-					InstanceType: "standard-2",
+					InstanceType: "standard.small",
 					SSHKey:       "ssh-key",
 				},
 			},

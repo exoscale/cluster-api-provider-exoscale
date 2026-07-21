@@ -1141,6 +1141,34 @@ func Test_cloud_GetSecurityGroup(t *testing.T) {
 	}
 }
 
+func Test_cloud_ListSecurityGroups(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	id := uuid.New()
+
+	t.Run("maps security groups", func(t *testing.T) {
+		exoClient := mocks.NewExoscaleClient(t)
+		exoClient.EXPECT().ListSecurityGroups(ctx).Return(&egoscale.ListSecurityGroupsResponse{
+			SecurityGroups: []egoscale.SecurityGroup{{ID: egoscale.UUID(id.String()), Name: "sg-name"}},
+		}, nil)
+
+		output, err := (&cloud{exoClient: exoClient}).ListSecurityGroups(ctx)
+
+		assert.NoError(t, err)
+		assert.Equal(t, []domain.SecurityGroup{{ID: id, Name: "sg-name"}}, output)
+	})
+
+	t.Run("returns list error", func(t *testing.T) {
+		exoClient := mocks.NewExoscaleClient(t)
+		exoClient.EXPECT().ListSecurityGroups(ctx).Return(nil, assert.AnError)
+
+		_, err := (&cloud{exoClient: exoClient}).ListSecurityGroups(ctx)
+
+		assert.ErrorIs(t, err, assert.AnError)
+	})
+}
+
 func Test_cloud_DeleteSecurityGroup(t *testing.T) {
 	t.Parallel()
 

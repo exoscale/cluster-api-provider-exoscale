@@ -246,6 +246,23 @@ func (c *cloud) GetSecurityGroup(ctx context.Context, id uuid.UUID) (domain.Secu
 	}, nil
 }
 
+func (c *cloud) ListSecurityGroups(ctx context.Context) ([]domain.SecurityGroup, error) {
+	resp, err := c.exoClient.ListSecurityGroups(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to list security groups: %w", err)
+	}
+
+	securityGroups := make([]domain.SecurityGroup, 0, len(resp.SecurityGroups))
+	for _, securityGroup := range resp.SecurityGroups {
+		id, err := uuid.Parse(securityGroup.ID.String())
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse security group ID: %w", err)
+		}
+		securityGroups = append(securityGroups, domain.SecurityGroup{ID: id, Name: securityGroup.Name})
+	}
+	return securityGroups, nil
+}
+
 func (c *cloud) DeleteSecurityGroup(ctx context.Context, id uuid.UUID) error {
 	op, err := c.exoClient.DeleteSecurityGroup(ctx, egoscale.UUID(id.String()))
 	if err != nil {

@@ -98,11 +98,18 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		}
 		if err := patchHelper.Patch(ctx, &exoCluster); err != nil {
 			log.Error(err, "unable to patch cluster", "cluster name", exoCluster.Name, "cluster id", exoCluster.Status.ID)
+			reterr = errors.Join(reterr, fmt.Errorf("unable to patch cluster: %w", err))
 		}
 	}()
 
-	if exoCluster.Status.ID == nil {
-		exoCluster.Status.ID = func() *string { v := uuid.New().String(); return &v }()
+	clusterIDChanged, err := ensureClusterID(&exoCluster)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if clusterIDChanged {
+		if err := patchHelper.Patch(ctx, &exoCluster); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 
 	log = log.WithValues("cluster_id", *exoCluster.Status.ID)
@@ -180,6 +187,36 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	})
 
 	return ctrl.Result{}, nil
+}
+
+func ensureClusterID(exoCluster *infrav1alpha1.ExoscaleCluster) (bool, error) {
+	annotationID := exoCluster.Annotations[domain.ClusterIDKey]
+	statusID := ""
+	if exoCluster.Status.ID != nil {
+		statusID = *exoCluster.Status.ID
+	}
+	if annotationID != "" && statusID != "" && annotationID != statusID {
+		return false, fmt.Errorf("cluster ID annotation %q does not match status %q", annotationID, statusID)
+	}
+
+	clusterID := annotationID
+	if clusterID == "" {
+		clusterID = statusID
+	}
+	if clusterID == "" {
+		clusterID = uuid.NewString()
+	}
+	if _, err := uuid.Parse(clusterID); err != nil {
+		return false, fmt.Errorf("invalid cluster ID %q: %w", clusterID, err)
+	}
+
+	changed := annotationID != clusterID || statusID != clusterID
+	if exoCluster.Annotations == nil {
+		exoCluster.Annotations = map[string]string{}
+	}
+	exoCluster.Annotations[domain.ClusterIDKey] = clusterID
+	exoCluster.Status.ID = &clusterID
+	return changed, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

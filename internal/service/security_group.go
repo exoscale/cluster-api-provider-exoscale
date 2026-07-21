@@ -41,6 +41,14 @@ func (s securityGroupService) UpsertSecurityGroup(ctx context.Context, clusterID
 
 		return sc, nil
 	} else {
+		existing, err := s.FindSecurityGroup(ctx, name)
+		if err != nil && !errors.Is(err, domain.ErrSecurityGroupNotFound) {
+			return domain.SecurityGroup{}, fmt.Errorf("error while searching for existing security group: %w", err)
+		} else if err == nil {
+			s.logger.Info("Found an existing security group by name, reusing it", "securityGroupID", existing.ID.String())
+			return existing, nil
+		}
+
 		s.logger.Info("Create security group")
 
 		id, err := s.cloud.CreateSecurityGroup(ctx, name)
@@ -54,6 +62,27 @@ func (s securityGroupService) UpsertSecurityGroup(ctx context.Context, clusterID
 
 		return sc, nil
 	}
+}
+
+func (s securityGroupService) FindSecurityGroup(ctx context.Context, name string) (domain.SecurityGroup, error) {
+	securityGroups, err := s.cloud.ListSecurityGroups(ctx)
+	if err != nil {
+		return domain.SecurityGroup{}, err
+	}
+	var match *domain.SecurityGroup
+	for i := range securityGroups {
+		if securityGroups[i].Name != name {
+			continue
+		}
+		if match != nil {
+			return domain.SecurityGroup{}, fmt.Errorf("multiple security groups named %q", name)
+		}
+		match = &securityGroups[i]
+	}
+	if match == nil {
+		return domain.SecurityGroup{}, domain.ErrSecurityGroupNotFound
+	}
+	return *match, nil
 }
 
 func (s *securityGroupService) DeleteSecurityGroup(ctx context.Context, id uuid.UUID) error {
@@ -116,6 +145,9 @@ func (s *securityGroupService) PurgeSecurityGroup(ctx context.Context, sgID uuid
 	s.logger.Info("Purge security group from rule", "securityGroupID", sgID.String())
 	rules, err := s.cloud.ListSecurityGroupRules(ctx, sgID)
 	if err != nil {
+		if errors.Is(err, domain.ErrSecurityGroupNotFound) {
+			return nil
+		}
 		return fmt.Errorf("unable to list rules from security group: %q: %w", sgID.String(), err)
 	}
 

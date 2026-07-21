@@ -10,6 +10,7 @@ import (
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/mocks"
 	egoscale "github.com/exoscale/egoscale/v3"
 	"github.com/go-logr/logr"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	v1 "k8s.io/api/core/v1"
@@ -110,6 +111,7 @@ func TestExoscaleClusterReconciler_Reconcile_nominal(t *testing.T) {
 
 				assert.Contains(t, updated.Finalizers, infrav1alpha1.ExoscaleClusterFinalizer)
 				assert.NotNil(t, updated.Status.ID)
+				assert.Equal(t, *updated.Status.ID, updated.Annotations[domain.ClusterIDKey])
 
 				ready := apimeta.FindStatusCondition(updated.Status.Conditions, infrav1alpha1.ReadyCondition)
 				if assert.NotNil(t, ready) {
@@ -361,6 +363,57 @@ func TestExoscaleClusterReconciler_Reconcile_nominal(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestEnsureClusterID(t *testing.T) {
+	t.Parallel()
+
+	t.Run("creates and persists a new ID", func(t *testing.T) {
+		cluster := &infrav1alpha1.ExoscaleCluster{}
+
+		changed, err := ensureClusterID(cluster)
+
+		assert.NoError(t, err)
+		assert.True(t, changed)
+		assert.NotNil(t, cluster.Status.ID)
+		assert.Equal(t, *cluster.Status.ID, cluster.Annotations[domain.ClusterIDKey])
+	})
+
+	t.Run("restores status from the persisted ID after move", func(t *testing.T) {
+		clusterID := uuid.NewString()
+		cluster := &infrav1alpha1.ExoscaleCluster{ObjectMeta: metav1.ObjectMeta{
+			Annotations: map[string]string{domain.ClusterIDKey: clusterID},
+		}}
+
+		changed, err := ensureClusterID(cluster)
+
+		assert.NoError(t, err)
+		assert.True(t, changed)
+		assert.Equal(t, clusterID, *cluster.Status.ID)
+	})
+
+	t.Run("backfills the annotation for existing clusters", func(t *testing.T) {
+		clusterID := uuid.NewString()
+		cluster := &infrav1alpha1.ExoscaleCluster{Status: infrav1alpha1.ExoscaleClusterStatus{ID: &clusterID}}
+
+		changed, err := ensureClusterID(cluster)
+
+		assert.NoError(t, err)
+		assert.True(t, changed)
+		assert.Equal(t, clusterID, cluster.Annotations[domain.ClusterIDKey])
+	})
+
+	t.Run("rejects conflicting identities", func(t *testing.T) {
+		statusID := uuid.NewString()
+		cluster := &infrav1alpha1.ExoscaleCluster{
+			ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{domain.ClusterIDKey: uuid.NewString()}},
+			Status:     infrav1alpha1.ExoscaleClusterStatus{ID: &statusID},
+		}
+
+		_, err := ensureClusterID(cluster)
+
+		assert.ErrorContains(t, err, "does not match")
+	})
 }
 
 func TestExoscaleClusterReconciler_Reconcile_error(t *testing.T) {

@@ -9,7 +9,10 @@ import (
 	"github.com/google/uuid"
 )
 
-const MachineUIDKey = "cluster-api-provider-exoscale/machine-uid"
+const (
+	ClusterIDKey  = "cluster-api-provider-exoscale/cluster-id"
+	MachineUIDKey = "cluster-api-provider-exoscale/machine-uid"
+)
 
 type ExoscaleClient interface {
 	Wait(ctx context.Context, op *egoscale.Operation, states ...egoscale.OperationState) (*egoscale.Operation, error)
@@ -22,6 +25,7 @@ type ExoscaleClient interface {
 
 	CreateSecurityGroup(ctx context.Context, req egoscale.CreateSecurityGroupRequest) (*egoscale.Operation, error)
 	GetSecurityGroup(ctx context.Context, id egoscale.UUID) (*egoscale.SecurityGroup, error)
+	ListSecurityGroups(ctx context.Context, opts ...egoscale.ListSecurityGroupsOpt) (*egoscale.ListSecurityGroupsResponse, error)
 	DeleteSecurityGroup(ctx context.Context, id egoscale.UUID) (*egoscale.Operation, error)
 	AddRuleToSecurityGroup(ctx context.Context, id egoscale.UUID, req egoscale.AddRuleToSecurityGroupRequest) (*egoscale.Operation, error)
 	DeleteRuleFromSecurityGroup(ctx context.Context, id egoscale.UUID, ruleID egoscale.UUID) (*egoscale.Operation, error)
@@ -36,6 +40,7 @@ type Cloud interface {
 
 	CreateSecurityGroup(ctx context.Context, name string) (uuid.UUID, error)
 	GetSecurityGroup(ctx context.Context, id uuid.UUID) (SecurityGroup, error)
+	ListSecurityGroups(ctx context.Context) ([]SecurityGroup, error)
 	DeleteSecurityGroup(ctx context.Context, id uuid.UUID) error
 
 	CreateSecurityGroupRule(ctx context.Context, sgID uuid.UUID, rule SecurityGroupRule) (uuid.UUID, error)
@@ -45,11 +50,13 @@ type Cloud interface {
 
 type ElasticIPService interface {
 	UpsertElasticIP(ctx context.Context, clusterID uuid.UUID, eipID *uuid.UUID, port int32) (ElasticIP, error)
+	FindElasticIP(ctx context.Context, clusterID uuid.UUID) (ElasticIP, error)
 	DeleteElasticIP(ctx context.Context, id uuid.UUID) error
 }
 
 type SecurityGroupService interface {
 	UpsertSecurityGroup(ctx context.Context, clusterID uuid.UUID, scID *uuid.UUID, name string) (SecurityGroup, error)
+	FindSecurityGroup(ctx context.Context, name string) (SecurityGroup, error)
 	DeleteSecurityGroup(ctx context.Context, id uuid.UUID) error
 	UpsertSecurityGroupRules(ctx context.Context, sgID uuid.UUID, desiredRules []SecurityGroupRule) ([]SecurityGroupRule, error)
 	PurgeSecurityGroup(ctx context.Context, sgID uuid.UUID) error

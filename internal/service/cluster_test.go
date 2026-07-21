@@ -582,6 +582,7 @@ func Test_clusterService_DeleteCluster(t *testing.T) {
 	eipID := uuid.New()
 	cpSGID := uuid.New()
 	nodeSGID := uuid.New()
+	clusterID := uuid.New()
 
 	tests := []struct {
 		name    string
@@ -638,6 +639,36 @@ func Test_clusterService_DeleteCluster(t *testing.T) {
 					SecurityGroupNode: &infrav1alpha1.SecurityGroupStatus{
 						ID: nodeSGID.String(),
 					},
+				},
+			},
+		},
+		{
+			name: "recovers resources after move before deletion",
+			cluster: infrav1alpha1.ExoscaleCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Status:     infrav1alpha1.ExoscaleClusterStatus{ID: new(clusterID.String())},
+			},
+			eipSvc: func(m *mocks.ElasticIPService) {
+				m.EXPECT().FindElasticIP(ctx, clusterID).Return(domain.ElasticIP{ID: eipID}, nil)
+				m.EXPECT().DeleteElasticIP(ctx, eipID).Return(nil)
+			},
+			sgSvc: func(m *mocks.SecurityGroupService) {
+				m.EXPECT().FindSecurityGroup(ctx, fmt.Sprintf("capi - %s - control plane", clusterID)).
+					Return(domain.SecurityGroup{ID: cpSGID, Name: "control-plane"}, nil)
+				m.EXPECT().FindSecurityGroup(ctx, fmt.Sprintf("capi - %s - node", clusterID)).
+					Return(domain.SecurityGroup{ID: nodeSGID, Name: "node"}, nil)
+				m.EXPECT().PurgeSecurityGroup(ctx, cpSGID).Return(nil)
+				m.EXPECT().PurgeSecurityGroup(ctx, nodeSGID).Return(nil)
+				m.EXPECT().DeleteSecurityGroup(ctx, cpSGID).Return(nil)
+				m.EXPECT().DeleteSecurityGroup(ctx, nodeSGID).Return(nil)
+			},
+			output: infrav1alpha1.ExoscaleCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Status: infrav1alpha1.ExoscaleClusterStatus{
+					ID:                       new(clusterID.String()),
+					ControlPlaneEndpoint:     &infrav1alpha1.APIEndpointStatus{ID: eipID.String()},
+					SecurityGroupControlPlan: &infrav1alpha1.SecurityGroupStatus{ID: cpSGID.String(), Name: "control-plane"},
+					SecurityGroupNode:        &infrav1alpha1.SecurityGroupStatus{ID: nodeSGID.String(), Name: "node"},
 				},
 			},
 		},

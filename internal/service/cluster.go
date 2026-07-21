@@ -141,6 +141,47 @@ func (s *clusterService) ReconcileCluster(ctx context.Context, cluster infrav1al
 }
 
 func (s *clusterService) DeleteCluster(ctx context.Context, cluster infrav1alpha1.ExoscaleCluster) (infrav1alpha1.ExoscaleCluster, error) {
+	var clusterID *uuid.UUID
+	if cluster.Status.ID != nil {
+		id, err := uuid.Parse(*cluster.Status.ID)
+		if err != nil {
+			return cluster, fmt.Errorf("unable to parse %q: %w: %w", ".status.id", errInvalidID, err)
+		}
+		clusterID = &id
+	}
+
+	if clusterID != nil {
+		if cluster.Status.ControlPlaneEndpoint == nil {
+			eip, err := s.elasticIPSvc.FindElasticIP(ctx, *clusterID)
+			if err != nil && !errors.Is(err, domain.ErrElasticIPNotFound) {
+				return cluster, fmt.Errorf("unable to recover elastic IP: %w", err)
+			}
+			if err == nil {
+				cluster.Status.ControlPlaneEndpoint = &infrav1alpha1.APIEndpointStatus{ID: eip.ID.String()}
+			}
+		}
+		if cluster.Status.SecurityGroupControlPlan == nil {
+			name := fmt.Sprintf("capi - %s - control plane", clusterID)
+			securityGroup, err := s.securityGroupSvc.FindSecurityGroup(ctx, name)
+			if err != nil && !errors.Is(err, domain.ErrSecurityGroupNotFound) {
+				return cluster, fmt.Errorf("unable to recover control-plane security group: %w", err)
+			}
+			if err == nil {
+				cluster.Status.SecurityGroupControlPlan = &infrav1alpha1.SecurityGroupStatus{ID: securityGroup.ID.String(), Name: securityGroup.Name}
+			}
+		}
+		if cluster.Status.SecurityGroupNode == nil {
+			name := fmt.Sprintf("capi - %s - node", clusterID)
+			securityGroup, err := s.securityGroupSvc.FindSecurityGroup(ctx, name)
+			if err != nil && !errors.Is(err, domain.ErrSecurityGroupNotFound) {
+				return cluster, fmt.Errorf("unable to recover node security group: %w", err)
+			}
+			if err == nil {
+				cluster.Status.SecurityGroupNode = &infrav1alpha1.SecurityGroupStatus{ID: securityGroup.ID.String(), Name: securityGroup.Name}
+			}
+		}
+	}
+
 	if cluster.Status.ControlPlaneEndpoint != nil {
 		id, err := uuid.Parse(cluster.Status.ControlPlaneEndpoint.ID)
 		if err != nil {

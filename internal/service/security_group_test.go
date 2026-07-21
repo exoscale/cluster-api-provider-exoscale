@@ -35,12 +35,20 @@ func Test_securityGroupService_UpsertSecurityGroup(t *testing.T) {
 		{
 			name: "nominal - no scID",
 			cloud: func(m *mocks.Cloud) {
+				m.EXPECT().ListSecurityGroups(ctx).Return(nil, nil)
 				m.EXPECT().
 					CreateSecurityGroup(ctx, name).
 					Return(sgID, nil)
 				m.EXPECT().
 					GetSecurityGroup(ctx, sgID).
 					Return(sg, nil)
+			},
+			output: sg,
+		},
+		{
+			name: "recovers existing security group by name",
+			cloud: func(m *mocks.Cloud) {
+				m.EXPECT().ListSecurityGroups(ctx).Return([]domain.SecurityGroup{sg}, nil)
 			},
 			output: sg,
 		},
@@ -88,6 +96,7 @@ func Test_securityGroupService_UpsertSecurityGroup(t *testing.T) {
 		{
 			name: "create security group returned an error - no scID",
 			cloud: func(m *mocks.Cloud) {
+				m.EXPECT().ListSecurityGroups(ctx).Return(nil, nil)
 				m.EXPECT().
 					CreateSecurityGroup(ctx, name).
 					Return(uuid.Nil, assert.AnError)
@@ -115,6 +124,10 @@ func Test_securityGroupService_UpsertSecurityGroup(t *testing.T) {
 			name: "get new security group returned an error - no scID",
 			cloud: func(m *mocks.Cloud) {
 				mock.InOrder(
+					m.EXPECT().
+						ListSecurityGroups(ctx).
+						Return(nil, nil).
+						Once(),
 					m.EXPECT().
 						CreateSecurityGroup(ctx, name).
 						Return(sgID, nil).
@@ -165,6 +178,16 @@ func Test_securityGroupService_UpsertSecurityGroup(t *testing.T) {
 			assert.Equal(t, ut.output, output)
 		})
 	}
+
+	t.Run("rejects duplicate security groups by name", func(t *testing.T) {
+		cloud := mocks.NewCloud(t)
+		cloud.EXPECT().ListSecurityGroups(ctx).Return([]domain.SecurityGroup{sg, {ID: uuid.New(), Name: name}}, nil)
+		svc := securityGroupService{cloud: cloud, logger: logr.Discard()}
+
+		_, err := svc.UpsertSecurityGroup(ctx, clusterID, nil, name)
+
+		assert.ErrorContains(t, err, "multiple security groups")
+	})
 }
 
 func Test_securityGroupService_DeleteSecurityGroup(t *testing.T) {
@@ -248,6 +271,14 @@ func Test_securityGroupService_PurgeSecurityGroup(t *testing.T) {
 				m.EXPECT().
 					ListSecurityGroupRules(ctx, sgID).
 					Return(nil, nil)
+			},
+		},
+		{
+			name: "nominal - security group already deleted",
+			cloud: func(m *mocks.Cloud) {
+				m.EXPECT().
+					ListSecurityGroupRules(ctx, sgID).
+					Return(nil, domain.ErrSecurityGroupNotFound)
 			},
 		},
 		{

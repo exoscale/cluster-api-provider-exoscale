@@ -230,6 +230,7 @@ func Test_elasticIPService_UpsertElasticIP(t *testing.T) {
 			assert.Equal(t, ut.output, output)
 		})
 	}
+
 }
 
 func Test_elasticIPService_DeleteElasticIP(t *testing.T) {
@@ -303,7 +304,7 @@ func Test_elasticIPService_findElasticIPByClusterID(t *testing.T) {
 	otherEIP := domain.ElasticIP{
 		ID:          uuid.New(),
 		IP:          "5.6.7.8",
-		Description: fmt.Sprintf("capi - clusterID - %s", uuid.New().String()),
+		Description: matchingEIP.Description + "-other",
 	}
 
 	tests := []struct {
@@ -351,10 +352,20 @@ func Test_elasticIPService_findElasticIPByClusterID(t *testing.T) {
 
 			svc := elasticIPService{cloud: cloud, logger: logr.Discard()}
 
-			output, err := svc.findElasticIPByClusterID(ctx, clusterID)
+			output, err := svc.FindElasticIP(ctx, clusterID)
 
 			assert.ErrorIs(t, err, ut.err)
 			assert.Equal(t, ut.output, output)
 		})
 	}
+
+	t.Run("rejects duplicate matching elastic IPs", func(t *testing.T) {
+		cloud := mocks.NewCloud(t)
+		cloud.EXPECT().ListElasticIPs(ctx).Return([]domain.ElasticIP{matchingEIP, {ID: uuid.New(), Description: matchingEIP.Description}}, nil)
+		svc := elasticIPService{cloud: cloud, logger: logr.Discard()}
+
+		_, err := svc.FindElasticIP(ctx, clusterID)
+
+		assert.ErrorContains(t, err, "multiple elastic IPs")
+	})
 }

@@ -14,6 +14,11 @@ type metadataRoundTripper struct {
 	logger logr.Logger
 }
 
+type requestError struct{ cause error }
+
+func (requestError) Error() string   { return "request failed" }
+func (e requestError) Unwrap() error { return e.cause }
+
 func (t metadataRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	started := time.Now()
 	resp, err := t.next.RoundTrip(req)
@@ -30,8 +35,12 @@ func (t metadataRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 		"duration", duration,
 	}
 	if err != nil {
-		t.logger.Error(err, fmt.Sprintf("HTTP %s %s%s -> REQUEST ERROR (%s)", req.Method, req.URL.Host, req.URL.EscapedPath(), duration), fields...)
-		return nil, err
+		safeErr := requestError{cause: err}
+		t.logger.Error(safeErr, fmt.Sprintf("HTTP %s %s%s -> REQUEST ERROR (%s)", req.Method, req.URL.Host, req.URL.EscapedPath(), duration), fields...)
+		// http.Client includes req.URL in its outer error, so remove the query after a terminal failure.
+		req.URL.RawQuery = ""
+		req.URL.ForceQuery = false
+		return nil, safeErr
 	}
 
 	statusText := http.StatusText(statusCode)

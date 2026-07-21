@@ -3,6 +3,7 @@ package exoscale
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -40,7 +41,7 @@ func Test_metadataRoundTripper(t *testing.T) {
 	}{
 		{name: "success", status: http.StatusAccepted, wantMessage: "-> 202 Accepted"},
 		{name: "HTTP error", status: http.StatusConflict, wantMessage: "-> 409 Conflict", wantHTTPError: "Conflict"},
-		{name: "request error", err: assert.AnError, wantMessage: "-> REQUEST ERROR"},
+		{name: "request error", err: errors.New("request failed for https://api.example.test/v2/instance?token=query-secret"), wantMessage: "-> REQUEST ERROR"},
 	}
 
 	for _, tc := range tests {
@@ -60,13 +61,14 @@ func Test_metadataRoundTripper(t *testing.T) {
 			assert.NoError(t, err)
 			req.Header.Set("Authorization", "header-secret")
 
-			resp, err := transport.RoundTrip(req)
+			resp, err := (&http.Client{Transport: transport}).Do(req)
 
 			assert.ErrorIs(t, err, tc.err)
 			if tc.err == nil {
 				assert.Equal(t, tc.status, resp.StatusCode)
 			} else {
 				assert.Nil(t, resp)
+				assert.NotContains(t, err.Error(), "query-secret")
 			}
 			assert.Contains(t, output, "HTTP POST api.example.test/v2/instance "+tc.wantMessage)
 			assert.Contains(t, output, `"method"="POST"`)

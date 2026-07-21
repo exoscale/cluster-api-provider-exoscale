@@ -44,7 +44,7 @@ func NewCloud(apiKey, apisecret string, zone egoscale.ZoneName) (*cloud, error) 
 	return newCloud(apiKey, apisecret, zone, nil)
 }
 
-func NewTracedCloud(apiKey, apisecret string, zone egoscale.ZoneName, logger logr.Logger) (*cloud, error) {
+func NewLoggingCloud(apiKey, apisecret string, zone egoscale.ZoneName, logger logr.Logger) (*cloud, error) {
 	return newCloud(apiKey, apisecret, zone, metadataHTTPClient(logger))
 }
 

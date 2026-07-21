@@ -69,7 +69,7 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
-	var exoscaleAPITraceLevel string
+	var exoscaleAPILogLevel string
 	var tlsOpts []func(*tls.Config)
 	// watchNamespace restricts the operator to a single namespace. This enables running multiple
 	// instances of the operator in the same cluster, each responsible for a different namespace,
@@ -100,8 +100,8 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
-	flag.StringVar(&exoscaleAPITraceLevel, "exoscale-api-trace-level", "off",
-		"Exoscale API trace level: off or metadata (method, host, path, status, duration).")
+	flag.StringVar(&exoscaleAPILogLevel, "exoscale-api-log-level", "off",
+		"Exoscale API log level: off or metadata (method, host, path, status, duration).")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -109,11 +109,11 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
-	if exoscaleAPITraceLevel != "off" && exoscaleAPITraceLevel != "metadata" {
-		setupLog.Error(fmt.Errorf("unsupported trace level %q", exoscaleAPITraceLevel), "Invalid Exoscale API trace level")
+	if exoscaleAPILogLevel != "off" && exoscaleAPILogLevel != "metadata" {
+		setupLog.Error(fmt.Errorf("unsupported API log level %q", exoscaleAPILogLevel), "Invalid Exoscale API log level")
 		os.Exit(1)
 	}
-	traceExoscaleAPI := exoscaleAPITraceLevel == "metadata"
+	logExoscaleAPI := exoscaleAPILogLevel == "metadata"
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
@@ -230,7 +230,7 @@ func main() {
 			zone egoscale.ZoneName,
 			logger logr.Logger,
 		) (domain.InstanceService, error) {
-			return service.NewInstanceService(apiKey, apiSecret, zone, logger, traceExoscaleAPI)
+			return service.NewInstanceService(apiKey, apiSecret, zone, logger, logExoscaleAPI)
 		},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "ExoscaleMachine")

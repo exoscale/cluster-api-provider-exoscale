@@ -53,11 +53,11 @@ type instanceCloud interface {
 // NewInstanceService returns an InstanceService bound to the given Exoscale
 // zone and credentials. The underlying egoscale client is created lazily by
 // the Cloud adapter.
-func NewInstanceService(apiKey, apiSecret string, zone egoscale.ZoneName, logger logr.Logger, traceAPI bool) (domain.InstanceService, error) {
+func NewInstanceService(apiKey, apiSecret string, zone egoscale.ZoneName, logger logr.Logger, logAPI bool) (domain.InstanceService, error) {
 	var cloudClient instanceCloud
 	var err error
-	if traceAPI {
-		cloudClient, err = exoscale.NewTracedCloud(apiKey, apiSecret, zone, logger)
+	if logAPI {
+		cloudClient, err = exoscale.NewLoggingCloud(apiKey, apiSecret, zone, logger)
 	} else {
 		cloudClient, err = exoscale.NewCloud(apiKey, apiSecret, zone)
 	}

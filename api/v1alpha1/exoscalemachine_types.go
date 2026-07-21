@@ -26,6 +26,7 @@ import (
 // Zone is inherited from ExoscaleCluster.spec.zone. If multi-zone support is
 // added later, use CAPI Machine.spec.failureDomain to pick the target zone
 // instead of duplicating zone here.
+// +kubebuilder:validation:XValidation:rule="self.template == oldSelf.template && self.instanceType == oldSelf.instanceType && has(self.sshKey) == has(oldSelf.sshKey) && (!has(self.sshKey) || self.sshKey == oldSelf.sshKey) && has(self.securityGroups) == has(oldSelf.securityGroups) && (!has(self.securityGroups) || self.securityGroups == oldSelf.securityGroups) && has(self.rootVolumeSizeGiB) == has(oldSelf.rootVolumeSizeGiB) && (!has(self.rootVolumeSizeGiB) || self.rootVolumeSizeGiB == oldSelf.rootVolumeSizeGiB)",message="instance creation fields are immutable"
 type ExoscaleMachineSpec struct {
 	// template is an Exoscale instance template UUID or exact template name.
 	// UUIDs pin an exact template; names are resolved at create time.

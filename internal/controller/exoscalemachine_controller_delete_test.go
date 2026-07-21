@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
@@ -42,6 +43,7 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 		name             string
 		ownerReference   bool
 		ownerMachine     bool
+		paused           bool
 		statusInstanceID string
 		deleteErr        error
 		wantService      bool
@@ -54,6 +56,7 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 		{name: "without either identifier removes finalizer"},
 		{name: "instance not found removes finalizer", ownerReference: true, statusInstanceID: instanceID.String(), deleteErr: domain.ErrInstanceNotFound, wantService: true},
 		{name: "delete error keeps finalizer", ownerReference: true, statusInstanceID: instanceID.String(), deleteErr: assert.AnError, wantService: true, wantErr: assert.AnError, wantFinalizer: true},
+		{name: "paused deletion keeps finalizer", ownerReference: true, paused: true, statusInstanceID: instanceID.String(), wantFinalizer: true},
 	}
 
 	for _, tc := range tests {
@@ -132,6 +135,9 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 					UID:        types.UID(machineUID.String()),
 				}}
 			}
+			if tc.paused {
+				exoMachine.Annotations = map[string]string{clusterv1.PausedAnnotation: ""}
+			}
 			objects = append(objects, exoMachine)
 
 			client := fake.NewClientBuilder().
@@ -170,6 +176,10 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 				assert.Contains(t, updated.Finalizers, machineFinalizer)
 			} else {
 				assert.NotContains(t, updated.Finalizers, machineFinalizer)
+			}
+			if tc.paused {
+				assert.NotNil(t, apimeta.FindStatusCondition(updated.Status.Conditions, clusterv1.PausedCondition))
+				assert.Nil(t, apimeta.FindStatusCondition(updated.Status.Conditions, clusterv1.ReadyCondition))
 			}
 		})
 	}

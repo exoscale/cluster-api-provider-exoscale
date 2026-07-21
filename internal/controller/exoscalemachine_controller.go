@@ -85,13 +85,42 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 	defer func() { reterr = patchExoscaleMachine(ctx, patchHelper, exoMachine, reterr) }()
 
+	if annotations.HasPaused(exoMachine) {
+		setMachinePaused(exoMachine)
+		return ctrl.Result{}, nil
+	}
+
 	deleting := !exoMachine.DeletionTimestamp.IsZero()
 	var machine *clusterv1.Machine
-	var machineID, instanceID *uuid.UUID
 	cluster, clusterErr := util.GetClusterFromMetadata(ctx, r.Client, exoMachine.ObjectMeta)
+	if !deleting && clusterErr != nil {
+		machine, err = util.GetOwnerMachine(ctx, r.Client, exoMachine.ObjectMeta)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if machine == nil {
+			log.Info("owner Machine not yet set, requeueing")
+			setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.NotReadyReason, "Waiting for owner Machine")
+			return ctrl.Result{}, nil
+		}
+		cluster, clusterErr = util.GetClusterFromMetadata(ctx, r.Client, machine.ObjectMeta)
+		if clusterErr != nil {
+			log.Info("Machine missing cluster label or cluster not found")
+			setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.NotReadyReason, "Waiting for Cluster")
+			return ctrl.Result{}, nil
+		}
+	}
+
+	if clusterErr == nil && annotations.IsPaused(cluster, exoMachine) {
+		log.Info("ExoscaleMachine or Cluster is paused")
+		setMachinePaused(exoMachine)
+		return ctrl.Result{}, nil
+	}
+	conditions.Delete(exoMachine, clusterv1.PausedCondition)
+
 	if deleting {
 		setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.DeletingReason, "Deleting instance")
-		machineID, instanceID, err = deletionInstanceIDs(exoMachine)
+		machineID, instanceID, err := deletionInstanceIDs(exoMachine)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -102,37 +131,6 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		if clusterErr != nil {
 			return ctrl.Result{}, clusterErr
 		}
-	} else if clusterErr != nil {
-		machine, err = util.GetOwnerMachine(ctx, r.Client, exoMachine.ObjectMeta)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		if machine == nil {
-			log.Info("owner Machine not yet set, requeueing")
-			setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.NotReadyReason, "Waiting for owner Machine")
-			return ctrl.Result{}, nil
-		}
-		cluster, err = util.GetClusterFromMetadata(ctx, r.Client, machine.ObjectMeta)
-		if err != nil {
-			log.Info("Machine missing cluster label or cluster not found")
-			setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.NotReadyReason, "Waiting for Cluster")
-			return ctrl.Result{}, nil
-		}
-	}
-
-	if annotations.IsPaused(cluster, exoMachine) {
-		log.Info("ExoscaleMachine or Cluster is paused")
-		conditions.Set(exoMachine, metav1.Condition{
-			Type:    clusterv1.PausedCondition,
-			Status:  metav1.ConditionTrue,
-			Reason:  clusterv1.PausedReason,
-			Message: "Reconciliation is paused",
-		})
-		return ctrl.Result{}, nil
-	}
-	conditions.Delete(exoMachine, clusterv1.PausedCondition)
-
-	if deleting {
 		exoCluster, err := r.getExoscaleCluster(ctx, cluster)
 		if err != nil {
 			return ctrl.Result{}, err
@@ -183,6 +181,15 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	return r.reconcileNormal(ctx, exoMachine, machine, exoCluster, instanceService, patchHelper)
+}
+
+func setMachinePaused(exoMachine *infrastructurev1alpha1.ExoscaleMachine) {
+	conditions.Set(exoMachine, metav1.Condition{
+		Type:    clusterv1.PausedCondition,
+		Status:  metav1.ConditionTrue,
+		Reason:  clusterv1.PausedReason,
+		Message: "Reconciliation is paused",
+	})
 }
 
 func (r *ExoscaleMachineReconciler) getExoscaleCluster(ctx context.Context, cluster *clusterv1.Cluster) (*infrastructurev1alpha1.ExoscaleCluster, error) {

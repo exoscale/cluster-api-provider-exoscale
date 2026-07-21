@@ -420,17 +420,19 @@ func (r *ExoscaleMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err != nil {
 		return err
 	}
+	machineToExoscaleMachine := filterExoscaleMachineRequests(
+		mgr.GetClient(),
+		r.WatchFilter,
+		util.MachineToInfrastructureMapFunc(infrastructurev1alpha1.GroupVersion.WithKind("ExoscaleMachine")),
+	)
+	clusterToExoscaleMachines = filterExoscaleMachineRequests(mgr.GetClient(), r.WatchFilter, clusterToExoscaleMachines)
 
 	return capicontrollerutil.NewControllerManagedBy(mgr, predicateLog).
 		For(&infrastructurev1alpha1.ExoscaleMachine{}).
 		WithEventFilter(capipredicates.ResourceHasFilterLabel(mgr.GetScheme(), predicateLog, r.WatchFilter)).
 		Watches(
 			&clusterv1.Machine{},
-			handler.EnqueueRequestsFromMapFunc(
-				util.MachineToInfrastructureMapFunc(
-					infrastructurev1alpha1.GroupVersion.WithKind("ExoscaleMachine"),
-				),
-			),
+			handler.EnqueueRequestsFromMapFunc(machineToExoscaleMachine),
 		).
 		// Cluster readiness and pause changes can affect every infrastructure machine in the cluster.
 		Watches(
@@ -446,6 +448,26 @@ func (r *ExoscaleMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		).
 		Named("exoscalemachine").
 		Complete(r)
+}
+
+func filterExoscaleMachineRequests(c client.Client, watchFilter string, mapper handler.MapFunc) handler.MapFunc {
+	if watchFilter == "" {
+		return mapper
+	}
+	return func(ctx context.Context, obj client.Object) []reconcile.Request {
+		requests := mapper(ctx, obj)
+		filtered := make([]reconcile.Request, 0, len(requests))
+		for _, request := range requests {
+			exoMachine := &infrastructurev1alpha1.ExoscaleMachine{}
+			if err := c.Get(ctx, request.NamespacedName, exoMachine); err != nil {
+				continue
+			}
+			if exoMachine.Labels[clusterv1.WatchLabel] == watchFilter {
+				filtered = append(filtered, request)
+			}
+		}
+		return filtered
+	}
 }
 
 func exoscaleClusterToExoscaleMachines(c client.Client, clusterToExoscaleMachines handler.MapFunc) handler.MapFunc {

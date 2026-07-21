@@ -53,3 +53,32 @@ func TestExoscaleClusterToExoscaleMachines(t *testing.T) {
 	}}))
 	assert.Equal(t, 1, calls)
 }
+
+func TestFilterExoscaleMachineRequests(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	scheme := newExoscaleMachineTestScheme(t)
+	matching := &infrav1alpha1.ExoscaleMachine{ObjectMeta: metav1.ObjectMeta{
+		Name:      "matching",
+		Namespace: "default",
+		Labels:    map[string]string{clusterv1.WatchLabel: "blue"},
+	}}
+	mismatched := &infrav1alpha1.ExoscaleMachine{ObjectMeta: metav1.ObjectMeta{
+		Name:      "mismatched",
+		Namespace: "default",
+		Labels:    map[string]string{clusterv1.WatchLabel: "green"},
+	}}
+	client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(matching, mismatched).Build()
+	requests := []reconcile.Request{
+		{NamespacedName: crclient.ObjectKeyFromObject(matching)},
+		{NamespacedName: crclient.ObjectKeyFromObject(mismatched)},
+		{NamespacedName: types.NamespacedName{Name: "missing", Namespace: "default"}},
+	}
+	mapper := func(context.Context, crclient.Object) []reconcile.Request { return requests }
+
+	filtered := filterExoscaleMachineRequests(client, "blue", mapper)
+
+	assert.Equal(t, requests[:1], filtered(ctx, &clusterv1.Cluster{}))
+	assert.Equal(t, requests, filterExoscaleMachineRequests(client, "", mapper)(ctx, &clusterv1.Cluster{}))
+}

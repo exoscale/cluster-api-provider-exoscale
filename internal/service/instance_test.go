@@ -16,7 +16,7 @@ func Test_instanceService_UpsertInstance(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	machineID := uuid.New()
+	machineID := domain.MachineID(uuid.NewString())
 	instanceID := uuid.New()
 	templateID := uuid.New()
 	elasticIPID := uuid.New()
@@ -474,14 +474,14 @@ func Test_instanceService_DeleteInstance(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	machineID := uuid.New()
+	machineID := domain.MachineID(uuid.NewString())
 	id := uuid.New()
 	staleID := uuid.New()
 	instance := domain.Instance{ID: id, Labels: map[string]string{machineUIDLabel: machineID.String()}}
 
 	tests := []struct {
 		name       string
-		machineID  *uuid.UUID
+		machineID  *domain.MachineID
 		instanceID *uuid.UUID
 		cloud      fakeInstanceCloud
 		err        error

@@ -247,9 +247,9 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 		return ctrl.Result{}, err
 	}
 
-	machineUID, err := uuid.Parse(string(machine.UID))
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("invalid Machine UID %q: %w", machine.UID, err)
+	machineID := domain.MachineID(machine.UID)
+	if machineID == "" {
+		return ctrl.Result{}, fmt.Errorf("Machine UID is empty")
 	}
 
 	var instanceID *uuid.UUID
@@ -295,7 +295,7 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 		UserData:         userData,
 	}
 
-	instance, err := instanceService.UpsertInstance(ctx, machineUID, instanceID, spec)
+	instance, err := instanceService.UpsertInstance(ctx, machineID, instanceID, spec)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("upsert instance: %w", err)
 	}
@@ -322,7 +322,8 @@ func (r *ExoscaleMachineReconciler) reconcileDelete(
 	ctx context.Context,
 	exoMachine *infrastructurev1alpha1.ExoscaleMachine,
 	instanceService domain.InstanceService,
-	machineID, instanceID *uuid.UUID,
+	machineID *domain.MachineID,
+	instanceID *uuid.UUID,
 ) error {
 	if err := instanceService.DeleteInstance(ctx, machineID, instanceID); err != nil && !errors.Is(err, domain.ErrInstanceNotFound) {
 		return fmt.Errorf("delete instance: %w", err)
@@ -332,7 +333,7 @@ func (r *ExoscaleMachineReconciler) reconcileDelete(
 	return nil
 }
 
-func deletionInstanceIDs(exoMachine *infrastructurev1alpha1.ExoscaleMachine) (*uuid.UUID, *uuid.UUID, error) {
+func deletionInstanceIDs(exoMachine *infrastructurev1alpha1.ExoscaleMachine) (*domain.MachineID, *uuid.UUID, error) {
 	var instanceID *uuid.UUID
 	if exoMachine.Status.InstanceID != "" {
 		id, err := uuid.Parse(exoMachine.Status.InstanceID)
@@ -353,10 +354,10 @@ func deletionInstanceIDs(exoMachine *infrastructurev1alpha1.ExoscaleMachine) (*u
 		if groupVersion.Group != clusterv1.GroupVersion.Group {
 			continue
 		}
-		machineID, err := uuid.Parse(string(ref.UID))
-		if err != nil {
-			return nil, nil, fmt.Errorf("invalid Machine owner UID %q: %w", ref.UID, err)
+		if ref.UID == "" {
+			return nil, instanceID, nil
 		}
+		machineID := domain.MachineID(ref.UID)
 		return &machineID, instanceID, nil
 	}
 

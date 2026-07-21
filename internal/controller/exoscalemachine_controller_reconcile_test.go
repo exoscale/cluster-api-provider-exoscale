@@ -53,7 +53,7 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 	_ = infrav1alpha1.AddToScheme(scheme)
 
 	instanceSvc := mocks.NewInstanceService(t)
-	instanceSvc.EXPECT().UpsertInstance(ctx, machineUID, (*uuid.UUID)(nil), domain.InstanceSpec{
+	instanceSvc.EXPECT().UpsertInstance(ctx, domain.MachineID(machineUID.String()), (*uuid.UUID)(nil), domain.InstanceSpec{
 		Name:             machineName,
 		Template:         templateID.String(),
 		InstanceType:     "standard.small",

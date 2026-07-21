@@ -107,9 +107,13 @@ type Cluster struct {
 }
 
 type InstanceService interface {
-	UpsertInstance(ctx context.Context, machineID uuid.UUID, instanceID *uuid.UUID, spec InstanceSpec) (Instance, error)
-	DeleteInstance(ctx context.Context, machineID, instanceID *uuid.UUID) error
+	UpsertInstance(ctx context.Context, machineID MachineID, instanceID *uuid.UUID, spec InstanceSpec) (Instance, error)
+	DeleteInstance(ctx context.Context, machineID *MachineID, instanceID *uuid.UUID) error
 }
+
+type MachineID string
+
+func (id MachineID) String() string { return string(id) }
 
 type InstanceSpec struct {
 	Name             string

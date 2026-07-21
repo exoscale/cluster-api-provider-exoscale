@@ -68,7 +68,7 @@ func NewInstanceService(apiKey, apiSecret string, zone egoscale.ZoneName, logger
 	return &instanceService{cloud: cloudClient, logger: logger}, nil
 }
 
-func (s *instanceService) UpsertInstance(ctx context.Context, machineID uuid.UUID, instanceID *uuid.UUID, spec domain.InstanceSpec) (domain.Instance, error) {
+func (s *instanceService) UpsertInstance(ctx context.Context, machineID domain.MachineID, instanceID *uuid.UUID, spec domain.InstanceSpec) (domain.Instance, error) {
 	spec.Labels = labelsWithMachineID(spec.Labels, machineID)
 	matches, err := s.findInstancesByMachineID(ctx, machineID)
 	if err != nil {
@@ -281,7 +281,7 @@ func templateDiskSizeGB(size int64) int64 {
 	return (size + bytesPerGiB - 1) / bytesPerGiB
 }
 
-func (s *instanceService) DeleteInstance(ctx context.Context, machineID, instanceID *uuid.UUID) error {
+func (s *instanceService) DeleteInstance(ctx context.Context, machineID *domain.MachineID, instanceID *uuid.UUID) error {
 	var statusInstance domain.Instance
 	if instanceID != nil {
 		var err error
@@ -323,7 +323,7 @@ func (s *instanceService) DeleteInstance(ctx context.Context, machineID, instanc
 	return nil
 }
 
-func (s *instanceService) findInstancesByMachineID(ctx context.Context, machineID uuid.UUID) ([]domain.Instance, error) {
+func (s *instanceService) findInstancesByMachineID(ctx context.Context, machineID domain.MachineID) ([]domain.Instance, error) {
 	instances, err := s.cloud.ListInstances(ctx)
 	if err != nil {
 		return nil, err
@@ -348,7 +348,7 @@ func oldestInstance(instances []domain.Instance) domain.Instance {
 	return oldest
 }
 
-func labelsWithMachineID(labels map[string]string, machineID uuid.UUID) map[string]string {
+func labelsWithMachineID(labels map[string]string, machineID domain.MachineID) map[string]string {
 	out := make(map[string]string, len(labels)+1)
 	maps.Copy(out, labels)
 	out[machineUIDLabel] = machineID.String()

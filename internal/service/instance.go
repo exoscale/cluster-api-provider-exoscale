@@ -263,42 +263,18 @@ func (s *instanceService) resolveInstanceType(ctx context.Context, instanceType 
 		return domain.InstanceType{}, fmt.Errorf("unable to list instance types: %w", err)
 	}
 
-	normalized := normalizeInstanceType(instanceType)
+	normalized := strings.ToLower(instanceType)
+	family, size, qualified := strings.Cut(normalized, ".")
+	if !qualified {
+		family, size = "standard", normalized
+	}
 	for _, candidate := range instanceTypes {
-		if candidate.ID == normalized || instanceTypeKey(candidate) == normalized ||
-			(!strings.Contains(normalized, ".") && candidate.Family == "standard" && candidate.Size == normalized) {
+		if strings.EqualFold(candidate.ID, instanceType) || candidate.Family == family && candidate.Size == size {
 			return candidate, nil
 		}
 	}
 
 	return domain.InstanceType{}, fmt.Errorf("unable to find instance type %q", instanceType)
-}
-
-func normalizeInstanceType(instanceType string) string {
-	if strings.Contains(instanceType, ".") {
-		return instanceType
-	}
-
-	for _, family := range []string{"standard", "memory", "startup"} {
-		if suffix, ok := strings.CutPrefix(instanceType, family+"-"); ok {
-			return family + "." + suffix
-		}
-	}
-	if suffix, ok := strings.CutPrefix(instanceType, "compute-"); ok {
-		return "cpu." + suffix
-	}
-	if instanceType == "compute" {
-		return "cpu"
-	}
-
-	return instanceType
-}
-
-func instanceTypeKey(instanceType domain.InstanceType) string {
-	if instanceType.Size == "" {
-		return instanceType.Family
-	}
-	return instanceType.Family + "." + instanceType.Size
 }
 
 func templateDiskSizeGB(size int64) int64 {

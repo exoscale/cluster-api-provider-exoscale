@@ -56,7 +56,7 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 	instanceSvc.EXPECT().UpsertInstance(ctx, machineUID, (*uuid.UUID)(nil), domain.InstanceSpec{
 		Name:             machineName,
 		Template:         templateID.String(),
-		InstanceType:     "standard-2",
+		InstanceType:     "standard.small",
 		SSHKey:           "ssh-key",
 		SecurityGroupIDs: []uuid.UUID{controlPlaneSecurityGroupID},
 		ElasticIPID:      &elasticIPID,
@@ -134,7 +134,7 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 				},
 				Spec: infrav1alpha1.ExoscaleMachineSpec{
 					Template:     templateID.String(),
-					InstanceType: "standard-2",
+					InstanceType: "standard.small",
 					SSHKey:       "ssh-key",
 				},
 				Status: infrav1alpha1.ExoscaleMachineStatus{

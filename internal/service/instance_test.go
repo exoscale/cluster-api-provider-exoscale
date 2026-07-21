@@ -22,8 +22,8 @@ func Test_instanceService_UpsertInstance(t *testing.T) {
 	elasticIPID := uuid.New()
 	instanceTypeID := uuid.New().String()
 	template := domain.InstanceTemplate{ID: templateID, Name: "ubuntu", SizeBytes: 15 * bytesPerGiB}
-	instanceType := domain.InstanceType{ID: instanceTypeID, Family: "standard", Size: "2"}
-	spec := domain.InstanceSpec{Name: "machine-0", Template: "ubuntu", InstanceType: "standard-2"}
+	instanceType := domain.InstanceType{ID: instanceTypeID, Family: "standard", Size: "small"}
+	spec := domain.InstanceSpec{Name: "machine-0", Template: "ubuntu", InstanceType: "standard.small"}
 	instance := domain.Instance{ID: instanceID, Labels: map[string]string{machineUIDLabel: machineID.String()}}
 
 	tests := []struct {
@@ -272,7 +272,7 @@ func Test_instanceService_resolveInstanceSpec(t *testing.T) {
 	instanceTypeID := uuid.New().String()
 	securityGroupID := uuid.New()
 	template := domain.InstanceTemplate{ID: templateID, Name: "ubuntu", SizeBytes: 15 * bytesPerGiB}
-	instanceType := domain.InstanceType{ID: instanceTypeID, Family: "standard", Size: "2"}
+	instanceType := domain.InstanceType{ID: instanceTypeID, Family: "standard", Size: "small"}
 	rootVolumeSizeGB := int64(20)
 
 	t.Run("resolves template name and default disk", func(t *testing.T) {
@@ -289,7 +289,7 @@ func Test_instanceService_resolveInstanceSpec(t *testing.T) {
 
 		output, err := svc.resolveInstanceSpec(ctx, domain.InstanceSpec{
 			Template:         "ubuntu",
-			InstanceType:     "standard-2",
+			InstanceType:     "standard.small",
 			SecurityGroupIDs: []uuid.UUID{securityGroupID, securityGroupID},
 		})
 
@@ -317,7 +317,7 @@ func Test_instanceService_resolveInstanceSpec(t *testing.T) {
 
 		output, err := svc.resolveInstanceSpec(ctx, domain.InstanceSpec{
 			Template:         templateID.String(),
-			InstanceType:     "standard-2",
+			InstanceType:     "standard.small",
 			RootVolumeSizeGB: &rootVolumeSizeGB,
 		})
 
@@ -341,7 +341,7 @@ func Test_instanceService_resolveInstanceSpec(t *testing.T) {
 
 		_, err := svc.resolveInstanceSpec(ctx, domain.InstanceSpec{
 			Template:         "ubuntu",
-			InstanceType:     "standard-2",
+			InstanceType:     "standard.small",
 			RootVolumeSizeGB: &tooSmall,
 		})
 
@@ -362,7 +362,7 @@ func Test_instanceService_resolveInstanceSpec(t *testing.T) {
 			},
 		}}
 
-		output, err := svc.resolveInstanceSpec(ctx, domain.InstanceSpec{Template: "ubuntu", InstanceType: "standard-2"})
+		output, err := svc.resolveInstanceSpec(ctx, domain.InstanceSpec{Template: "ubuntu", InstanceType: "standard.small"})
 
 		assert.NoError(t, err)
 		assert.Equal(t, int64(15), output.DiskSizeGB)
@@ -387,7 +387,7 @@ func Test_instanceService_resolveInstanceSpec(t *testing.T) {
 			},
 		}}
 
-		output, err := svc.resolveInstanceSpec(ctx, domain.InstanceSpec{Template: "ubuntu", InstanceType: "standard-2"})
+		output, err := svc.resolveInstanceSpec(ctx, domain.InstanceSpec{Template: "ubuntu", InstanceType: "standard.small"})
 
 		assert.NoError(t, err)
 		assert.Equal(t, newer.ID, output.TemplateID)
@@ -430,7 +430,7 @@ func Test_instanceService_resolveInstanceSpec(t *testing.T) {
 
 		_, err := svc.resolveInstanceSpec(ctx, domain.InstanceSpec{
 			Template:         "ubuntu",
-			InstanceType:     "standard-2",
+			InstanceType:     "standard.small",
 			RootVolumeSizeGB: &tooSmall,
 		})
 
@@ -441,35 +441,33 @@ func Test_instanceService_resolveInstanceSpec(t *testing.T) {
 func Test_instanceService_resolveInstanceType(t *testing.T) {
 	t.Parallel()
 
-	want := domain.InstanceType{ID: uuid.NewString(), Family: "standard", Size: "small"}
+	standard := domain.InstanceType{ID: uuid.NewString(), Family: "standard", Size: "small"}
+	memory := domain.InstanceType{ID: uuid.NewString(), Family: "memory", Size: "large"}
+	cpu := domain.InstanceType{ID: uuid.NewString(), Family: "cpu", Size: "extra-large"}
 	svc := instanceService{cloud: fakeInstanceCloud{
 		listInstanceTypes: func(context.Context) ([]domain.InstanceType, error) {
-			return []domain.InstanceType{want}, nil
+			return []domain.InstanceType{standard, memory, cpu}, nil
 		},
 	}}
 
-	got, err := svc.resolveInstanceType(context.Background(), "small")
-
-	assert.NoError(t, err)
-	assert.Equal(t, want, got)
-}
-
-func Test_normalizeInstanceType(t *testing.T) {
-	t.Parallel()
-
-	tests := map[string]string{
-		"small":      "small",
-		"standard-2": "standard.2",
-		"memory-4":   "memory.4",
-		"compute-8":  "cpu.8",
-		"cpu.8":      "cpu.8",
+	tests := map[string]domain.InstanceType{
+		"small":           standard,
+		"standard.small":  standard,
+		"memory.large":    memory,
+		"cpu.extra-large": cpu,
+		memory.ID:         memory,
 	}
-
-	for input, expected := range tests {
+	for input, want := range tests {
 		t.Run(input, func(t *testing.T) {
-			assert.Equal(t, expected, normalizeInstanceType(input))
+			got, err := svc.resolveInstanceType(context.Background(), input)
+
+			assert.NoError(t, err)
+			assert.Equal(t, want, got)
 		})
 	}
+
+	_, err := svc.resolveInstanceType(context.Background(), "memory.unknown")
+	assert.ErrorContains(t, err, `unable to find instance type "memory.unknown"`)
 }
 
 func Test_instanceService_DeleteInstance(t *testing.T) {

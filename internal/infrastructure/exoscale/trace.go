@@ -18,11 +18,15 @@ func (t metadataRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 	started := time.Now()
 	resp, err := t.next.RoundTrip(req)
 	duration := time.Since(started).Round(time.Millisecond)
+	statusCode := 0
+	if resp != nil {
+		statusCode = resp.StatusCode
+	}
 	fields := []any{
 		"method", req.Method,
 		"host", req.URL.Host,
 		"path", req.URL.EscapedPath(),
-		"status", 0,
+		"status", statusCode,
 		"duration", duration,
 	}
 	if err != nil {
@@ -30,13 +34,12 @@ func (t metadataRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 		return nil, err
 	}
 
-	fields[7] = resp.StatusCode
-	statusText := http.StatusText(resp.StatusCode)
-	if resp.StatusCode >= http.StatusBadRequest {
+	statusText := http.StatusText(statusCode)
+	if statusCode >= http.StatusBadRequest {
 		fields = append(fields, "httpError", statusText)
 	}
 	t.logger.Info(
-		fmt.Sprintf("HTTP %s %s%s -> %d %s (%s)", req.Method, req.URL.Host, req.URL.EscapedPath(), resp.StatusCode, statusText, duration),
+		fmt.Sprintf("HTTP %s %s%s -> %d %s (%s)", req.Method, req.URL.Host, req.URL.EscapedPath(), statusCode, statusText, duration),
 		fields...,
 	)
 	return resp, nil

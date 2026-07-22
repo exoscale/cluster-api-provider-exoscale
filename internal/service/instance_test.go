@@ -94,7 +94,7 @@ func Test_instanceService_UpsertInstance(t *testing.T) {
 					Name:         "machine-0",
 					TemplateID:   templateID,
 					InstanceType: instanceType,
-					DiskSizeGiB:  25,
+					DiskSizeGiB:  15,
 					Labels:       labels,
 				}).Return(instanceID, nil)
 				m.EXPECT().GetInstance(ctx, instanceID).Return(instance, nil)
@@ -242,7 +242,7 @@ func Test_instanceService_resolveInstanceSpec(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, domain.ResolvedInstanceSpec{
 			TemplateID: templateID, InstanceType: instanceType,
-			SecurityGroupIDs: []uuid.UUID{securityGroupID}, DiskSizeGiB: 25,
+			SecurityGroupIDs: []uuid.UUID{securityGroupID}, DiskSizeGiB: 15,
 		}, output)
 	})
 
@@ -274,7 +274,7 @@ func Test_instanceService_resolveInstanceSpec(t *testing.T) {
 		assert.ErrorContains(t, err, "rootVolumeSizeGiB 10 is smaller than minimum size 15")
 	})
 
-	t.Run("adds default headroom to smaller templates", func(t *testing.T) {
+	t.Run("applies provider minimum to smaller templates", func(t *testing.T) {
 		smallTemplate := template
 		smallTemplate.SizeBytes = 5 * bytesPerGiB
 		cloud := mocks.NewInstanceCloud(t)
@@ -284,7 +284,7 @@ func Test_instanceService_resolveInstanceSpec(t *testing.T) {
 		output, err := (&instanceService{cloud: cloud}).resolveInstanceSpec(ctx, domain.InstanceSpec{Template: "ubuntu", InstanceType: "standard.small"})
 
 		assert.NoError(t, err)
-		assert.Equal(t, int64(15), output.DiskSizeGiB)
+		assert.Equal(t, int64(10), output.DiskSizeGiB)
 	})
 
 	t.Run("rounds template bytes up to GiB", func(t *testing.T) {
@@ -297,7 +297,7 @@ func Test_instanceService_resolveInstanceSpec(t *testing.T) {
 		output, err := (&instanceService{cloud: cloud}).resolveInstanceSpec(ctx, domain.InstanceSpec{Template: "ubuntu", InstanceType: "standard.small"})
 
 		assert.NoError(t, err)
-		assert.Equal(t, int64(26), output.DiskSizeGiB)
+		assert.Equal(t, int64(16), output.DiskSizeGiB)
 	})
 
 	t.Run("selects newest matching template", func(t *testing.T) {

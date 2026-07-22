@@ -19,8 +19,6 @@ const bytesPerGiB int64 = 1024 * 1024 * 1024
 
 const minimumDiskSizeGiB int64 = 10
 
-const defaultDiskHeadroomGiB int64 = 10
-
 var _ domain.InstanceService = (*instanceService)(nil)
 
 // instanceService implements domain.InstanceService on top of the domain
@@ -207,7 +205,7 @@ func (s *instanceService) resolveInstanceSpec(ctx context.Context, spec domain.I
 
 	templateSizeGiB := templateDiskSizeGiB(template.SizeBytes)
 	minimumSizeGiB := max(templateSizeGiB, minimumDiskSizeGiB)
-	diskSize := templateSizeGiB + defaultDiskHeadroomGiB
+	diskSize := minimumSizeGiB
 	if spec.RootVolumeSizeGiB != nil {
 		if *spec.RootVolumeSizeGiB < minimumSizeGiB {
 			return domain.ResolvedInstanceSpec{}, fmt.Errorf("rootVolumeSizeGiB %d is smaller than minimum size %d", *spec.RootVolumeSizeGiB, minimumSizeGiB)

@@ -1,8 +1,18 @@
-# cluster-api-provider-exoscale
-// TODO(user): Add simple overview of use/purpose
+# Cluster API Provider Exoscale
 
-## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+Kubernetes-native declarative infrastructure for Exoscale.
+
+## What is the Cluster API Provider Exoscale?
+
+The Cluster API Provider Exoscale (CAPX) is an infrastructure provider for
+[Cluster API](https://cluster-api.sigs.k8s.io/). It provides declarative APIs
+for provisioning and managing the Exoscale infrastructure used by self-managed
+Kubernetes clusters.
+
+CAPX reconciles `ExoscaleCluster` and `ExoscaleMachine` resources into Exoscale
+Elastic IPs, security groups, and Compute instances. Cluster API bootstrap and
+control-plane providers manage the Kubernetes lifecycle on top of that
+infrastructure.
 
 ## Run locally
 

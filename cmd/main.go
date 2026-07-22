@@ -41,10 +41,7 @@ import (
 
 	infrastructurev1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/controller"
-	"github.com/exoscale/cluster-api-provider-exoscale/internal/domain"
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/service"
-	egoscale "github.com/exoscale/egoscale/v3"
-	"github.com/go-logr/logr"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -222,16 +219,10 @@ func main() {
 		os.Exit(1)
 	}
 	if err := (&controller.ExoscaleMachineReconciler{
-		Client:      mgr.GetClient(),
-		Scheme:      mgr.GetScheme(),
-		WatchFilter: watchFilter,
-		NewInstanceService: func(
-			apiKey, apiSecret string,
-			zone egoscale.ZoneName,
-			logger logr.Logger,
-		) (domain.InstanceService, error) {
-			return service.NewInstanceService(apiKey, apiSecret, zone, logger, logExoscaleAPI)
-		},
+		Client:             mgr.GetClient(),
+		Scheme:             mgr.GetScheme(),
+		WatchFilter:        watchFilter,
+		NewInstanceService: service.NewInstanceServiceFactory(logExoscaleAPI),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "ExoscaleMachine")
 		os.Exit(1)

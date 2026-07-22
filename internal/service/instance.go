@@ -46,6 +46,13 @@ type instanceCloud interface {
 	DeleteInstance(ctx context.Context, id uuid.UUID) error
 }
 
+// NewInstanceServiceFactory returns an instance-service factory configured for API logging.
+func NewInstanceServiceFactory(logAPI bool) func(string, string, egoscale.ZoneName, logr.Logger) (domain.InstanceService, error) {
+	return func(apiKey, apiSecret string, zone egoscale.ZoneName, logger logr.Logger) (domain.InstanceService, error) {
+		return NewInstanceService(apiKey, apiSecret, zone, logger, logAPI)
+	}
+}
+
 // NewInstanceService returns an InstanceService bound to the given Exoscale
 // zone and credentials. The underlying egoscale client is created lazily by
 // the Cloud adapter.

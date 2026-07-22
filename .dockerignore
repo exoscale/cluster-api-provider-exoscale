@@ -2,11 +2,30 @@
 # Ignore everything by default and re-include only needed files
 **
 
-# Keep parent directories visible so nested !**/*.go exceptions are included
-!**/
+# Re-include only packages in the manager's build dependency graph.
+!api/
+!api/v1alpha1/
+!api/v1alpha1/*.go
+!cmd/
+!cmd/*.go
+!internal/
+!internal/controller/
+!internal/controller/*.go
+!internal/domain/
+!internal/domain/*.go
+!internal/infrastructure/
+!internal/infrastructure/exoscale/
+!internal/infrastructure/exoscale/*.go
+!internal/mocks/
+!internal/mocks/*.go
+!internal/service/
+!internal/service/*.go
+!test/
+test/**
+!test/utils/
+!test/utils/*.go
 
-# Re-include Go source files (but not *_test.go)
-!**/*.go
+# Exclude tests from otherwise included packages.
 **/*_test.go
 
 # Re-include Go module files

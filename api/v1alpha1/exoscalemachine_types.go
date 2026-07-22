@@ -35,8 +35,9 @@ type ExoscaleMachineSpec struct {
 	Template string `json:"template"`
 
 	// instanceType is an Exoscale instance type UUID or a value in [family.]size
-	// format (e.g. "small", "memory.large", "cpu.extra-large").
-	// The family defaults to "standard" when omitted.
+	// format. For example, "small" is shorthand for "standard.small".
+	// The value is resolved against the Exoscale catalog during reconciliation.
+	// Run `exo compute instance-type list -v` to list available values.
 	// +required
 	// +kubebuilder:validation:MinLength=1
 	InstanceType string `json:"instanceType"`

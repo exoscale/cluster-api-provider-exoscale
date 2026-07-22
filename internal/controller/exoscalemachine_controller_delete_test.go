@@ -38,6 +38,8 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 	deleteTime := metav1.Now()
 	machineUID := domain.MachineID("machine-id")
 	instanceID := uuid.New()
+	clusterID := uuid.New()
+	controllerOwner := true
 
 	tests := []struct {
 		name             string
@@ -74,7 +76,7 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 				expectedInstanceID = &instanceID
 			}
 			if tc.wantService {
-				instanceSvc.EXPECT().DeleteInstance(ctx, expectedMachineID, expectedInstanceID).Return(tc.deleteErr)
+				instanceSvc.EXPECT().DeleteInstance(ctx, expectedMachineID, clusterID, expectedInstanceID).Return(tc.deleteErr)
 			}
 
 			objects := []crclient.Object{
@@ -89,7 +91,10 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 					},
 				},
 				&infrav1alpha1.ExoscaleCluster{
-					ObjectMeta: metav1.ObjectMeta{Name: exoscaleClusterName, Namespace: ns},
+					ObjectMeta: metav1.ObjectMeta{
+						Name: exoscaleClusterName, Namespace: ns,
+						Annotations: map[string]string{domain.ClusterIDKey: clusterID.String()},
+					},
 					Spec: infrav1alpha1.ExoscaleClusterSpec{
 						Zone: "ch-gva-2",
 						ExoscaleSecret: infrav1alpha1.ExoscaleSecretRef{
@@ -134,6 +139,7 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 					Kind:       "Machine",
 					Name:       machineName,
 					UID:        types.UID(machineUID),
+					Controller: &controllerOwner,
 				}}
 			}
 			if tc.paused {
@@ -191,6 +197,8 @@ func Test_deletionInstanceIDs(t *testing.T) {
 	providerID := "exoscale://" + instanceID.String()
 	legacyProviderID := "exoscale:///" + instanceID.String()
 	invalidProviderID := "bad-id"
+	controllerOwner := true
+	notController := false
 	tests := []struct {
 		name           string
 		machine        infrav1alpha1.ExoscaleMachine
@@ -221,14 +229,14 @@ func Test_deletionInstanceIDs(t *testing.T) {
 		{
 			name: "invalid owner API version",
 			machine: infrav1alpha1.ExoscaleMachine{ObjectMeta: metav1.ObjectMeta{OwnerReferences: []metav1.OwnerReference{{
-				APIVersion: "cluster.x-k8s.io/v1beta2/extra", Kind: "Machine", UID: types.UID(machineID),
+				APIVersion: "cluster.x-k8s.io/v1beta2/extra", Kind: "Machine", UID: types.UID(machineID), Controller: &controllerOwner,
 			}}}},
 			wantErr: "invalid owner API version",
 		},
 		{
 			name: "accepts non-UUID Machine owner UID",
 			machine: infrav1alpha1.ExoscaleMachine{ObjectMeta: metav1.ObjectMeta{OwnerReferences: []metav1.OwnerReference{{
-				APIVersion: clusterv1.GroupVersion.String(), Kind: "Machine", UID: types.UID(machineID),
+				APIVersion: clusterv1.GroupVersion.String(), Kind: "Machine", UID: types.UID(machineID), Controller: &controllerOwner,
 			}}}},
 			wantMachineID: &machineID,
 		},
@@ -237,10 +245,22 @@ func Test_deletionInstanceIDs(t *testing.T) {
 			machine: infrav1alpha1.ExoscaleMachine{ObjectMeta: metav1.ObjectMeta{
 				Annotations: map[string]string{domain.MachineUIDKey: preMoveMachineID.String()},
 				OwnerReferences: []metav1.OwnerReference{{
-					APIVersion: clusterv1.GroupVersion.String(), Kind: "Machine", UID: types.UID(machineID),
+					APIVersion: clusterv1.GroupVersion.String(), Kind: "Machine", UID: types.UID(machineID), Controller: &controllerOwner,
 				}},
 			}},
 			wantMachineID: &preMoveMachineID,
+		},
+		{
+			name: "ignores Machine owner without controller flag",
+			machine: infrav1alpha1.ExoscaleMachine{ObjectMeta: metav1.ObjectMeta{OwnerReferences: []metav1.OwnerReference{{
+				APIVersion: clusterv1.GroupVersion.String(), Kind: "Machine", UID: types.UID(machineID),
+			}}}},
+		},
+		{
+			name: "ignores non-controller Machine owner",
+			machine: infrav1alpha1.ExoscaleMachine{ObjectMeta: metav1.ObjectMeta{OwnerReferences: []metav1.OwnerReference{{
+				APIVersion: clusterv1.GroupVersion.String(), Kind: "Machine", UID: types.UID(machineID), Controller: &notController,
+			}}}},
 		},
 		{
 			name: "ignores malformed non-Machine owner",
@@ -252,7 +272,7 @@ func Test_deletionInstanceIDs(t *testing.T) {
 			name: "ignores foreign Machine owner",
 			machine: infrav1alpha1.ExoscaleMachine{
 				ObjectMeta: metav1.ObjectMeta{OwnerReferences: []metav1.OwnerReference{{
-					APIVersion: "other.example.io/v1", Kind: "Machine", UID: "bad-id",
+					APIVersion: "other.example.io/v1", Kind: "Machine", UID: "bad-id", Controller: &controllerOwner,
 				}}},
 				Status: infrav1alpha1.ExoscaleMachineStatus{InstanceID: instanceID.String()},
 			},

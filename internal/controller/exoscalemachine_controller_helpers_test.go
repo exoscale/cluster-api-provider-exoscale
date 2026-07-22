@@ -69,6 +69,25 @@ func TestEnsureMachineID(t *testing.T) {
 	assert.Equal(t, domain.MachineID("pre-move-uid"), machineID)
 }
 
+func TestExoscaleClusterID(t *testing.T) {
+	t.Parallel()
+
+	annotationID := uuid.New()
+	statusID := uuid.NewString()
+
+	id, err := exoscaleClusterID(&infrav1alpha1.ExoscaleCluster{ObjectMeta: metav1.ObjectMeta{
+		Annotations: map[string]string{domain.ClusterIDKey: annotationID.String()},
+	}})
+	assert.NoError(t, err)
+	assert.Equal(t, annotationID, id)
+
+	_, err = exoscaleClusterID(&infrav1alpha1.ExoscaleCluster{
+		ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{domain.ClusterIDKey: annotationID.String()}},
+		Status:     infrav1alpha1.ExoscaleClusterStatus{ID: &statusID},
+	})
+	assert.ErrorContains(t, err, "does not match status")
+}
+
 func TestInstanceName(t *testing.T) {
 	t.Parallel()
 

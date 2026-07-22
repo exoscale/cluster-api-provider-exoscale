@@ -51,15 +51,15 @@ type Cloud interface {
 type ElasticIPService interface {
 	UpsertElasticIP(ctx context.Context, clusterID uuid.UUID, eipID *uuid.UUID, port int32) (ElasticIP, error)
 	FindElasticIP(ctx context.Context, clusterID uuid.UUID) (ElasticIP, error)
-	DeleteElasticIP(ctx context.Context, id uuid.UUID) error
+	DeleteElasticIP(ctx context.Context, id, clusterID uuid.UUID) error
 }
 
 type SecurityGroupService interface {
 	UpsertSecurityGroup(ctx context.Context, clusterID uuid.UUID, scID *uuid.UUID, name string) (SecurityGroup, error)
 	FindSecurityGroup(ctx context.Context, name string) (SecurityGroup, error)
-	DeleteSecurityGroup(ctx context.Context, id uuid.UUID) error
+	DeleteSecurityGroup(ctx context.Context, id uuid.UUID, name string) error
 	UpsertSecurityGroupRules(ctx context.Context, sgID uuid.UUID, desiredRules []SecurityGroupRule) ([]SecurityGroupRule, error)
-	PurgeSecurityGroup(ctx context.Context, sgID uuid.UUID) error
+	PurgeSecurityGroup(ctx context.Context, sgID uuid.UUID, name string) error
 }
 
 type ElasticIP struct {
@@ -117,7 +117,7 @@ type Cluster struct {
 
 type InstanceService interface {
 	UpsertInstance(ctx context.Context, machineID MachineID, instanceID *uuid.UUID, spec InstanceSpec) (Instance, error)
-	DeleteInstance(ctx context.Context, machineID *MachineID, instanceID *uuid.UUID) error
+	DeleteInstance(ctx context.Context, machineID *MachineID, clusterID uuid.UUID, instanceID *uuid.UUID) error
 }
 
 type MachineID string

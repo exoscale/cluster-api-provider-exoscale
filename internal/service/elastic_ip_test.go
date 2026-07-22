@@ -77,7 +77,7 @@ func Test_elasticIPService_UpsertElasticIP(t *testing.T) {
 			},
 		},
 		{
-			name:  "nominal - eip not found",
+			name:  "stale status ID recovers existing elastic IP by description",
 			eipID: &eipID,
 			port:  port,
 			cloud: func(m *mocks.Cloud) {
@@ -87,17 +87,12 @@ func Test_elasticIPService_UpsertElasticIP(t *testing.T) {
 						Return(domain.ElasticIP{}, domain.ErrElasticIPNotFound).
 						Once(),
 					m.EXPECT().
-						CreateElasticIP(ctx, port, description).
-						Return(eipID, nil).
-						Once(),
-					m.EXPECT().
-						GetElasticIP(ctx, eipID).Return(
-						domain.ElasticIP{
-							ID:              eipID,
-							Description:     description,
-							HealthCheckPort: port,
-							IP:              "1.2.3.4",
-						}, nil).
+						ListElasticIPs(ctx).Return([]domain.ElasticIP{{
+						ID:              eipID,
+						Description:     description,
+						HealthCheckPort: port,
+						IP:              "1.2.3.4",
+					}}, nil).
 						Once(),
 				)
 			},
@@ -109,7 +104,7 @@ func Test_elasticIPService_UpsertElasticIP(t *testing.T) {
 			},
 		},
 		{
-			name:  "nominal - eip found - need update",
+			name:  "nominal - eip found - reconciles health-check port",
 			eipID: &eipID,
 			port:  port,
 			cloud: func(m *mocks.Cloud) {
@@ -117,7 +112,7 @@ func Test_elasticIPService_UpsertElasticIP(t *testing.T) {
 					GetElasticIP(ctx, eipID).Return(
 					domain.ElasticIP{
 						ID:              eipID,
-						Description:     "diff in description",
+						Description:     description,
 						HealthCheckPort: 0,
 						IP:              "1.2.3.4",
 					}, nil)
@@ -134,6 +129,28 @@ func Test_elasticIPService_UpsertElasticIP(t *testing.T) {
 				HealthCheckPort: port,
 				IP:              "1.2.3.4",
 			},
+		},
+		{
+			name:  "rejects status elastic IP owned by another cluster",
+			eipID: &eipID,
+			port:  port,
+			cloud: func(m *mocks.Cloud) {
+				m.EXPECT().GetElasticIP(ctx, eipID).Return(domain.ElasticIP{
+					ID: eipID, Description: "foreign", HealthCheckPort: port,
+				}, nil)
+			},
+			err: errNotOwned,
+		},
+		{
+			name: "description recovery reconciles health-check port",
+			port: port,
+			cloud: func(m *mocks.Cloud) {
+				eip := domain.ElasticIP{ID: eipID, Description: description, HealthCheckPort: 1, IP: "1.2.3.4"}
+				m.EXPECT().ListElasticIPs(ctx).Return([]domain.ElasticIP{eip}, nil)
+				eip.HealthCheckPort = port
+				m.EXPECT().UpdateElasticIP(ctx, eip).Return(nil)
+			},
+			output: domain.ElasticIP{ID: eipID, Description: description, HealthCheckPort: port, IP: "1.2.3.4"},
 		},
 		{
 			name:  "nominal - eip found - no update",
@@ -177,7 +194,7 @@ func Test_elasticIPService_UpsertElasticIP(t *testing.T) {
 					GetElasticIP(ctx, eipID).Return(
 					domain.ElasticIP{
 						ID:              eipID,
-						Description:     "diff in description",
+						Description:     description,
 						HealthCheckPort: 0,
 						IP:              "1.2.3.4",
 					}, nil)
@@ -226,7 +243,11 @@ func Test_elasticIPService_UpsertElasticIP(t *testing.T) {
 
 			output, err := svc.UpsertElasticIP(ctx, clusterID, ut.eipID, port)
 
-			assert.ErrorIs(t, err, ut.err)
+			if ut.err == errNotOwned {
+				assert.ErrorContains(t, err, "is not owned by cluster")
+			} else {
+				assert.ErrorIs(t, err, ut.err)
+			}
 			assert.Equal(t, ut.output, output)
 		})
 	}
@@ -238,6 +259,8 @@ func Test_elasticIPService_DeleteElasticIP(t *testing.T) {
 
 	ctx := context.Background()
 	id := uuid.New()
+	clusterID := uuid.New()
+	description := fmt.Sprintf("capi - clusterID - %s", clusterID)
 
 	tests := []struct {
 		name  string
@@ -247,7 +270,7 @@ func Test_elasticIPService_DeleteElasticIP(t *testing.T) {
 		{
 			name: "nominal - eip found",
 			cloud: func(m *mocks.Cloud) {
-				m.EXPECT().GetElasticIP(ctx, id).Return(domain.ElasticIP{}, nil)
+				m.EXPECT().GetElasticIP(ctx, id).Return(domain.ElasticIP{ID: id, Description: description}, nil)
 				m.EXPECT().DeleteElasticIP(ctx, id).Return(nil)
 			},
 		},
@@ -259,6 +282,13 @@ func Test_elasticIPService_DeleteElasticIP(t *testing.T) {
 		},
 
 		{
+			name: "rejects foreign elastic IP",
+			cloud: func(m *mocks.Cloud) {
+				m.EXPECT().GetElasticIP(ctx, id).Return(domain.ElasticIP{ID: id, Description: "foreign"}, nil)
+			},
+			err: errNotOwned,
+		},
+		{
 			name: "get eip returned an error",
 			cloud: func(m *mocks.Cloud) {
 				m.EXPECT().GetElasticIP(ctx, id).Return(domain.ElasticIP{}, assert.AnError)
@@ -268,7 +298,7 @@ func Test_elasticIPService_DeleteElasticIP(t *testing.T) {
 		{
 			name: "delete eip returned an error",
 			cloud: func(m *mocks.Cloud) {
-				m.EXPECT().GetElasticIP(ctx, id).Return(domain.ElasticIP{}, nil)
+				m.EXPECT().GetElasticIP(ctx, id).Return(domain.ElasticIP{ID: id, Description: description}, nil)
 				m.EXPECT().DeleteElasticIP(ctx, id).Return(assert.AnError)
 			},
 			err: assert.AnError,
@@ -284,9 +314,13 @@ func Test_elasticIPService_DeleteElasticIP(t *testing.T) {
 
 			svc := elasticIPService{cloud: cloud, logger: logr.Discard()}
 
-			err := svc.DeleteElasticIP(ctx, id)
+			err := svc.DeleteElasticIP(ctx, id, clusterID)
 
-			assert.ErrorIs(t, err, ut.err)
+			if ut.err == errNotOwned {
+				assert.ErrorContains(t, err, "is not owned by cluster")
+			} else {
+				assert.ErrorIs(t, err, ut.err)
+			}
 		})
 	}
 }

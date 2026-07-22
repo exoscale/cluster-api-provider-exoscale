@@ -26,54 +26,49 @@ func (s *elasticIPService) UpsertElasticIP(ctx context.Context, clusterID uuid.U
 
 	if eipID != nil {
 		eip, err := s.cloud.GetElasticIP(ctx, *eipID)
-		if err != nil && !errors.Is(err, domain.ErrElasticIPNotFound) {
+		if err == nil {
+			if eip.Description != eipDescription {
+				return domain.ElasticIP{}, fmt.Errorf("elastic IP %s is not owned by cluster %s: description is %q", eip.ID, clusterID, eip.Description)
+			}
+			return s.reconcileHealthCheckPort(ctx, eip, port)
+		}
+		if !errors.Is(err, domain.ErrElasticIPNotFound) {
 			return domain.ElasticIP{}, fmt.Errorf("error while fetching eip: %w", err)
-		} else if errors.Is(err, domain.ErrElasticIPNotFound) {
-			s.logger.Info("Elastic IP not found, will create a new one")
-
-			id, err := s.cloud.CreateElasticIP(ctx, port, eipDescription)
-			if err != nil {
-				return domain.ElasticIP{}, fmt.Errorf("error while creating eip: %w", err)
-			}
-			eip, err = s.cloud.GetElasticIP(ctx, id)
-			if err != nil {
-				return domain.ElasticIP{}, fmt.Errorf("error while fetching new eip, %w", err)
-			}
 		}
+		s.logger.Info("Status elastic IP not found, recovering by description")
+	}
 
-		if eip.Description != eipDescription || port != eip.HealthCheckPort {
-			s.logger.Info("Update elastic IP")
+	// Search before creating both on initial reconciliation and when status is stale.
+	existing, err := s.FindElasticIP(ctx, clusterID)
+	if err != nil && !errors.Is(err, domain.ErrElasticIPNotFound) {
+		return domain.ElasticIP{}, fmt.Errorf("error while searching for existing eip: %w", err)
+	} else if err == nil {
+		s.logger.Info("Found an existing elastic IP by cluster ID, reusing it")
+		return s.reconcileHealthCheckPort(ctx, existing, port)
+	}
 
-			eip.Description = eipDescription
-			eip.HealthCheckPort = port
-			if err := s.cloud.UpdateElasticIP(ctx, eip); err != nil {
-				return domain.ElasticIP{}, fmt.Errorf("error while updating the eip: %w", err)
-			}
-		}
-		return eip, nil
-	} else {
-		// No ID in status: search for an existing EIP by cluster ID before creating to
-		// avoid duplicates when two reconciles race during initial provisioning.
-		existing, err := s.FindElasticIP(ctx, clusterID)
-		if err != nil && !errors.Is(err, domain.ErrElasticIPNotFound) {
-			return domain.ElasticIP{}, fmt.Errorf("error while searching for existing eip: %w", err)
-		} else if err == nil {
-			s.logger.Info("Found an existing elastic IP by cluster ID, reusing it")
-			return existing, nil
-		}
+	s.logger.Info("Create elastic IP")
+	id, err := s.cloud.CreateElasticIP(ctx, port, eipDescription)
+	if err != nil {
+		return domain.ElasticIP{}, fmt.Errorf("error while creating eip: %w", err)
+	}
+	eip, err := s.cloud.GetElasticIP(ctx, id)
+	if err != nil {
+		return domain.ElasticIP{}, fmt.Errorf("error while fetching new eip, %w", err)
+	}
+	return eip, nil
+}
 
-		s.logger.Info("Create elastic IP")
-
-		id, err := s.cloud.CreateElasticIP(ctx, port, eipDescription)
-		if err != nil {
-			return domain.ElasticIP{}, fmt.Errorf("error while creating eip: %w", err)
-		}
-		eip, err := s.cloud.GetElasticIP(ctx, id)
-		if err != nil {
-			return domain.ElasticIP{}, fmt.Errorf("error while fetching new eip, %w", err)
-		}
+func (s *elasticIPService) reconcileHealthCheckPort(ctx context.Context, eip domain.ElasticIP, port int32) (domain.ElasticIP, error) {
+	if eip.HealthCheckPort == port {
 		return eip, nil
 	}
+	s.logger.Info("Update elastic IP health-check port")
+	eip.HealthCheckPort = port
+	if err := s.cloud.UpdateElasticIP(ctx, eip); err != nil {
+		return domain.ElasticIP{}, fmt.Errorf("error while updating the eip: %w", err)
+	}
+	return eip, nil
 }
 
 func (s *elasticIPService) FindElasticIP(ctx context.Context, clusterID uuid.UUID) (domain.ElasticIP, error) {
@@ -98,12 +93,17 @@ func (s *elasticIPService) FindElasticIP(ctx context.Context, clusterID uuid.UUI
 	return *match, nil
 }
 
-func (s elasticIPService) DeleteElasticIP(ctx context.Context, id uuid.UUID) error {
-	if _, err := s.cloud.GetElasticIP(ctx, id); err != nil {
+func (s elasticIPService) DeleteElasticIP(ctx context.Context, id, clusterID uuid.UUID) error {
+	eip, err := s.cloud.GetElasticIP(ctx, id)
+	if err != nil {
 		if errors.Is(err, domain.ErrElasticIPNotFound) {
 			return nil
 		}
 		return err
+	}
+	expectedDescription := fmt.Sprintf("capi - clusterID - %s", clusterID)
+	if eip.Description != expectedDescription {
+		return fmt.Errorf("elastic IP %s is not owned by cluster %s: description is %q", id, clusterID, eip.Description)
 	}
 
 	s.logger.Info("Delete elastic IP")

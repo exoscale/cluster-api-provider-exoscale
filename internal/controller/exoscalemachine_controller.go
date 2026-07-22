@@ -138,13 +138,17 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		if err != nil {
 			return ctrl.Result{}, err
 		}
+		clusterID, err := exoscaleClusterID(exoCluster)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
 
 		instanceService, err := r.instanceService(ctx, exoCluster)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 
-		return ctrl.Result{}, r.reconcileDelete(ctx, exoMachine, instanceService, machineID, instanceID)
+		return ctrl.Result{}, r.reconcileDelete(ctx, exoMachine, instanceService, machineID, clusterID, instanceID)
 	}
 	if machine == nil {
 		machine, err = util.GetOwnerMachine(ctx, r.Client, exoMachine.ObjectMeta)
@@ -277,8 +281,9 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 		}
 		elasticIPID = &id
 	}
-	if exoCluster.Status.ID == nil {
-		return ctrl.Result{}, fmt.Errorf("cluster ID is not available")
+	clusterID, err := exoscaleClusterID(exoCluster)
+	if err != nil {
+		return ctrl.Result{}, err
 	}
 	machineRole := "worker"
 	if isControlPlane {
@@ -304,7 +309,7 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 		RootVolumeSizeGiB: exoMachine.Spec.RootVolumeSizeGiB,
 		UserData:          userData,
 		Labels: map[string]string{
-			instanceClusterIDLabel: *exoCluster.Status.ID,
+			instanceClusterIDLabel: clusterID.String(),
 			instanceRoleLabel:      machineRole,
 		},
 	}
@@ -344,9 +349,10 @@ func (r *ExoscaleMachineReconciler) reconcileDelete(
 	exoMachine *infrastructurev1alpha1.ExoscaleMachine,
 	instanceService domain.InstanceService,
 	machineID *domain.MachineID,
+	clusterID uuid.UUID,
 	instanceID *uuid.UUID,
 ) error {
-	if err := instanceService.DeleteInstance(ctx, machineID, instanceID); err != nil && !errors.Is(err, domain.ErrInstanceNotFound) {
+	if err := instanceService.DeleteInstance(ctx, machineID, clusterID, instanceID); err != nil && !errors.Is(err, domain.ErrInstanceNotFound) {
 		return fmt.Errorf("delete instance: %w", err)
 	}
 
@@ -365,7 +371,7 @@ func deletionInstanceIDs(exoMachine *infrastructurev1alpha1.ExoscaleMachine) (*d
 	}
 
 	for _, ref := range exoMachine.OwnerReferences {
-		if ref.Kind != "Machine" {
+		if ref.Kind != "Machine" || ref.Controller == nil || !*ref.Controller {
 			continue
 		}
 		groupVersion, err := schema.ParseGroupVersion(ref.APIVersion)
@@ -383,6 +389,30 @@ func deletionInstanceIDs(exoMachine *infrastructurev1alpha1.ExoscaleMachine) (*d
 	}
 
 	return nil, instanceID, nil
+}
+
+func exoscaleClusterID(exoCluster *infrastructurev1alpha1.ExoscaleCluster) (uuid.UUID, error) {
+	annotationID := exoCluster.Annotations[domain.ClusterIDKey]
+	statusID := ""
+	if exoCluster.Status.ID != nil {
+		statusID = *exoCluster.Status.ID
+	}
+	if annotationID != "" && statusID != "" && annotationID != statusID {
+		return uuid.Nil, fmt.Errorf("cluster ID annotation %q does not match status %q", annotationID, statusID)
+	}
+
+	clusterID := annotationID
+	if clusterID == "" {
+		clusterID = statusID
+	}
+	if clusterID == "" {
+		return uuid.Nil, fmt.Errorf("cluster ID is not available")
+	}
+	id, err := uuid.Parse(clusterID)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("invalid cluster ID %q: %w", clusterID, err)
+	}
+	return id, nil
 }
 
 func ensureMachineID(exoMachine *infrastructurev1alpha1.ExoscaleMachine, machine *clusterv1.Machine) (domain.MachineID, bool, error) {

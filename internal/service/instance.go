@@ -31,8 +31,7 @@ type instanceService struct {
 	logger logr.Logger
 }
 
-// instanceCloud is declared locally so the service can be unit-tested with a
-// small fake without pulling in the full egoscale SDK.
+// instanceCloud is the narrow cloud API used by the instance service.
 type instanceCloud interface {
 	ListInstances(ctx context.Context, label string) ([]domain.Instance, error)
 	ListInstanceTypes(ctx context.Context) ([]domain.InstanceType, error)
@@ -72,8 +71,15 @@ func NewInstanceService(apiKey, apiSecret string, zone egoscale.ZoneName, logger
 }
 
 func (s *instanceService) UpsertInstance(ctx context.Context, machineID domain.MachineID, instanceID *uuid.UUID, spec domain.InstanceSpec) (domain.Instance, error) {
+	if machineID == "" {
+		return domain.Instance{}, fmt.Errorf("machine UID is required")
+	}
+	clusterID := spec.Labels[domain.ClusterIDKey]
+	if clusterID == "" {
+		return domain.Instance{}, fmt.Errorf("cluster ID label is required")
+	}
 	spec.Labels = labelsWithMachineID(spec.Labels, machineID)
-	matches, err := s.findInstancesByMachineID(ctx, machineID)
+	matches, err := s.findInstances(ctx, machineID, clusterID)
 	if err != nil {
 		return domain.Instance{}, fmt.Errorf("error while searching for existing instance: %w", err)
 	}
@@ -113,8 +119,8 @@ func (s *instanceService) UpsertInstance(ctx context.Context, machineID domain.M
 			return domain.Instance{}, fmt.Errorf("error while fetching new instance: %w", err)
 		}
 	}
-	if instance.Labels[domain.MachineUIDKey] != machineID.String() {
-		return domain.Instance{}, fmt.Errorf("instance %s is not owned by Machine UID %s", instance.ID, machineID)
+	if err := instanceOwnershipError(instance, machineID, clusterID); err != nil {
+		return domain.Instance{}, err
 	}
 
 	for _, duplicate := range matches {
@@ -284,7 +290,20 @@ func templateDiskSizeGiB(size int64) int64 {
 	return (size + bytesPerGiB - 1) / bytesPerGiB
 }
 
-func (s *instanceService) DeleteInstance(ctx context.Context, machineID *domain.MachineID, instanceID *uuid.UUID) error {
+func (s *instanceService) DeleteInstance(ctx context.Context, machineID *domain.MachineID, clusterID uuid.UUID, instanceID *uuid.UUID) error {
+	if machineID == nil {
+		if instanceID == nil {
+			return nil
+		}
+		return fmt.Errorf("cannot verify status instance %s without a Machine UID", *instanceID)
+	}
+	if *machineID == "" {
+		return fmt.Errorf("machine UID is required")
+	}
+	if clusterID == uuid.Nil {
+		return fmt.Errorf("cannot delete instances without a cluster ID")
+	}
+
 	var statusInstance domain.Instance
 	if instanceID != nil {
 		var err error
@@ -293,25 +312,18 @@ func (s *instanceService) DeleteInstance(ctx context.Context, machineID *domain.
 			return err
 		}
 		if err == nil {
-			if machineID == nil {
-				return fmt.Errorf("cannot verify status instance %s without a Machine UID", statusInstance.ID)
-			}
-			if statusInstance.Labels[domain.MachineUIDKey] != machineID.String() {
-				return fmt.Errorf("status instance %s is not owned by Machine UID %s", statusInstance.ID, machineID)
+			if err := instanceOwnershipError(statusInstance, *machineID, clusterID.String()); err != nil {
+				return fmt.Errorf("status %w", err)
 			}
 		}
 	}
 
-	var instances []domain.Instance
-	if machineID != nil {
-		byMachineID, err := s.findInstancesByMachineID(ctx, *machineID)
-		if err != nil {
-			return err
-		}
-		instances = byMachineID
-		if statusInstance.ID != uuid.Nil && !slices.ContainsFunc(instances, func(instance domain.Instance) bool { return instance.ID == statusInstance.ID }) {
-			instances = append(instances, statusInstance)
-		}
+	instances, err := s.findInstances(ctx, *machineID, clusterID.String())
+	if err != nil {
+		return err
+	}
+	if statusInstance.ID != uuid.Nil && !slices.ContainsFunc(instances, func(instance domain.Instance) bool { return instance.ID == statusInstance.ID }) {
+		instances = append(instances, statusInstance)
 	}
 	if len(instances) == 0 {
 		return nil
@@ -326,7 +338,7 @@ func (s *instanceService) DeleteInstance(ctx context.Context, machineID *domain.
 	return nil
 }
 
-func (s *instanceService) findInstancesByMachineID(ctx context.Context, machineID domain.MachineID) ([]domain.Instance, error) {
+func (s *instanceService) findInstances(ctx context.Context, machineID domain.MachineID, clusterID string) ([]domain.Instance, error) {
 	instances, err := s.cloud.ListInstances(ctx, domain.MachineUIDKey+"="+machineID.String())
 	if err != nil {
 		return nil, err
@@ -334,11 +346,21 @@ func (s *instanceService) findInstancesByMachineID(ctx context.Context, machineI
 
 	var matches []domain.Instance
 	for _, instance := range instances {
-		if instance.Labels[domain.MachineUIDKey] == machineID.String() {
+		if instance.Labels[domain.MachineUIDKey] == machineID.String() && instance.Labels[domain.ClusterIDKey] == clusterID {
 			matches = append(matches, instance)
 		}
 	}
 	return matches, nil
+}
+
+func instanceOwnershipError(instance domain.Instance, machineID domain.MachineID, clusterID string) error {
+	if instance.Labels[domain.MachineUIDKey] != machineID.String() {
+		return fmt.Errorf("instance %s is not owned by Machine UID %s", instance.ID, machineID)
+	}
+	if instance.Labels[domain.ClusterIDKey] != clusterID {
+		return fmt.Errorf("instance %s is not owned by cluster %s", instance.ID, clusterID)
+	}
+	return nil
 }
 
 func oldestInstance(instances []domain.Instance) domain.Instance {

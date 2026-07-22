@@ -53,7 +53,7 @@ func Test_securityGroupService_UpsertSecurityGroup(t *testing.T) {
 			output: sg,
 		},
 		{
-			name: "nominal - scID not found",
+			name: "stale status ID recovers existing security group by name",
 			scID: &sgID,
 			cloud: func(m *mocks.Cloud) {
 				mock.InOrder(
@@ -62,16 +62,20 @@ func Test_securityGroupService_UpsertSecurityGroup(t *testing.T) {
 						Return(domain.SecurityGroup{}, domain.ErrSecurityGroupNotFound).
 						Once(),
 					m.EXPECT().
-						CreateSecurityGroup(ctx, name).
-						Return(sgID, nil).
-						Once(),
-					m.EXPECT().
-						GetSecurityGroup(ctx, sgID).
-						Return(sg, nil).
+						ListSecurityGroups(ctx).
+						Return([]domain.SecurityGroup{sg}, nil).
 						Once(),
 				)
 			},
 			output: sg,
+		},
+		{
+			name: "rejects status security group owned by another cluster",
+			scID: &sgID,
+			cloud: func(m *mocks.Cloud) {
+				m.EXPECT().GetSecurityGroup(ctx, sgID).Return(domain.SecurityGroup{ID: sgID, Name: "foreign"}, nil)
+			},
+			err: errNotOwned,
 		},
 		{
 			name: "nominal - scID found",
@@ -113,6 +117,10 @@ func Test_securityGroupService_UpsertSecurityGroup(t *testing.T) {
 						Return(domain.SecurityGroup{}, domain.ErrSecurityGroupNotFound).
 						Once(),
 					m.EXPECT().
+						ListSecurityGroups(ctx).
+						Return(nil, nil).
+						Once(),
+					m.EXPECT().
 						CreateSecurityGroup(ctx, name).
 						Return(uuid.Nil, assert.AnError).
 						Once(),
@@ -150,6 +158,10 @@ func Test_securityGroupService_UpsertSecurityGroup(t *testing.T) {
 						Return(domain.SecurityGroup{}, domain.ErrSecurityGroupNotFound).
 						Once(),
 					m.EXPECT().
+						ListSecurityGroups(ctx).
+						Return(nil, nil).
+						Once(),
+					m.EXPECT().
 						CreateSecurityGroup(ctx, name).
 						Return(sgID, nil).
 						Once(),
@@ -174,7 +186,11 @@ func Test_securityGroupService_UpsertSecurityGroup(t *testing.T) {
 
 			output, err := svc.UpsertSecurityGroup(ctx, clusterID, ut.scID, name)
 
-			assert.ErrorIs(t, err, ut.err)
+			if ut.err == errNotOwned {
+				assert.ErrorContains(t, err, "is not owned by cluster")
+			} else {
+				assert.ErrorIs(t, err, ut.err)
+			}
 			assert.Equal(t, ut.output, output)
 		})
 	}
@@ -195,6 +211,7 @@ func Test_securityGroupService_DeleteSecurityGroup(t *testing.T) {
 
 	ctx := context.Background()
 	id := uuid.New()
+	name := "expected"
 
 	tests := []struct {
 		name  string
@@ -204,9 +221,16 @@ func Test_securityGroupService_DeleteSecurityGroup(t *testing.T) {
 		{
 			name: "nominal - sg found",
 			cloud: func(m *mocks.Cloud) {
-				m.EXPECT().GetSecurityGroup(ctx, id).Return(domain.SecurityGroup{}, nil)
+				m.EXPECT().GetSecurityGroup(ctx, id).Return(domain.SecurityGroup{ID: id, Name: name}, nil)
 				m.EXPECT().DeleteSecurityGroup(ctx, id).Return(nil)
 			},
+		},
+		{
+			name: "rejects foreign security group",
+			cloud: func(m *mocks.Cloud) {
+				m.EXPECT().GetSecurityGroup(ctx, id).Return(domain.SecurityGroup{ID: id, Name: "foreign"}, nil)
+			},
+			err: errNotOwned,
 		},
 		{
 			name: "nominal - sg not found",
@@ -224,7 +248,7 @@ func Test_securityGroupService_DeleteSecurityGroup(t *testing.T) {
 		{
 			name: "delete security group returned an error",
 			cloud: func(m *mocks.Cloud) {
-				m.EXPECT().GetSecurityGroup(ctx, id).Return(domain.SecurityGroup{}, nil)
+				m.EXPECT().GetSecurityGroup(ctx, id).Return(domain.SecurityGroup{ID: id, Name: name}, nil)
 				m.EXPECT().DeleteSecurityGroup(ctx, id).Return(assert.AnError)
 			},
 			err: assert.AnError,
@@ -240,9 +264,13 @@ func Test_securityGroupService_DeleteSecurityGroup(t *testing.T) {
 
 			svc := securityGroupService{cloud: cloud, logger: logr.Discard()}
 
-			err := svc.DeleteSecurityGroup(ctx, id)
+			err := svc.DeleteSecurityGroup(ctx, id, name)
 
-			assert.ErrorIs(t, err, ut.err)
+			if ut.err == errNotOwned {
+				assert.ErrorContains(t, err, "expected")
+			} else {
+				assert.ErrorIs(t, err, ut.err)
+			}
 		})
 	}
 }
@@ -252,6 +280,8 @@ func Test_securityGroupService_PurgeSecurityGroup(t *testing.T) {
 
 	ctx := context.Background()
 	sgID := uuid.New()
+	sgName := "expected"
+	sg := domain.SecurityGroup{ID: sgID, Name: sgName}
 	rule1ID := uuid.New()
 	rule2ID := uuid.New()
 
@@ -268,6 +298,7 @@ func Test_securityGroupService_PurgeSecurityGroup(t *testing.T) {
 		{
 			name: "nominal - no rules",
 			cloud: func(m *mocks.Cloud) {
+				m.EXPECT().GetSecurityGroup(ctx, sgID).Return(sg, nil)
 				m.EXPECT().
 					ListSecurityGroupRules(ctx, sgID).
 					Return(nil, nil)
@@ -277,13 +308,14 @@ func Test_securityGroupService_PurgeSecurityGroup(t *testing.T) {
 			name: "nominal - security group already deleted",
 			cloud: func(m *mocks.Cloud) {
 				m.EXPECT().
-					ListSecurityGroupRules(ctx, sgID).
-					Return(nil, domain.ErrSecurityGroupNotFound)
+					GetSecurityGroup(ctx, sgID).
+					Return(domain.SecurityGroup{}, domain.ErrSecurityGroupNotFound)
 			},
 		},
 		{
 			name: "nominal - rules deleted",
 			cloud: func(m *mocks.Cloud) {
+				m.EXPECT().GetSecurityGroup(ctx, sgID).Return(sg, nil)
 				m.EXPECT().
 					ListSecurityGroupRules(ctx, sgID).
 					Return(rules, nil)
@@ -296,8 +328,16 @@ func Test_securityGroupService_PurgeSecurityGroup(t *testing.T) {
 			},
 		},
 		{
+			name: "rejects foreign security group before deleting rules",
+			cloud: func(m *mocks.Cloud) {
+				m.EXPECT().GetSecurityGroup(ctx, sgID).Return(domain.SecurityGroup{ID: sgID, Name: "foreign"}, nil)
+			},
+			err: errNotOwned,
+		},
+		{
 			name: "list rules returned an error",
 			cloud: func(m *mocks.Cloud) {
+				m.EXPECT().GetSecurityGroup(ctx, sgID).Return(sg, nil)
 				m.EXPECT().
 					ListSecurityGroupRules(ctx, sgID).
 					Return(nil, assert.AnError)
@@ -307,6 +347,7 @@ func Test_securityGroupService_PurgeSecurityGroup(t *testing.T) {
 		{
 			name: "delete rule returned an error",
 			cloud: func(m *mocks.Cloud) {
+				m.EXPECT().GetSecurityGroup(ctx, sgID).Return(sg, nil)
 				m.EXPECT().
 					ListSecurityGroupRules(ctx, sgID).
 					Return(rules, nil)
@@ -327,9 +368,13 @@ func Test_securityGroupService_PurgeSecurityGroup(t *testing.T) {
 
 			svc := securityGroupService{cloud: cloud, logger: logr.Discard()}
 
-			err := svc.PurgeSecurityGroup(ctx, sgID)
+			err := svc.PurgeSecurityGroup(ctx, sgID, sgName)
 
-			assert.ErrorIs(t, err, ut.err)
+			if ut.err == errNotOwned {
+				assert.ErrorContains(t, err, "expected")
+			} else {
+				assert.ErrorIs(t, err, ut.err)
+			}
 		})
 	}
 }

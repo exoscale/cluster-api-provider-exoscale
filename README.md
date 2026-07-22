@@ -57,14 +57,17 @@ metadata:
   name: my-cluster
   namespace: default
 spec:
+  clusterNetwork:
+    pods:
+      cidrBlocks:
+        - 10.244.0.0/16
   infrastructureRef:
     apiGroup: infrastructure.cluster.x-k8s.io
     kind: ExoscaleCluster
     name: my-cluster
 EOF
 
-$> export EXOSCALE_TEMPLATE='<template-uuid-or-name>'
-$> cat <<EOF | kubectl apply -f -
+$> cat <<'EOF' | kubectl apply -f -
 apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
 kind: KubeadmConfig
 metadata:
@@ -72,6 +75,50 @@ metadata:
   namespace: default
 spec:
   format: cloud-config
+  preKubeadmCommands:
+    - |
+      set -eux
+      swapoff -a
+
+      cat >/etc/modules-load.d/kubernetes.conf <<EOF
+      overlay
+      br_netfilter
+      EOF
+      modprobe overlay
+      modprobe br_netfilter
+
+      cat >/etc/sysctl.d/99-kubernetes.conf <<EOF
+      net.bridge.bridge-nf-call-iptables = 1
+      net.bridge.bridge-nf-call-ip6tables = 1
+      net.ipv4.ip_forward = 1
+      EOF
+      sysctl --system
+
+      apt-get update
+      apt-get install -y ca-certificates curl gpg containerd
+
+      install -m 0755 -d /etc/apt/keyrings
+      curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.32/deb/Release.key \
+        | gpg --dearmor --yes -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+      echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.32/deb/ /' \
+        >/etc/apt/sources.list.d/kubernetes.list
+
+      apt-get update
+      apt-get install -y \
+        kubeadm=1.32.13-1.1 \
+        kubelet=1.32.13-1.1 \
+        kubectl=1.32.13-1.1
+      apt-mark hold kubeadm kubelet kubectl
+
+      mkdir -p /etc/containerd
+      containerd config default >/etc/containerd/config.toml
+      sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+      echo "KUBELET_EXTRA_ARGS=--provider-id=exoscale://$(cat /var/lib/cloud/data/instance-id)" \
+        >/etc/default/kubelet
+      systemctl enable --now containerd
+      systemctl enable kubelet
+  postKubeadmCommands:
+    - kubectl --kubeconfig=/etc/kubernetes/admin.conf apply -f https://github.com/flannel-io/flannel/releases/download/v0.28.8/kube-flannel.yml
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
 kind: ExoscaleMachine
@@ -81,8 +128,9 @@ metadata:
   labels:
     cluster.x-k8s.io/cluster-name: my-cluster
 spec:
-  template: "${EXOSCALE_TEMPLATE}"
+  template: Linux Ubuntu 24.04 LTS 64-bit
   instanceType: small
+  rootVolumeSizeGiB: 20
 ---
 apiVersion: cluster.x-k8s.io/v1beta2
 kind: Machine
@@ -94,7 +142,7 @@ metadata:
     cluster.x-k8s.io/control-plane: ""
 spec:
   clusterName: my-cluster
-  version: v1.32.0
+  version: v1.32.13
   bootstrap:
     configRef:
       apiGroup: bootstrap.cluster.x-k8s.io
@@ -106,9 +154,14 @@ spec:
     name: my-control-plane
 EOF
 
-## wait for the cluster infrastructure and instance to become ready
+## Wait for the workload control plane and node to become ready.
 
-$> kubectl get cluster,exoscalecluster,machine,exoscalemachine
+$> kubectl wait cluster/my-cluster --for=condition=ControlPlaneInitialized --timeout=20m
+$> clusterctl get kubeconfig my-cluster > /tmp/my-cluster.kubeconfig
+$> kubectl --kubeconfig=/tmp/my-cluster.kubeconfig wait node --all --for=condition=Ready --timeout=10m
+$> kubectl --kubeconfig=/tmp/my-cluster.kubeconfig get nodes
+
+$> kubectl get cluster,exoscalecluster,machine,exoscalemachine,kubeadmconfig
 ```
 
 ### Delete simple cluster

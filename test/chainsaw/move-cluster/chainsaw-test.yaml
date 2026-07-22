@@ -88,7 +88,7 @@ spec:
                 name: ($clusterName)
                 namespace: ($namespace)
               (status.id == metadata.annotations."cluster-api-provider-exoscale/cluster-id"): true
-              (regex_match('^[0-9a-f-]{36}$', status.id)): true
+              (regex_match('^[0-9a-f-]{36}$', (status.id || ''))): true
               status:
                 initialization:
                   provisioned: true

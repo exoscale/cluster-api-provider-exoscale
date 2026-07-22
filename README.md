@@ -63,14 +63,57 @@ spec:
     name: my-cluster
 EOF
 
-## wait 1-2 min
+$> export EXOSCALE_TEMPLATE='<template-uuid-or-name>'
+$> cat <<EOF | kubectl apply -f -
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
+kind: KubeadmConfig
+metadata:
+  name: my-control-plane
+  namespace: default
+spec:
+  format: cloud-config
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: ExoscaleMachine
+metadata:
+  name: my-control-plane
+  namespace: default
+  labels:
+    cluster.x-k8s.io/cluster-name: my-cluster
+spec:
+  template: "${EXOSCALE_TEMPLATE}"
+  instanceType: small
+---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Machine
+metadata:
+  name: my-control-plane
+  namespace: default
+  labels:
+    cluster.x-k8s.io/cluster-name: my-cluster
+    cluster.x-k8s.io/control-plane: ""
+spec:
+  clusterName: my-cluster
+  version: v1.32.0
+  bootstrap:
+    configRef:
+      apiGroup: bootstrap.cluster.x-k8s.io
+      kind: KubeadmConfig
+      name: my-control-plane
+  infrastructureRef:
+    apiGroup: infrastructure.cluster.x-k8s.io
+    kind: ExoscaleMachine
+    name: my-control-plane
+EOF
 
-$> kubectl get exoscaleclusters/my-cluster -o yaml | yq
+## wait for the cluster infrastructure and instance to become ready
+
+$> kubectl get cluster,exoscalecluster,machine,exoscalemachine
 ```
 
 ### Delete simple cluster
 ```Bash
-$> kubectl delete cluster/my-cluster ## it will also delete `exoscaleclusters/my-cluster`
+$> kubectl delete cluster/my-cluster ## also deletes its Machine and Exoscale resources
 ```
 
 ## End-to-End testing

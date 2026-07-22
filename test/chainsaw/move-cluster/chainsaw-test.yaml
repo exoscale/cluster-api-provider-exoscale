@@ -12,7 +12,7 @@ spec:
     - name: clusterName
       value: (join('-', ['capi-move-cluster', ($values.suffix || 'local')]))
     - name: targetClusterName
-      value: (join('-', ['capx-move-target', ($values.suffix || 'local')]))
+      value: (join('-', ['capx', ($values.suffix || 'local')]))
     - name: namespace
       value: default
     - name: image

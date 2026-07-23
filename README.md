@@ -1,17 +1,13 @@
-# Cluster API Provider Exoscale
+# Kubernetes Cluster API Provider Exoscale
 
-Kubernetes-native declarative infrastructure for Exoscale.
+## What is the Cluster API Provider Exoscale (CAPX)
 
-## What is the Cluster API Provider Exoscale?
+The [Cluster API][cluster_api] brings declarative, Kubernetes-style APIs to
+cluster creation, configuration and management.
 
-The Cluster API Provider Exoscale (CAPX) is an infrastructure provider for
-[Cluster API](https://cluster-api.sigs.k8s.io/). It provides declarative APIs
-for provisioning and managing the Exoscale infrastructure used by self-managed
-Kubernetes clusters.
-
-CAPX reconciles `ExoscaleCluster` and `ExoscaleMachine` resources into Exoscale
-Elastic IPs, security groups, and Compute instances. Cluster API bootstrap and
-control-plane providers manage the Kubernetes lifecycle on top of that
+CAPX is an infrastructure provider that provisions and manages Exoscale
+resources for self-managed Kubernetes clusters. It currently reconciles
+`ExoscaleCluster` and `ExoscaleMachine` resources into the required cloud
 infrastructure.
 
 ## Run locally
@@ -29,155 +25,32 @@ $> make install run
 ```
 
 ### Deploy a simple cluster
-```Bash
+```bash
 $> export EXOSCALE_API_KEY=<api-key>
 $> export EXOSCALE_API_SECRET=<api-secret>
 $> kubectl create secret generic exoscale --from-literal=apikey=$EXOSCALE_API_KEY --from-literal=apisecret=$EXOSCALE_API_SECRET
+$> kubectl apply -k config/samples/
+```
 
-$> cat <<EOF | kubectl apply -f -
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
-kind: ExoscaleCluster
-metadata:
-  name: my-cluster
-  namespace: default
-spec:
-  zone: ch-gva-2
-  securityGroupControlPlane:
-    rules:
-      - description: allow ssh
-        network: "0.0.0.0/0"
-        endPort: 22
-        startPort: 22
-        protocol: tcp
-        flowDirection: ingress
-  securityGroupNode:
-    rules:
-      - description: allow ssh
-        network: "0.0.0.0/0"
-        endPort: 22
-        startPort: 22
-        protocol: tcp
-        flowDirection: ingress
-EOF
-
-$> cat <<EOF | kubectl apply -f -
-apiVersion: cluster.x-k8s.io/v1beta2
-kind: Cluster
-metadata:
-  name: my-cluster
-  namespace: default
-spec:
-  clusterNetwork:
-    pods:
-      cidrBlocks:
-        - 10.244.0.0/16
-  infrastructureRef:
-    apiGroup: infrastructure.cluster.x-k8s.io
-    kind: ExoscaleCluster
-    name: my-cluster
-EOF
-
-$> cat <<'EOF' | kubectl apply -f -
-apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
-kind: KubeadmConfig
-metadata:
-  name: my-control-plane
-  namespace: default
-spec:
-  format: cloud-config
-  preKubeadmCommands:
-    - |
-      set -eux
-      swapoff -a
-
-      cat >/etc/modules-load.d/kubernetes.conf <<EOF
-      overlay
-      br_netfilter
-      EOF
-      modprobe overlay
-      modprobe br_netfilter
-
-      cat >/etc/sysctl.d/99-kubernetes.conf <<EOF
-      net.bridge.bridge-nf-call-iptables = 1
-      net.bridge.bridge-nf-call-ip6tables = 1
-      net.ipv4.ip_forward = 1
-      EOF
-      sysctl --system
-
-      apt-get update
-      apt-get install -y ca-certificates curl gpg containerd
-
-      install -m 0755 -d /etc/apt/keyrings
-      curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.32/deb/Release.key \
-        | gpg --dearmor --yes -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-      echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.32/deb/ /' \
-        >/etc/apt/sources.list.d/kubernetes.list
-
-      apt-get update
-      apt-get install -y \
-        kubeadm=1.32.13-1.1 \
-        kubelet=1.32.13-1.1 \
-        kubectl=1.32.13-1.1
-      apt-mark hold kubeadm kubelet kubectl
-
-      mkdir -p /etc/containerd
-      containerd config default >/etc/containerd/config.toml
-      sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
-      echo "KUBELET_EXTRA_ARGS=--provider-id=exoscale://$(cat /var/lib/cloud/data/instance-id)" \
-        >/etc/default/kubelet
-      systemctl enable --now containerd
-      systemctl enable kubelet
-  postKubeadmCommands:
-    - kubectl --kubeconfig=/etc/kubernetes/admin.conf apply -f https://github.com/flannel-io/flannel/releases/download/v0.28.8/kube-flannel.yml
----
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
-kind: ExoscaleMachine
-metadata:
-  name: my-control-plane
-  namespace: default
-  labels:
-    cluster.x-k8s.io/cluster-name: my-cluster
-spec:
-  template: Linux Ubuntu 24.04 LTS 64-bit
-  instanceType: small
-  rootVolumeSizeGiB: 20
----
-apiVersion: cluster.x-k8s.io/v1beta2
-kind: Machine
-metadata:
-  name: my-control-plane
-  namespace: default
-  labels:
-    cluster.x-k8s.io/cluster-name: my-cluster
-    cluster.x-k8s.io/control-plane: ""
-spec:
-  clusterName: my-cluster
-  version: v1.32.13
-  bootstrap:
-    configRef:
-      apiGroup: bootstrap.cluster.x-k8s.io
-      kind: KubeadmConfig
-      name: my-control-plane
-  infrastructureRef:
-    apiGroup: infrastructure.cluster.x-k8s.io
-    kind: ExoscaleMachine
-    name: my-control-plane
-EOF
-
-## Wait for the workload control plane and node to become ready.
-
+#### Wait for the workload cluster
+```bash
 $> kubectl wait cluster/my-cluster --for=condition=ControlPlaneInitialized --timeout=20m
 $> clusterctl get kubeconfig my-cluster > /tmp/my-cluster.kubeconfig
 $> kubectl --kubeconfig=/tmp/my-cluster.kubeconfig wait node --all --for=condition=Ready --timeout=10m
+$> kubectl wait cluster/my-cluster --for=condition=RemoteConnectionProbe --timeout=5m
+$> kubectl wait machine/my-control-plane --for=condition=Ready --for=condition=Available --timeout=5m
 $> kubectl --kubeconfig=/tmp/my-cluster.kubeconfig get nodes
 
-$> kubectl get cluster,exoscalecluster,machine,exoscalemachine,kubeadmconfig
+$> kubectl get exoscalecluster,machine,exoscalemachine,kubeadmconfig
 ```
 
 ### Delete simple cluster
-```Bash
+```bash
 $> kubectl delete cluster/my-cluster ## also deletes its Machine and Exoscale resources
 ```
+
+The shared `exoscale` credential Secret is not owned by the Cluster and remains
+after Cluster deletion.
 
 ## End-to-End testing
 ```Bash
@@ -221,21 +94,9 @@ make deploy IMG=<some-registry>/cluster-api-provider-exoscale:tag
 > **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin
 privileges or be logged in as admin.
 
-**Create instances of your solution**
-You can apply the samples (examples) from the config/sample:
-
-```sh
-kubectl apply -k config/samples/
-```
-
->**NOTE**: Ensure that the samples has default values to test it out.
-
 ### To Uninstall
-**Delete the instances (CRs) from the cluster:**
-
-```sh
-kubectl delete -k config/samples/
-```
+Delete workload Clusters and wait for their cloud resources to be removed before
+uninstalling CAPX.
 
 **Delete the APIs(CRDs) from the cluster:**
 
@@ -315,3 +176,5 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
+[cluster_api]: https://github.com/kubernetes-sigs/cluster-api

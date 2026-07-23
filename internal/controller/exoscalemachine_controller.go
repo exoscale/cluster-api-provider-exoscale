@@ -315,25 +315,27 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 	}
 
 	decisionInput := machineDecisionInput{machineID: machineID, instanceID: instanceID, spec: spec}
-	action := decideMachine(decisionInput).upsert
-	instance, err := instanceService.UpsertInstance(ctx, action.machineID, action.instanceID, action.spec)
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("upsert instance: %w", err)
+	decision := decideMachine(decisionInput)
+	switch decision.action {
+	case machineActionUpsert:
+		instance, err := instanceService.UpsertInstance(ctx, decision.upsert.machineID, decision.upsert.instanceID, decision.upsert.spec)
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("upsert instance: %w", err)
+		}
+		decisionInput.upsertResult = &instance
+		decision = decideMachine(decisionInput)
 	}
 
-	decisionInput.upsertResult = &instance
-	return applyMachineOutcome(log, exoMachine, *decideMachine(decisionInput).outcome), nil
+	return applyMachineDecision(log, exoMachine, decision), nil
 }
 
-func applyMachineOutcome(log logr.Logger, exoMachine *infrastructurev1alpha1.ExoscaleMachine, outcome machineOutcome) ctrl.Result {
+func applyMachineDecision(log logr.Logger, exoMachine *infrastructurev1alpha1.ExoscaleMachine, decision machineDecision) ctrl.Result {
+	outcome := decision.outcome
 	exoMachine.Status.InstanceID = outcome.instanceID
-	if outcome.providerID != nil {
-		exoMachine.Spec.ProviderID = outcome.providerID
-	}
-	if outcome.provisioned != nil {
-		exoMachine.Status.Initialization.Provisioned = outcome.provisioned
-	}
-	if outcome.replaceAddresses {
+	switch decision.action {
+	case machineActionReady:
+		exoMachine.Spec.ProviderID = &outcome.providerID
+		exoMachine.Status.Initialization.Provisioned = new(true)
 		var addresses []clusterv1.MachineAddress
 		if len(outcome.addresses) > 0 {
 			addresses = make([]clusterv1.MachineAddress, 0, len(outcome.addresses))
@@ -346,10 +348,8 @@ func applyMachineOutcome(log logr.Logger, exoMachine *infrastructurev1alpha1.Exo
 			addresses = append(addresses, clusterv1.MachineAddress{Type: addressType, Address: address.address})
 		}
 		exoMachine.Status.Addresses = addresses
-	}
-	if outcome.ready {
 		setMachineReady(exoMachine, metav1.ConditionTrue, clusterv1.ReadyReason, outcome.message)
-	} else {
+	case machineActionWait:
 		log.Info("instance not yet running", "state", outcome.instanceState)
 		setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.NotReadyReason, outcome.message)
 	}

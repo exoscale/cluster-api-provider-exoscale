@@ -17,9 +17,8 @@ func TestDecideMachine(t *testing.T) {
 	resultInstanceID := uuid.New()
 	spec := domain.InstanceSpec{Name: "machine", Template: "template", InstanceType: "standard.small"}
 	providerID := "exoscale://" + resultInstanceID.String()
-	provisioned := true
 	pending := func(instance domain.Instance) machineDecision {
-		return machineDecision{outcome: &machineOutcome{
+		return machineDecision{action: machineActionWait, outcome: machineOutcome{
 			instanceID:    instance.ID.String(),
 			instanceState: instance.State,
 			message:       "Instance state is " + instance.State,
@@ -39,7 +38,7 @@ func TestDecideMachine(t *testing.T) {
 				instanceID: &currentInstanceID,
 				spec:       spec,
 			},
-			want: machineDecision{upsert: &upsertInstanceAction{
+			want: machineDecision{action: machineActionUpsert, upsert: upsertInstanceAction{
 				machineID:  machineID,
 				instanceID: &currentInstanceID,
 				spec:       spec,
@@ -60,28 +59,22 @@ func TestDecideMachine(t *testing.T) {
 			input: machineDecisionInput{upsertResult: &domain.Instance{
 				ID: resultInstanceID, State: "running", PublicIP: "1.2.3.4", PrivateIP: "10.0.0.1",
 			}},
-			want: machineDecision{outcome: &machineOutcome{
-				instanceID:       resultInstanceID.String(),
-				instanceState:    "running",
-				providerID:       &providerID,
-				provisioned:      &provisioned,
-				addresses:        []machineAddress{{public: true, address: "1.2.3.4"}, {address: "10.0.0.1"}},
-				replaceAddresses: true,
-				ready:            true,
-				message:          "Instance is running",
+			want: machineDecision{action: machineActionReady, outcome: machineOutcome{
+				instanceID:    resultInstanceID.String(),
+				instanceState: "running",
+				providerID:    providerID,
+				addresses:     []machineAddress{{public: true, address: "1.2.3.4"}, {address: "10.0.0.1"}},
+				message:       "Instance is running",
 			}},
 		},
 		{
 			name:  "running without addresses replaces them with empty",
 			input: machineDecisionInput{upsertResult: &domain.Instance{ID: resultInstanceID, State: "running"}},
-			want: machineDecision{outcome: &machineOutcome{
-				instanceID:       resultInstanceID.String(),
-				instanceState:    "running",
-				providerID:       &providerID,
-				provisioned:      &provisioned,
-				replaceAddresses: true,
-				ready:            true,
-				message:          "Instance is running",
+			want: machineDecision{action: machineActionReady, outcome: machineOutcome{
+				instanceID:    resultInstanceID.String(),
+				instanceState: "running",
+				providerID:    providerID,
+				message:       "Instance is running",
 			}},
 		},
 		{

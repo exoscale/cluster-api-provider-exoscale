@@ -15,9 +15,18 @@ type machineDecisionInput struct {
 	upsertResult *domain.Instance
 }
 
+type machineAction uint8
+
+const (
+	machineActionUpsert machineAction = iota
+	machineActionWait
+	machineActionReady
+)
+
 type machineDecision struct {
-	upsert  *upsertInstanceAction
-	outcome *machineOutcome
+	action  machineAction
+	upsert  upsertInstanceAction
+	outcome machineOutcome
 }
 
 type upsertInstanceAction struct {
@@ -27,15 +36,12 @@ type upsertInstanceAction struct {
 }
 
 type machineOutcome struct {
-	instanceID       string
-	instanceState    string
-	providerID       *string
-	provisioned      *bool
-	addresses        []machineAddress
-	replaceAddresses bool
-	ready            bool
-	message          string
-	requeueAfter     time.Duration
+	instanceID    string
+	instanceState string
+	providerID    string
+	addresses     []machineAddress
+	message       string
+	requeueAfter  time.Duration
 }
 
 type machineAddress struct {
@@ -45,7 +51,7 @@ type machineAddress struct {
 
 func decideMachine(input machineDecisionInput) machineDecision {
 	if input.upsertResult == nil {
-		return machineDecision{upsert: &upsertInstanceAction{
+		return machineDecision{action: machineActionUpsert, upsert: upsertInstanceAction{
 			machineID:  input.machineID,
 			instanceID: input.instanceID,
 			spec:       input.spec,
@@ -53,24 +59,18 @@ func decideMachine(input machineDecisionInput) machineDecision {
 	}
 
 	instance := input.upsertResult
-	outcome := &machineOutcome{
+	outcome := machineOutcome{
 		instanceID:    instance.ID.String(),
 		instanceState: instance.State,
-		message:       fmt.Sprintf("Instance state is %s", instance.State),
-		requeueAfter:  15 * time.Second,
 	}
 	if instance.State != "running" {
-		return machineDecision{outcome: outcome}
+		outcome.message = fmt.Sprintf("Instance state is %s", instance.State)
+		outcome.requeueAfter = 15 * time.Second
+		return machineDecision{action: machineActionWait, outcome: outcome}
 	}
 
-	providerID := fmt.Sprintf("exoscale://%s", instance.ID)
-	provisioned := true
-	outcome.providerID = &providerID
-	outcome.provisioned = &provisioned
-	outcome.replaceAddresses = true
-	outcome.ready = true
+	outcome.providerID = fmt.Sprintf("exoscale://%s", instance.ID)
 	outcome.message = "Instance is running"
-	outcome.requeueAfter = 0
 	if instance.PublicIP != "" {
 		outcome.addresses = append(outcome.addresses, machineAddress{public: true, address: instance.PublicIP})
 	}
@@ -78,5 +78,5 @@ func decideMachine(input machineDecisionInput) machineDecision {
 		outcome.addresses = append(outcome.addresses, machineAddress{address: instance.PrivateIP})
 	}
 
-	return machineDecision{outcome: outcome}
+	return machineDecision{action: machineActionReady, outcome: outcome}
 }

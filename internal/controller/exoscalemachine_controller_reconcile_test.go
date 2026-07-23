@@ -45,6 +45,7 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 	controlPlaneSecurityGroupID := uuid.New()
 	nodeSecurityGroupID := uuid.New()
 	clusterID := uuid.NewString()
+	rootVolumeSize := int64(20)
 	dataSecretName := bootstrapSecretName
 	clusterProvisioned := true
 
@@ -55,13 +56,14 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 
 	instanceSvc := mocks.NewInstanceService(t)
 	instanceSvc.EXPECT().UpsertInstance(ctx, domain.MachineID(machineUID.String()), (*uuid.UUID)(nil), domain.InstanceSpec{
-		Name:             instanceName(ns, machineName),
-		Template:         templateID.String(),
-		InstanceType:     "standard.small",
-		SSHKey:           "ssh-key",
-		SecurityGroupIDs: []uuid.UUID{controlPlaneSecurityGroupID},
-		ElasticIPID:      &elasticIPID,
-		UserData:         "#cloud-config",
+		Name:              instanceName(ns, machineName),
+		Template:          templateID.String(),
+		InstanceType:      "standard.small",
+		SSHKey:            "ssh-key",
+		SecurityGroupIDs:  []uuid.UUID{controlPlaneSecurityGroupID},
+		ElasticIPID:       &elasticIPID,
+		RootVolumeSizeGiB: &rootVolumeSize,
+		UserData:          "#cloud-config",
 		Labels: map[string]string{
 			instanceClusterIDLabel: clusterID,
 			instanceRoleLabel:      "control-plane",
@@ -139,9 +141,10 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 					},
 				},
 				Spec: infrav1alpha1.ExoscaleMachineSpec{
-					Template:     templateID.String(),
-					InstanceType: "standard.small",
-					SSHKey:       "ssh-key",
+					TemplateID:       templateID.String(),
+					InstanceType:     "standard.small",
+					SSHKey:           "ssh-key",
+					RootVolumeSizeGB: &rootVolumeSize,
 				},
 				Status: infrav1alpha1.ExoscaleMachineStatus{
 					Conditions: []metav1.Condition{
@@ -172,6 +175,10 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 	assert.NoError(t, client.Get(ctx, types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}, updated))
 	assert.Equal(t, instanceID.String(), updated.Status.InstanceID)
 	assert.Equal(t, machineUID.String(), updated.Annotations[domain.MachineUIDKey])
+	assert.Equal(t, templateID.String(), updated.Spec.TemplateID)
+	assert.Empty(t, updated.Spec.Template)
+	assert.Equal(t, &rootVolumeSize, updated.Spec.RootVolumeSizeGB)
+	assert.Nil(t, updated.Spec.RootVolumeSizeGiB)
 	assert.Equal(t, []clusterv1.MachineAddress{
 		{Type: clusterv1.MachineExternalIP, Address: "1.2.3.4"},
 		{Type: clusterv1.MachineInternalIP, Address: "10.0.0.1"},

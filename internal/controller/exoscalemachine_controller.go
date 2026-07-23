@@ -301,12 +301,12 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 
 	spec := domain.InstanceSpec{
 		Name:              instanceName(machine.Namespace, machine.Name),
-		Template:          exoMachine.Spec.Template,
+		Template:          exoMachine.Spec.TemplateRef(),
 		InstanceType:      exoMachine.Spec.InstanceType,
 		SSHKey:            exoMachine.Spec.SSHKey,
 		SecurityGroupIDs:  securityGroupIDs,
 		ElasticIPID:       elasticIPID,
-		RootVolumeSizeGiB: exoMachine.Spec.RootVolumeSizeGiB,
+		RootVolumeSizeGiB: exoMachine.Spec.RootVolumeSize(),
 		UserData:          userData,
 		Labels: map[string]string{
 			instanceClusterIDLabel: clusterID.String(),

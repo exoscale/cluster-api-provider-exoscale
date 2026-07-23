@@ -5,22 +5,6 @@ metadata:
   namespace: default
 spec:
   zone: ch-gva-2
-  securityGroupControlPlane:
-    rules:
-      - description: allow ssh
-        network: "0.0.0.0/0"
-        endPort: 22
-        startPort: 22
-        protocol: tcp
-        flowDirection: ingress
-  securityGroupNode:
-    rules:
-      - description: allow ssh
-        network: "0.0.0.0/0"
-        endPort: 22
-        startPort: 22
-        protocol: tcp
-        flowDirection: ingress
 ---
 apiVersion: cluster.x-k8s.io/v1beta2
 kind: Cluster

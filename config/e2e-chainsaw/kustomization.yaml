@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - ../default
+  - ../network-policy
 
 patches:
   - patch: |-
@@ -26,3 +27,9 @@ patches:
     target:
       kind: Deployment
       name: cluster-api-provider-exoscale-controller-manager
+  - patch: |-
+      - op: replace
+        path: /metadata/namespace
+        value: cluster-api-provider-exoscale-system
+    target:
+      kind: NetworkPolicy

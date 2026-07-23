@@ -1,0 +1,64 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: deploy-cluster-template
+spec:
+  timeouts:
+    delete: 5m
+    cleanup: 5m
+  bindings:
+  - name: templateName
+    value: (join('-', ['capi-cluster-template', ($values.suffix || 'local')]))
+  - name: namespace
+    value: default
+  steps:
+    - name: validate cluster template webhook
+      try:
+        - apply:
+            file: exoscaleclustertemplate.yaml
+        - patch:
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleClusterTemplate
+              metadata:
+                name: ($templateName)
+                namespace: ($namespace)
+              spec:
+                template:
+                  metadata:
+                    labels:
+                      e2e.cluster.x-k8s.io/mutable: "true"
+                    annotations:
+                      e2e.cluster.x-k8s.io/mutable: "true"
+        - assert:
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleClusterTemplate
+              metadata:
+                name: ($templateName)
+                namespace: ($namespace)
+              spec:
+                template:
+                  metadata:
+                    labels:
+                      e2e.cluster.x-k8s.io/mutable: "true"
+                    annotations:
+                      e2e.cluster.x-k8s.io/mutable: "true"
+        - patch:
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleClusterTemplate
+              metadata:
+                name: ($templateName)
+                namespace: ($namespace)
+              spec:
+                template:
+                  spec:
+                    zone: ch-gva-2
+            expect:
+              - match:
+                  apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+                  kind: ExoscaleClusterTemplate
+                check:
+                  ($error != null): true
+                  (contains($error, 'spec.template.spec is immutable')): true

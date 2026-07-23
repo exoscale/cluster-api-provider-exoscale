@@ -34,6 +34,7 @@ func Test_instanceService_UpsertInstance(t *testing.T) {
 	}
 	labels := map[string]string{domain.MachineUIDKey: machineID.String(), domain.ClusterIDKey: clusterID}
 	instance := domain.Instance{ID: instanceID, Labels: labels}
+	legacyInstance := domain.Instance{ID: instanceID, Labels: map[string]string{domain.MachineUIDKey: machineID.String()}}
 
 	tests := []struct {
 		name        string
@@ -53,6 +54,22 @@ func Test_instanceService_UpsertInstance(t *testing.T) {
 				m.EXPECT().GetInstance(ctx, instanceID).Return(instance, nil)
 			},
 			output: instance,
+		},
+		{
+			name:       "reuses legacy instance from status ID",
+			instanceID: &instanceID,
+			cloud: func(m *mocks.InstanceCloud) {
+				m.EXPECT().ListInstances(ctx, query).Return([]domain.Instance{legacyInstance}, nil)
+				m.EXPECT().GetInstance(ctx, instanceID).Return(legacyInstance, nil)
+			},
+			output: legacyInstance,
+		},
+		{
+			name: "recovers legacy instance by Machine UID",
+			cloud: func(m *mocks.InstanceCloud) {
+				m.EXPECT().ListInstances(ctx, query).Return([]domain.Instance{legacyInstance}, nil)
+			},
+			output: legacyInstance,
 		},
 		{
 			name: "recovers only instance with both ownership labels",
@@ -384,6 +401,7 @@ func Test_instanceService_DeleteInstance(t *testing.T) {
 	staleID := uuid.New()
 	labels := map[string]string{domain.MachineUIDKey: machineID.String(), domain.ClusterIDKey: clusterID.String()}
 	instance := domain.Instance{ID: id, Labels: labels}
+	legacyInstance := domain.Instance{ID: id, Labels: map[string]string{domain.MachineUIDKey: machineID.String()}}
 
 	tests := []struct {
 		name        string
@@ -399,6 +417,21 @@ func Test_instanceService_DeleteInstance(t *testing.T) {
 			cloud: func(m *mocks.InstanceCloud) {
 				m.EXPECT().GetInstance(ctx, id).Return(instance, nil)
 				m.EXPECT().ListInstances(ctx, query).Return([]domain.Instance{instance}, nil)
+				m.EXPECT().DeleteInstance(ctx, id).Return(nil)
+			},
+		},
+		{
+			name: "deletes legacy instance from status ID", machineID: &machineID, clusterID: clusterID, instanceID: &id,
+			cloud: func(m *mocks.InstanceCloud) {
+				m.EXPECT().GetInstance(ctx, id).Return(legacyInstance, nil)
+				m.EXPECT().ListInstances(ctx, query).Return([]domain.Instance{legacyInstance}, nil)
+				m.EXPECT().DeleteInstance(ctx, id).Return(nil)
+			},
+		},
+		{
+			name: "recovers legacy instance from ownership label", machineID: &machineID, clusterID: clusterID,
+			cloud: func(m *mocks.InstanceCloud) {
+				m.EXPECT().ListInstances(ctx, query).Return([]domain.Instance{legacyInstance}, nil)
 				m.EXPECT().DeleteInstance(ctx, id).Return(nil)
 			},
 		},

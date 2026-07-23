@@ -150,34 +150,30 @@ func (s *clusterService) DeleteCluster(ctx context.Context, cluster infrav1alpha
 	}
 
 	if clusterID != nil {
-		if cluster.Status.ControlPlaneEndpoint == nil {
-			eip, err := s.elasticIPSvc.FindElasticIP(ctx, *clusterID)
-			if err != nil && !errors.Is(err, domain.ErrElasticIPNotFound) {
-				return cluster, fmt.Errorf("unable to recover elastic IP: %w", err)
-			}
-			if err == nil {
-				cluster.Status.ControlPlaneEndpoint = &infrav1alpha1.APIEndpointStatus{ID: eip.ID.String()}
-			}
+		eip, err := s.elasticIPSvc.FindElasticIP(ctx, *clusterID)
+		if err != nil && !errors.Is(err, domain.ErrElasticIPNotFound) {
+			return cluster, fmt.Errorf("unable to recover elastic IP: %w", err)
 		}
-		if cluster.Status.SecurityGroupControlPlan == nil {
-			name := fmt.Sprintf("capi - %s - control plane", clusterID)
-			securityGroup, err := s.securityGroupSvc.FindSecurityGroup(ctx, name)
-			if err != nil && !errors.Is(err, domain.ErrSecurityGroupNotFound) {
-				return cluster, fmt.Errorf("unable to recover control-plane security group: %w", err)
-			}
-			if err == nil {
-				cluster.Status.SecurityGroupControlPlan = &infrav1alpha1.SecurityGroupStatus{ID: securityGroup.ID.String(), Name: securityGroup.Name}
-			}
+		if err == nil {
+			cluster.Status.ControlPlaneEndpoint = &infrav1alpha1.APIEndpointStatus{ID: eip.ID.String()}
 		}
-		if cluster.Status.SecurityGroupNode == nil {
-			name := fmt.Sprintf("capi - %s - node", clusterID)
-			securityGroup, err := s.securityGroupSvc.FindSecurityGroup(ctx, name)
-			if err != nil && !errors.Is(err, domain.ErrSecurityGroupNotFound) {
-				return cluster, fmt.Errorf("unable to recover node security group: %w", err)
-			}
-			if err == nil {
-				cluster.Status.SecurityGroupNode = &infrav1alpha1.SecurityGroupStatus{ID: securityGroup.ID.String(), Name: securityGroup.Name}
-			}
+
+		controlPlaneName := fmt.Sprintf("capi - %s - control plane", clusterID)
+		controlPlaneGroup, err := s.securityGroupSvc.FindSecurityGroup(ctx, controlPlaneName)
+		if err != nil && !errors.Is(err, domain.ErrSecurityGroupNotFound) {
+			return cluster, fmt.Errorf("unable to recover control-plane security group: %w", err)
+		}
+		if err == nil {
+			cluster.Status.SecurityGroupControlPlan = &infrav1alpha1.SecurityGroupStatus{ID: controlPlaneGroup.ID.String(), Name: controlPlaneGroup.Name}
+		}
+
+		nodeName := fmt.Sprintf("capi - %s - node", clusterID)
+		nodeGroup, err := s.securityGroupSvc.FindSecurityGroup(ctx, nodeName)
+		if err != nil && !errors.Is(err, domain.ErrSecurityGroupNotFound) {
+			return cluster, fmt.Errorf("unable to recover node security group: %w", err)
+		}
+		if err == nil {
+			cluster.Status.SecurityGroupNode = &infrav1alpha1.SecurityGroupStatus{ID: nodeGroup.ID.String(), Name: nodeGroup.Name}
 		}
 	}
 

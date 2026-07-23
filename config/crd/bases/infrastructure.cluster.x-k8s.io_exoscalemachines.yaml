@@ -75,6 +75,14 @@ spec:
                   exoscale://<instance-uuid>. Set by the controller after the instance is created.
                   CAPI uses this field to match the InfraMachine to the Node object.
                 type: string
+              rootVolumeSizeGB:
+                description: |-
+                  rootVolumeSizeGB is the legacy spelling of rootVolumeSizeGiB.
+                  Deprecated: use rootVolumeSizeGiB.
+                format: int64
+                maximum: 10000
+                minimum: 10
+                type: integer
               rootVolumeSizeGiB:
                 description: rootVolumeSizeGiB overrides the disk size declared by
                   the template.
@@ -99,18 +107,30 @@ spec:
                   UUIDs pin an exact template; names are resolved at create time.
                 minLength: 1
                 type: string
+              templateID:
+                description: |-
+                  templateID is the legacy UUID-only spelling of template.
+                  Deprecated: use template.
+                pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+                type: string
             required:
             - instanceType
-            - template
             type: object
             x-kubernetes-validations:
+            - message: exactly one of template or templateID must be set
+              rule: has(self.template) != has(self.templateID)
+            - message: rootVolumeSizeGiB and rootVolumeSizeGB are mutually exclusive
+              rule: '!(has(self.rootVolumeSizeGiB) && has(self.rootVolumeSizeGB))'
             - message: instance creation fields are immutable
-              rule: self.template == oldSelf.template && self.instanceType == oldSelf.instanceType
+              rule: '(has(self.template) ? self.template : self.templateID) == (has(oldSelf.template)
+                ? oldSelf.template : oldSelf.templateID) && self.instanceType == oldSelf.instanceType
                 && has(self.sshKey) == has(oldSelf.sshKey) && (!has(self.sshKey) ||
                 self.sshKey == oldSelf.sshKey) && has(self.securityGroups) == has(oldSelf.securityGroups)
                 && (!has(self.securityGroups) || self.securityGroups == oldSelf.securityGroups)
-                && has(self.rootVolumeSizeGiB) == has(oldSelf.rootVolumeSizeGiB) &&
-                (!has(self.rootVolumeSizeGiB) || self.rootVolumeSizeGiB == oldSelf.rootVolumeSizeGiB)
+                && (has(self.rootVolumeSizeGiB) ? self.rootVolumeSizeGiB : (has(self.rootVolumeSizeGB)
+                ? self.rootVolumeSizeGB : 0)) == (has(oldSelf.rootVolumeSizeGiB) ?
+                oldSelf.rootVolumeSizeGiB : (has(oldSelf.rootVolumeSizeGB) ? oldSelf.rootVolumeSizeGB
+                : 0))'
           status:
             description: |-
               ExoscaleMachineStatus defines the observed state of an ExoscaleMachine.

@@ -81,6 +81,7 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		}
 		return reconcile.Result{}, err
 	}
+	beforeIdentity := exoCluster.DeepCopy()
 
 	patchHelper, err := patch.NewHelper(&exoCluster, r.Client)
 	if err != nil {
@@ -109,11 +110,6 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	clusterIDChanged, err := ensureClusterID(&exoCluster)
 	if err != nil {
 		return ctrl.Result{}, err
-	}
-	if clusterIDChanged {
-		if err := patchHelper.Patch(ctx, &exoCluster); err != nil {
-			return ctrl.Result{}, err
-		}
 	}
 
 	log = log.WithValues("cluster_id", *exoCluster.Status.ID)
@@ -154,6 +150,35 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+	finalizerChanged := false
+	if exoCluster.DeletionTimestamp.IsZero() {
+		finalizerChanged = controllerutil.AddFinalizer(&exoCluster, infrav1alpha1.ExoscaleClusterFinalizer)
+	}
+	if finalizerChanged {
+		desiredStatus := exoCluster.DeepCopy().Status
+		if err := r.Patch(ctx, &exoCluster, client.MergeFromWithOptions(beforeIdentity, client.MergeFromWithOptimisticLock{})); err != nil {
+			skipDeferredPatch = true
+			return ctrl.Result{}, err
+		}
+		beforeStatus := exoCluster.DeepCopy()
+		beforeStatus.Status = beforeIdentity.Status
+		patchHelper, err = patch.NewHelper(beforeStatus, r.Client)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		exoCluster.Status = desiredStatus
+	}
+	if clusterIDChanged {
+		if err := patchHelper.Patch(ctx, &exoCluster); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+	if clusterIDChanged || finalizerChanged {
+		patchHelper, err = patch.NewHelper(&exoCluster, r.Client)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+	}
 
 	// reconcile cluster.
 	clusterSvc, err := r.NewClusterService(apiKey, apiSecret, exoCluster.Spec.Zone, log)
@@ -175,8 +200,6 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		}
 		skipDeferredPatch = true
 		return ctrl.Result{}, nil
-	} else {
-		controllerutil.AddFinalizer(&exoCluster, infrav1alpha1.ExoscaleClusterFinalizer)
 	}
 
 	exoCluster, err = clusterSvc.ReconcileCluster(ctx, exoCluster)

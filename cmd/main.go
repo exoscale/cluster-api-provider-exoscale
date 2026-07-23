@@ -42,6 +42,7 @@ import (
 	infrastructurev1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/controller"
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/service"
+	webhookv1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/internal/webhook/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -226,6 +227,13 @@ func main() {
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "ExoscaleMachine")
 		os.Exit(1)
+	}
+	// nolint:goconst
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if err := webhookv1alpha1.SetupExoscaleClusterTemplateWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "Failed to create webhook", "webhook", "ExoscaleClusterTemplate")
+			os.Exit(1)
+		}
 	}
 	// +kubebuilder:scaffold:builder
 

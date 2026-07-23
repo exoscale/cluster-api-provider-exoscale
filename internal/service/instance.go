@@ -344,7 +344,7 @@ func (s *instanceService) findInstances(ctx context.Context, machineID domain.Ma
 
 	var matches []domain.Instance
 	for _, instance := range instances {
-		if instance.Labels[domain.MachineUIDKey] == machineID.String() && instance.Labels[domain.ClusterIDKey] == clusterID {
+		if instanceOwnershipError(instance, machineID, clusterID) == nil {
 			matches = append(matches, instance)
 		}
 	}
@@ -355,7 +355,7 @@ func instanceOwnershipError(instance domain.Instance, machineID domain.MachineID
 	if instance.Labels[domain.MachineUIDKey] != machineID.String() {
 		return fmt.Errorf("instance %s is not owned by Machine UID %s", instance.ID, machineID)
 	}
-	if instance.Labels[domain.ClusterIDKey] != clusterID {
+	if ownerClusterID := instance.Labels[domain.ClusterIDKey]; ownerClusterID != "" && ownerClusterID != clusterID {
 		return fmt.Errorf("instance %s is not owned by cluster %s", instance.ID, clusterID)
 	}
 	return nil

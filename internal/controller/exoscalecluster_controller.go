@@ -86,7 +86,11 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+	skipDeferredPatch := false
 	defer func() {
+		if skipDeferredPatch {
+			return
+		}
 		// TODO: maybe create a real error management with custom type
 		if reterr != nil {
 			conditions.Set(&exoCluster, metav1.Condition{
@@ -164,8 +168,12 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 				return ctrl.Result{}, err
 			}
 			log.Info("DELETE FINALIZER")
+			beforeFinalizerRemoval := exoCluster.DeepCopy()
 			controllerutil.RemoveFinalizer(&exoCluster, infrav1alpha1.ExoscaleClusterFinalizer)
+			skipDeferredPatch = true
+			return ctrl.Result{}, client.IgnoreNotFound(r.Patch(ctx, &exoCluster, client.MergeFrom(beforeFinalizerRemoval)))
 		}
+		skipDeferredPatch = true
 		return ctrl.Result{}, nil
 	} else {
 		controllerutil.AddFinalizer(&exoCluster, infrav1alpha1.ExoscaleClusterFinalizer)

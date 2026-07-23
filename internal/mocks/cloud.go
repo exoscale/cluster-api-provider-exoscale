@@ -694,6 +694,68 @@ func (_c *Cloud_ListSecurityGroupRules_Call) RunAndReturn(run func(ctx context.C
 	return _c
 }
 
+// ListSecurityGroups provides a mock function for the type Cloud
+func (_mock *Cloud) ListSecurityGroups(ctx context.Context) ([]domain.SecurityGroup, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListSecurityGroups")
+	}
+
+	var r0 []domain.SecurityGroup
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) ([]domain.SecurityGroup, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) []domain.SecurityGroup); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]domain.SecurityGroup)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// Cloud_ListSecurityGroups_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListSecurityGroups'
+type Cloud_ListSecurityGroups_Call struct {
+	*mock.Call
+}
+
+// ListSecurityGroups is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *Cloud_Expecter) ListSecurityGroups(ctx any) *Cloud_ListSecurityGroups_Call {
+	return &Cloud_ListSecurityGroups_Call{Call: _e.mock.On("ListSecurityGroups", ctx)}
+}
+
+func (_c *Cloud_ListSecurityGroups_Call) Run(run func(ctx context.Context)) *Cloud_ListSecurityGroups_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *Cloud_ListSecurityGroups_Call) Return(securityGroups []domain.SecurityGroup, err error) *Cloud_ListSecurityGroups_Call {
+	_c.Call.Return(securityGroups, err)
+	return _c
+}
+
+func (_c *Cloud_ListSecurityGroups_Call) RunAndReturn(run func(ctx context.Context) ([]domain.SecurityGroup, error)) *Cloud_ListSecurityGroups_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // UpdateElasticIP provides a mock function for the type Cloud
 func (_mock *Cloud) UpdateElasticIP(ctx context.Context, eip domain.ElasticIP) error {
 	ret := _mock.Called(ctx, eip)

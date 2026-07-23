@@ -26,16 +26,25 @@ import (
 // Zone is inherited from ExoscaleCluster.spec.zone. If multi-zone support is
 // added later, use CAPI Machine.spec.failureDomain to pick the target zone
 // instead of duplicating zone here.
+// +kubebuilder:validation:XValidation:rule="has(self.template) != has(self.templateID)",message="exactly one of template or templateID must be set"
+// +kubebuilder:validation:XValidation:rule="!(has(self.rootVolumeSizeGiB) && has(self.rootVolumeSizeGB))",message="rootVolumeSizeGiB and rootVolumeSizeGB are mutually exclusive"
 type ExoscaleMachineSpec struct {
 	// template is an Exoscale instance template UUID or exact template name.
 	// UUIDs pin an exact template; names are resolved at create time.
-	// +required
+	// +optional
 	// +kubebuilder:validation:MinLength=1
-	Template string `json:"template"`
+	Template string `json:"template,omitempty"`
+
+	// templateID is the legacy UUID-only spelling of template.
+	// Deprecated: use template.
+	// +optional
+	// +kubebuilder:validation:Pattern=`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
+	TemplateID string `json:"templateID,omitempty"`
 
 	// instanceType is an Exoscale instance type UUID or a value in [family.]size
-	// format (e.g. "small", "memory.large", "cpu.extra-large").
-	// The family defaults to "standard" when omitted.
+	// format. For example, "small" is shorthand for "standard.small".
+	// The value is resolved against the Exoscale catalog during reconciliation.
+	// Run `exo compute instance-type list -v` to list available values.
 	// +required
 	// +kubebuilder:validation:MinLength=1
 	InstanceType string `json:"instanceType"`
@@ -49,7 +58,14 @@ type ExoscaleMachineSpec struct {
 	// +optional
 	SecurityGroups []string `json:"securityGroups,omitempty"`
 
-	// rootVolumeSizeGB overrides the disk size declared by the template.
+	// rootVolumeSizeGiB overrides the disk size declared by the template.
+	// +optional
+	// +kubebuilder:validation:Minimum=10
+	// +kubebuilder:validation:Maximum=10000
+	RootVolumeSizeGiB *int64 `json:"rootVolumeSizeGiB,omitempty"`
+
+	// rootVolumeSizeGB is the legacy spelling of rootVolumeSizeGiB.
+	// Deprecated: use rootVolumeSizeGiB.
 	// +optional
 	// +kubebuilder:validation:Minimum=10
 	// +kubebuilder:validation:Maximum=10000
@@ -60,6 +76,22 @@ type ExoscaleMachineSpec struct {
 	// CAPI uses this field to match the InfraMachine to the Node object.
 	// +optional
 	ProviderID *string `json:"providerID,omitempty"`
+}
+
+// TemplateRef returns the canonical or legacy instance template reference.
+func (s ExoscaleMachineSpec) TemplateRef() string {
+	if s.Template != "" {
+		return s.Template
+	}
+	return s.TemplateID
+}
+
+// RootVolumeSize returns the canonical or legacy root volume size in GiB.
+func (s ExoscaleMachineSpec) RootVolumeSize() *int64 {
+	if s.RootVolumeSizeGiB != nil {
+		return s.RootVolumeSizeGiB
+	}
+	return s.RootVolumeSizeGB
 }
 
 // ExoscaleMachineInitializationStatus provides observations of the ExoscaleMachine initialization process.
@@ -88,10 +120,6 @@ type ExoscaleMachineStatus struct {
 	// +kubebuilder:validation:Pattern=`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
 	InstanceID string `json:"instanceID,omitempty"`
 
-	// instanceState is the Exoscale instance state (e.g. "running", "stopped").
-	// +optional
-	InstanceState string `json:"instanceState,omitempty"`
-
 	// addresses are the network addresses of the instance (public and private IPs).
 	// +optional
 	// +listType=atomic
@@ -117,10 +145,10 @@ type ExoscaleMachineStatus struct {
 // +kubebuilder:resource:path=exoscalemachines,scope=Namespaced,categories=cluster-api,shortName=exom
 // +kubebuilder:storageversion
 // +kubebuilder:printcolumn:name="Cluster",type=string,JSONPath=`.metadata.labels.cluster\.x-k8s\.io/cluster-name`
-// +kubebuilder:printcolumn:name="State",type=string,JSONPath=`.status.instanceState`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.ready`
 // +kubebuilder:printcolumn:name="ProviderID",type=string,JSONPath=`.spec.providerID`
 // +kubebuilder:printcolumn:name="Machine",type=string,JSONPath=`.metadata.ownerReferences[?(@.kind=="Machine")].name`
+// +kubebuilder:validation:XValidation:rule="(has(self.spec.template) ? self.spec.template : self.spec.templateID) == (has(oldSelf.spec.template) ? oldSelf.spec.template : oldSelf.spec.templateID) && self.spec.instanceType == oldSelf.spec.instanceType && has(self.spec.sshKey) == has(oldSelf.spec.sshKey) && (!has(self.spec.sshKey) || self.spec.sshKey == oldSelf.spec.sshKey) && has(self.spec.securityGroups) == has(oldSelf.spec.securityGroups) && (!has(self.spec.securityGroups) || self.spec.securityGroups == oldSelf.spec.securityGroups) && (has(self.spec.rootVolumeSizeGiB) ? self.spec.rootVolumeSizeGiB : (has(self.spec.rootVolumeSizeGB) ? self.spec.rootVolumeSizeGB : 0)) == (has(oldSelf.spec.rootVolumeSizeGiB) ? oldSelf.spec.rootVolumeSizeGiB : (has(oldSelf.spec.rootVolumeSizeGB) ? oldSelf.spec.rootVolumeSizeGB : 0))",message="instance creation fields are immutable"
 
 // ExoscaleMachine is the Schema for the exoscalemachines API.
 type ExoscaleMachine struct {

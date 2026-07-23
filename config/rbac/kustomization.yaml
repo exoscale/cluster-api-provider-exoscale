@@ -22,10 +22,15 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the cluster-api-provider-exoscale itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
+- exoscaleclustertemplate_admin_role.yaml
+- exoscaleclustertemplate_editor_role.yaml
+- exoscaleclustertemplate_viewer_role.yaml
+- exoscalemachinetemplate_admin_role.yaml
+- exoscalemachinetemplate_editor_role.yaml
+- exoscalemachinetemplate_viewer_role.yaml
 - exoscalemachine_admin_role.yaml
 - exoscalemachine_editor_role.yaml
 - exoscalemachine_viewer_role.yaml
 - exoscalecluster_admin_role.yaml
 - exoscalecluster_editor_role.yaml
 - exoscalecluster_viewer_role.yaml
-

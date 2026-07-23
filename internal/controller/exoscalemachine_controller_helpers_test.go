@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	infrav1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
@@ -45,6 +46,53 @@ func TestExoscaleMachineReconciler_getExoscaleCluster(t *testing.T) {
 		assert.ErrorContains(t, err, `unable to fetch ExoscaleCluster "missing"`)
 		assert.True(t, apierrors.IsNotFound(err))
 	})
+}
+
+func TestEnsureMachineID(t *testing.T) {
+	t.Parallel()
+
+	machine := &clusterv1.Machine{ObjectMeta: metav1.ObjectMeta{UID: "current-uid"}}
+	exoMachine := &infrav1alpha1.ExoscaleMachine{}
+
+	machineID, added, err := ensureMachineID(exoMachine, machine)
+
+	assert.NoError(t, err)
+	assert.True(t, added)
+	assert.Equal(t, domain.MachineID("current-uid"), machineID)
+	assert.Equal(t, "current-uid", exoMachine.Annotations[domain.MachineUIDKey])
+
+	exoMachine.Annotations[domain.MachineUIDKey] = "pre-move-uid"
+	machineID, added, err = ensureMachineID(exoMachine, machine)
+
+	assert.NoError(t, err)
+	assert.False(t, added)
+	assert.Equal(t, domain.MachineID("pre-move-uid"), machineID)
+}
+
+func TestExoscaleClusterID(t *testing.T) {
+	t.Parallel()
+
+	annotationID := uuid.New()
+	statusID := uuid.NewString()
+
+	id, err := exoscaleClusterID(&infrav1alpha1.ExoscaleCluster{ObjectMeta: metav1.ObjectMeta{
+		Annotations: map[string]string{domain.ClusterIDKey: annotationID.String()},
+	}})
+	assert.NoError(t, err)
+	assert.Equal(t, annotationID, id)
+
+	_, err = exoscaleClusterID(&infrav1alpha1.ExoscaleCluster{
+		ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{domain.ClusterIDKey: annotationID.String()}},
+		Status:     infrav1alpha1.ExoscaleClusterStatus{ID: &statusID},
+	})
+	assert.ErrorContains(t, err, "does not match status")
+}
+
+func TestInstanceName(t *testing.T) {
+	t.Parallel()
+
+	assert.NotEqual(t, instanceName("a-b", "c"), instanceName("a", "b-c"))
+	assert.Len(t, instanceName(strings.Repeat("a", 63), strings.Repeat("b", 253)), 255)
 }
 
 func TestExoscaleMachineReconciler_instanceService(t *testing.T) {
@@ -119,6 +167,7 @@ func TestExoscaleMachineReconciler_bootstrapData(t *testing.T) {
 	ctx := context.Background()
 	missingName := "missing"
 	emptyName := "empty"
+	emptyValueName := "empty-value"
 	tests := []struct {
 		name         string
 		secretName   *string
@@ -133,6 +182,15 @@ func TestExoscaleMachineReconciler_bootstrapData(t *testing.T) {
 			secretName: &emptyName,
 			secret:     &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: emptyName, Namespace: "default"}},
 			wantErr:    `bootstrap data secret "empty" has no value key`,
+		},
+		{
+			name:       "requires non-empty value",
+			secretName: &emptyValueName,
+			secret: &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: emptyValueName, Namespace: "default"},
+				Data:       map[string][]byte{"value": {}},
+			},
+			wantErr: `bootstrap data secret "empty-value" has an empty value`,
 		},
 	}
 

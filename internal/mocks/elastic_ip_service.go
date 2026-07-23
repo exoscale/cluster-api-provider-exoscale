@@ -40,16 +40,16 @@ func (_m *ElasticIPService) EXPECT() *ElasticIPService_Expecter {
 }
 
 // DeleteElasticIP provides a mock function for the type ElasticIPService
-func (_mock *ElasticIPService) DeleteElasticIP(ctx context.Context, id uuid.UUID) error {
-	ret := _mock.Called(ctx, id)
+func (_mock *ElasticIPService) DeleteElasticIP(ctx context.Context, id uuid.UUID, clusterID uuid.UUID) error {
+	ret := _mock.Called(ctx, id, clusterID)
 
 	if len(ret) == 0 {
 		panic("no return value specified for DeleteElasticIP")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID) error); ok {
-		r0 = returnFunc(ctx, id)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID, uuid.UUID) error); ok {
+		r0 = returnFunc(ctx, id, clusterID)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -64,11 +64,83 @@ type ElasticIPService_DeleteElasticIP_Call struct {
 // DeleteElasticIP is a helper method to define mock.On call
 //   - ctx context.Context
 //   - id uuid.UUID
-func (_e *ElasticIPService_Expecter) DeleteElasticIP(ctx any, id any) *ElasticIPService_DeleteElasticIP_Call {
-	return &ElasticIPService_DeleteElasticIP_Call{Call: _e.mock.On("DeleteElasticIP", ctx, id)}
+//   - clusterID uuid.UUID
+func (_e *ElasticIPService_Expecter) DeleteElasticIP(ctx any, id any, clusterID any) *ElasticIPService_DeleteElasticIP_Call {
+	return &ElasticIPService_DeleteElasticIP_Call{Call: _e.mock.On("DeleteElasticIP", ctx, id, clusterID)}
 }
 
-func (_c *ElasticIPService_DeleteElasticIP_Call) Run(run func(ctx context.Context, id uuid.UUID)) *ElasticIPService_DeleteElasticIP_Call {
+func (_c *ElasticIPService_DeleteElasticIP_Call) Run(run func(ctx context.Context, id uuid.UUID, clusterID uuid.UUID)) *ElasticIPService_DeleteElasticIP_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 uuid.UUID
+		if args[1] != nil {
+			arg1 = args[1].(uuid.UUID)
+		}
+		var arg2 uuid.UUID
+		if args[2] != nil {
+			arg2 = args[2].(uuid.UUID)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *ElasticIPService_DeleteElasticIP_Call) Return(err error) *ElasticIPService_DeleteElasticIP_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *ElasticIPService_DeleteElasticIP_Call) RunAndReturn(run func(ctx context.Context, id uuid.UUID, clusterID uuid.UUID) error) *ElasticIPService_DeleteElasticIP_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// FindElasticIP provides a mock function for the type ElasticIPService
+func (_mock *ElasticIPService) FindElasticIP(ctx context.Context, clusterID uuid.UUID) (domain.ElasticIP, error) {
+	ret := _mock.Called(ctx, clusterID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FindElasticIP")
+	}
+
+	var r0 domain.ElasticIP
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID) (domain.ElasticIP, error)); ok {
+		return returnFunc(ctx, clusterID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID) domain.ElasticIP); ok {
+		r0 = returnFunc(ctx, clusterID)
+	} else {
+		r0 = ret.Get(0).(domain.ElasticIP)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, uuid.UUID) error); ok {
+		r1 = returnFunc(ctx, clusterID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// ElasticIPService_FindElasticIP_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindElasticIP'
+type ElasticIPService_FindElasticIP_Call struct {
+	*mock.Call
+}
+
+// FindElasticIP is a helper method to define mock.On call
+//   - ctx context.Context
+//   - clusterID uuid.UUID
+func (_e *ElasticIPService_Expecter) FindElasticIP(ctx any, clusterID any) *ElasticIPService_FindElasticIP_Call {
+	return &ElasticIPService_FindElasticIP_Call{Call: _e.mock.On("FindElasticIP", ctx, clusterID)}
+}
+
+func (_c *ElasticIPService_FindElasticIP_Call) Run(run func(ctx context.Context, clusterID uuid.UUID)) *ElasticIPService_FindElasticIP_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -86,12 +158,12 @@ func (_c *ElasticIPService_DeleteElasticIP_Call) Run(run func(ctx context.Contex
 	return _c
 }
 
-func (_c *ElasticIPService_DeleteElasticIP_Call) Return(err error) *ElasticIPService_DeleteElasticIP_Call {
-	_c.Call.Return(err)
+func (_c *ElasticIPService_FindElasticIP_Call) Return(elasticIP domain.ElasticIP, err error) *ElasticIPService_FindElasticIP_Call {
+	_c.Call.Return(elasticIP, err)
 	return _c
 }
 
-func (_c *ElasticIPService_DeleteElasticIP_Call) RunAndReturn(run func(ctx context.Context, id uuid.UUID) error) *ElasticIPService_DeleteElasticIP_Call {
+func (_c *ElasticIPService_FindElasticIP_Call) RunAndReturn(run func(ctx context.Context, clusterID uuid.UUID) (domain.ElasticIP, error)) *ElasticIPService_FindElasticIP_Call {
 	_c.Call.Return(run)
 	return _c
 }

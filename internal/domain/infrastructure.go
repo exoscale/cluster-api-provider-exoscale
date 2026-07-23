@@ -9,6 +9,11 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	ClusterIDKey  = "cluster-api-provider-exoscale/cluster-id"
+	MachineUIDKey = "cluster-api-provider-exoscale/machine-uid"
+)
+
 type ExoscaleClient interface {
 	Wait(ctx context.Context, op *egoscale.Operation, states ...egoscale.OperationState) (*egoscale.Operation, error)
 
@@ -20,6 +25,7 @@ type ExoscaleClient interface {
 
 	CreateSecurityGroup(ctx context.Context, req egoscale.CreateSecurityGroupRequest) (*egoscale.Operation, error)
 	GetSecurityGroup(ctx context.Context, id egoscale.UUID) (*egoscale.SecurityGroup, error)
+	ListSecurityGroups(ctx context.Context, opts ...egoscale.ListSecurityGroupsOpt) (*egoscale.ListSecurityGroupsResponse, error)
 	DeleteSecurityGroup(ctx context.Context, id egoscale.UUID) (*egoscale.Operation, error)
 	AddRuleToSecurityGroup(ctx context.Context, id egoscale.UUID, req egoscale.AddRuleToSecurityGroupRequest) (*egoscale.Operation, error)
 	DeleteRuleFromSecurityGroup(ctx context.Context, id egoscale.UUID, ruleID egoscale.UUID) (*egoscale.Operation, error)
@@ -34,6 +40,7 @@ type Cloud interface {
 
 	CreateSecurityGroup(ctx context.Context, name string) (uuid.UUID, error)
 	GetSecurityGroup(ctx context.Context, id uuid.UUID) (SecurityGroup, error)
+	ListSecurityGroups(ctx context.Context) ([]SecurityGroup, error)
 	DeleteSecurityGroup(ctx context.Context, id uuid.UUID) error
 
 	CreateSecurityGroupRule(ctx context.Context, sgID uuid.UUID, rule SecurityGroupRule) (uuid.UUID, error)
@@ -43,14 +50,16 @@ type Cloud interface {
 
 type ElasticIPService interface {
 	UpsertElasticIP(ctx context.Context, clusterID uuid.UUID, eipID *uuid.UUID, port int32) (ElasticIP, error)
-	DeleteElasticIP(ctx context.Context, id uuid.UUID) error
+	FindElasticIP(ctx context.Context, clusterID uuid.UUID) (ElasticIP, error)
+	DeleteElasticIP(ctx context.Context, id, clusterID uuid.UUID) error
 }
 
 type SecurityGroupService interface {
 	UpsertSecurityGroup(ctx context.Context, clusterID uuid.UUID, scID *uuid.UUID, name string) (SecurityGroup, error)
-	DeleteSecurityGroup(ctx context.Context, id uuid.UUID) error
+	FindSecurityGroup(ctx context.Context, name string) (SecurityGroup, error)
+	DeleteSecurityGroup(ctx context.Context, id uuid.UUID, name string) error
 	UpsertSecurityGroupRules(ctx context.Context, sgID uuid.UUID, desiredRules []SecurityGroupRule) ([]SecurityGroupRule, error)
-	PurgeSecurityGroup(ctx context.Context, sgID uuid.UUID) error
+	PurgeSecurityGroup(ctx context.Context, sgID uuid.UUID, name string) error
 }
 
 type ElasticIP struct {
@@ -107,20 +116,24 @@ type Cluster struct {
 }
 
 type InstanceService interface {
-	UpsertInstance(ctx context.Context, machineID uuid.UUID, instanceID *uuid.UUID, spec InstanceSpec) (Instance, error)
-	DeleteInstance(ctx context.Context, machineID, instanceID *uuid.UUID) error
+	UpsertInstance(ctx context.Context, machineID MachineID, instanceID *uuid.UUID, spec InstanceSpec) (Instance, error)
+	DeleteInstance(ctx context.Context, machineID *MachineID, clusterID uuid.UUID, instanceID *uuid.UUID) error
 }
 
+type MachineID string
+
+func (id MachineID) String() string { return string(id) }
+
 type InstanceSpec struct {
-	Name             string
-	Template         string
-	InstanceType     string
-	SSHKey           string
-	SecurityGroupIDs []uuid.UUID
-	ElasticIPID      *uuid.UUID
-	RootVolumeSizeGB *int64
-	UserData         string
-	Labels           map[string]string
+	Name              string
+	Template          string
+	InstanceType      string
+	SSHKey            string
+	SecurityGroupIDs  []uuid.UUID
+	ElasticIPID       *uuid.UUID
+	RootVolumeSizeGiB *int64
+	UserData          string
+	Labels            map[string]string
 }
 
 type ResolvedInstanceSpec struct {
@@ -129,7 +142,7 @@ type ResolvedInstanceSpec struct {
 	InstanceType     InstanceType
 	SSHKey           string
 	SecurityGroupIDs []uuid.UUID
-	DiskSizeGB       int64
+	DiskSizeGiB      int64
 	UserData         string
 	Labels           map[string]string
 }

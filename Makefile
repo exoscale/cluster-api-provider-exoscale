@@ -82,9 +82,12 @@ setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
 	esac
 
 .PHONY: test-e2e
-test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expected an isolated environment using Kind.
-	KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v
-	$(MAKE) cleanup-test-e2e
+test-e2e: setup-test-e2e manifests generate fmt vet clusterctl ## Run the e2e tests. Expected an isolated environment using Kind.
+	@status=0; \
+		"$(CLUSTERCTL)" init --infrastructure - && \
+		KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v || status=$$?; \
+		$(MAKE) cleanup-test-e2e KIND_CLUSTER=$(KIND_CLUSTER); \
+		exit $$status
 
 CHAINSAW_VALUES_SUFFIX ?=
 CHAINSAW_VALUES_ZONE ?=
@@ -99,9 +102,9 @@ chainsaw-test-e2e: setup-test-e2e-chainsaw chainsaw ## Run the e2e tests. Expect
 	EXOSCALE_ZONE=$(if $(CHAINSAW_VALUES_ZONE),$(CHAINSAW_VALUES_ZONE),bg-sof-1) \
 		$(CLUSTERCTL) generate cluster template-validation \
 		--from templates/cluster-template.yaml \
-		--kubernetes-version v1.32.0 \
+		--kubernetes-version v1.32.13 \
 		| $(KUBECTL) apply --server-side --dry-run=server -f -
-	$(CHAINSAW) test --set='suffix=$(CHAINSAW_VALUES_SUFFIX),zone=$(CHAINSAW_VALUES_ZONE),template=$(CHAINSAW_MACHINE_TEMPLATE),instanceType=$(CHAINSAW_MACHINE_INSTANCE_TYPE)' $(CHAINSAW_TEST_DIRS)
+	$(CHAINSAW) test --parallel 1 --set='suffix=$(CHAINSAW_VALUES_SUFFIX),zone=$(CHAINSAW_VALUES_ZONE),template=$(CHAINSAW_MACHINE_TEMPLATE),instanceType=$(CHAINSAW_MACHINE_INSTANCE_TYPE),image=$(IMG)' $(CHAINSAW_TEST_DIRS)
 
 ## Exoscale credentials: use env vars if already set, otherwise read from config file.
 EXOSCALE_CONFIG      ?= $(HOME)/.config/exoscale/exoscale.toml
@@ -164,9 +167,11 @@ lint-config: golangci-lint ## Verify golangci-lint linter configuration
 build: manifests generate fmt vet ## Build manager binary.
 	go build -o bin/manager cmd/main.go
 
+ENABLE_WEBHOOKS ?= false
+
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
-	go run ./cmd/main.go
+	ENABLE_WEBHOOKS=$(ENABLE_WEBHOOKS) go run ./cmd/main.go
 
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
@@ -220,8 +225,13 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 
 .PHONY: deploy
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG}
-	"$(KUSTOMIZE)" build config/default | "$(KUBECTL)" apply -f -
+	@tmp="$$(mktemp -d)"; \
+		trap 'rm -rf "$$tmp"' EXIT; \
+		ln -s "$(CURDIR)/config/default" "$$tmp/base"; \
+		printf 'apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n  - base\n' > "$$tmp/kustomization.yaml"; \
+		cd "$$tmp"; \
+		"$(KUSTOMIZE)" edit set image controller=${IMG}; \
+		"$(KUSTOMIZE)" build --load-restrictor LoadRestrictionsNone . | "$(KUBECTL)" apply -f -
 
 .PHONY: undeploy
 undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.

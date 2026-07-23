@@ -22,9 +22,6 @@ spec:
     - jsonPath: .metadata.labels.cluster\.x-k8s\.io/cluster-name
       name: Cluster
       type: string
-    - jsonPath: .status.instanceState
-      name: State
-      type: string
     - jsonPath: .status.ready
       name: Ready
       type: string
@@ -67,8 +64,9 @@ spec:
               instanceType:
                 description: |-
                   instanceType is an Exoscale instance type UUID or a value in [family.]size
-                  format (e.g. "small", "memory.large", "cpu.extra-large").
-                  The family defaults to "standard" when omitted.
+                  format. For example, "small" is shorthand for "standard.small".
+                  The value is resolved against the Exoscale catalog during reconciliation.
+                  Run `exo compute instance-type list -v` to list available values.
                 minLength: 1
                 type: string
               providerID:
@@ -78,7 +76,15 @@ spec:
                   CAPI uses this field to match the InfraMachine to the Node object.
                 type: string
               rootVolumeSizeGB:
-                description: rootVolumeSizeGB overrides the disk size declared by
+                description: |-
+                  rootVolumeSizeGB is the legacy spelling of rootVolumeSizeGiB.
+                  Deprecated: use rootVolumeSizeGiB.
+                format: int64
+                maximum: 10000
+                minimum: 10
+                type: integer
+              rootVolumeSizeGiB:
+                description: rootVolumeSizeGiB overrides the disk size declared by
                   the template.
                 format: int64
                 maximum: 10000
@@ -101,10 +107,20 @@ spec:
                   UUIDs pin an exact template; names are resolved at create time.
                 minLength: 1
                 type: string
+              templateID:
+                description: |-
+                  templateID is the legacy UUID-only spelling of template.
+                  Deprecated: use template.
+                pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+                type: string
             required:
             - instanceType
-            - template
             type: object
+            x-kubernetes-validations:
+            - message: exactly one of template or templateID must be set
+              rule: has(self.template) != has(self.templateID)
+            - message: rootVolumeSizeGiB and rootVolumeSizeGB are mutually exclusive
+              rule: '!(has(self.rootVolumeSizeGiB) && has(self.rootVolumeSizeGB))'
           status:
             description: |-
               ExoscaleMachineStatus defines the observed state of an ExoscaleMachine.
@@ -224,10 +240,6 @@ spec:
                   creation.
                 pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
                 type: string
-              instanceState:
-                description: instanceState is the Exoscale instance state (e.g. "running",
-                  "stopped").
-                type: string
               ready:
                 description: ready is true when the Exoscale instance is running and
                   reachable.
@@ -238,6 +250,18 @@ spec:
         required:
         - spec
         type: object
+        x-kubernetes-validations:
+        - message: instance creation fields are immutable
+          rule: '(has(self.spec.template) ? self.spec.template : self.spec.templateID)
+            == (has(oldSelf.spec.template) ? oldSelf.spec.template : oldSelf.spec.templateID)
+            && self.spec.instanceType == oldSelf.spec.instanceType && has(self.spec.sshKey)
+            == has(oldSelf.spec.sshKey) && (!has(self.spec.sshKey) || self.spec.sshKey
+            == oldSelf.spec.sshKey) && has(self.spec.securityGroups) == has(oldSelf.spec.securityGroups)
+            && (!has(self.spec.securityGroups) || self.spec.securityGroups == oldSelf.spec.securityGroups)
+            && (has(self.spec.rootVolumeSizeGiB) ? self.spec.rootVolumeSizeGiB : (has(self.spec.rootVolumeSizeGB)
+            ? self.spec.rootVolumeSizeGB : 0)) == (has(oldSelf.spec.rootVolumeSizeGiB)
+            ? oldSelf.spec.rootVolumeSizeGiB : (has(oldSelf.spec.rootVolumeSizeGB)
+            ? oldSelf.spec.rootVolumeSizeGB : 0))'
     served: true
     storage: true
     subresources:

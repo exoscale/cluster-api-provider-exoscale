@@ -78,8 +78,9 @@ spec:
                       instanceType:
                         description: |-
                           instanceType is an Exoscale instance type UUID or a value in [family.]size
-                          format (e.g. "small", "memory.large", "cpu.extra-large").
-                          The family defaults to "standard" when omitted.
+                          format. For example, "small" is shorthand for "standard.small".
+                          The value is resolved against the Exoscale catalog during reconciliation.
+                          Run `exo compute instance-type list -v` to list available values.
                         minLength: 1
                         type: string
                       providerID:
@@ -89,7 +90,15 @@ spec:
                           CAPI uses this field to match the InfraMachine to the Node object.
                         type: string
                       rootVolumeSizeGB:
-                        description: rootVolumeSizeGB overrides the disk size declared
+                        description: |-
+                          rootVolumeSizeGB is the legacy spelling of rootVolumeSizeGiB.
+                          Deprecated: use rootVolumeSizeGiB.
+                        format: int64
+                        maximum: 10000
+                        minimum: 10
+                        type: integer
+                      rootVolumeSizeGiB:
+                        description: rootVolumeSizeGiB overrides the disk size declared
                           by the template.
                         format: int64
                         maximum: 10000
@@ -112,18 +121,27 @@ spec:
                           UUIDs pin an exact template; names are resolved at create time.
                         minLength: 1
                         type: string
+                      templateID:
+                        description: |-
+                          templateID is the legacy UUID-only spelling of template.
+                          Deprecated: use template.
+                        pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+                        type: string
                     required:
                     - instanceType
-                    - template
                     type: object
+                    x-kubernetes-validations:
+                    - message: exactly one of template or templateID must be set
+                      rule: has(self.template) != has(self.templateID)
+                    - message: rootVolumeSizeGiB and rootVolumeSizeGB are mutually
+                        exclusive
+                      rule: '!(has(self.rootVolumeSizeGiB) && has(self.rootVolumeSizeGB))'
                 required:
                 - spec
                 type: object
                 x-kubernetes-validations:
                 - message: providerID must not be set in an ExoscaleMachineTemplate
                   rule: '!has(self.spec.providerID)'
-                - message: spec.template.spec is immutable
-                  rule: self.spec == oldSelf.spec
             required:
             - template
             type: object

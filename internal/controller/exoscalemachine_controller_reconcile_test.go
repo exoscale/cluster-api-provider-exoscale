@@ -44,6 +44,8 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 	elasticIPID := uuid.New()
 	controlPlaneSecurityGroupID := uuid.New()
 	nodeSecurityGroupID := uuid.New()
+	clusterID := uuid.NewString()
+	rootVolumeSize := int64(20)
 	dataSecretName := bootstrapSecretName
 	clusterProvisioned := true
 
@@ -53,14 +55,19 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 	_ = infrav1alpha1.AddToScheme(scheme)
 
 	instanceSvc := mocks.NewInstanceService(t)
-	instanceSvc.EXPECT().UpsertInstance(ctx, machineUID, (*uuid.UUID)(nil), domain.InstanceSpec{
-		Name:             machineName,
-		Template:         templateID.String(),
-		InstanceType:     "standard.small",
-		SSHKey:           "ssh-key",
-		SecurityGroupIDs: []uuid.UUID{controlPlaneSecurityGroupID},
-		ElasticIPID:      &elasticIPID,
-		UserData:         "#cloud-config",
+	instanceSvc.EXPECT().UpsertInstance(ctx, domain.MachineID(machineUID.String()), (*uuid.UUID)(nil), domain.InstanceSpec{
+		Name:              instanceName(ns, machineName),
+		Template:          templateID.String(),
+		InstanceType:      "standard.small",
+		SSHKey:            "ssh-key",
+		SecurityGroupIDs:  []uuid.UUID{controlPlaneSecurityGroupID},
+		ElasticIPID:       &elasticIPID,
+		RootVolumeSizeGiB: &rootVolumeSize,
+		UserData:          "#cloud-config",
+		Labels: map[string]string{
+			instanceClusterIDLabel: clusterID,
+			instanceRoleLabel:      "control-plane",
+		},
 	}).Return(domain.Instance{ID: instanceID, State: "running", PublicIP: "1.2.3.4", PrivateIP: "10.0.0.1"}, nil)
 
 	client := fake.NewClientBuilder().
@@ -91,6 +98,7 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 					},
 				},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
+					ID:                       &clusterID,
 					Initialization:           infrav1alpha1.ExoscaleClusterInitializationStatus{Provisioned: &clusterProvisioned},
 					ControlPlaneEndpoint:     &infrav1alpha1.APIEndpointStatus{ID: elasticIPID.String()},
 					SecurityGroupControlPlan: &infrav1alpha1.SecurityGroupStatus{ID: controlPlaneSecurityGroupID.String()},
@@ -133,9 +141,10 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 					},
 				},
 				Spec: infrav1alpha1.ExoscaleMachineSpec{
-					Template:     templateID.String(),
-					InstanceType: "standard.small",
-					SSHKey:       "ssh-key",
+					TemplateID:       templateID.String(),
+					InstanceType:     "standard.small",
+					SSHKey:           "ssh-key",
+					RootVolumeSizeGB: &rootVolumeSize,
 				},
 				Status: infrav1alpha1.ExoscaleMachineStatus{
 					Conditions: []metav1.Condition{
@@ -165,7 +174,11 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 	updated := &infrav1alpha1.ExoscaleMachine{}
 	assert.NoError(t, client.Get(ctx, types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}, updated))
 	assert.Equal(t, instanceID.String(), updated.Status.InstanceID)
-	assert.Equal(t, "running", updated.Status.InstanceState)
+	assert.Equal(t, machineUID.String(), updated.Annotations[domain.MachineUIDKey])
+	assert.Equal(t, templateID.String(), updated.Spec.TemplateID)
+	assert.Empty(t, updated.Spec.Template)
+	assert.Equal(t, &rootVolumeSize, updated.Spec.RootVolumeSizeGB)
+	assert.Nil(t, updated.Spec.RootVolumeSizeGiB)
 	assert.Equal(t, []clusterv1.MachineAddress{
 		{Type: clusterv1.MachineExternalIP, Address: "1.2.3.4"},
 		{Type: clusterv1.MachineInternalIP, Address: "10.0.0.1"},
@@ -264,7 +277,6 @@ func TestExoscaleMachineReconciler_Reconcile_prerequisites(t *testing.T) {
 			}
 			assert.Nil(t, updated.Spec.ProviderID)
 			assert.Empty(t, updated.Status.InstanceID)
-			assert.Empty(t, updated.Status.InstanceState)
 			assert.Empty(t, updated.Status.Addresses)
 			assert.Nil(t, updated.Status.Initialization.Provisioned)
 		})
@@ -295,10 +307,9 @@ func TestExoscaleMachineReconciler_reconcileNormal_controlPlaneEndpoint(t *testi
 	tests := []struct {
 		name     string
 		endpoint *infrav1alpha1.APIEndpointStatus
-		wantWait bool
 		wantErr  string
 	}{
-		{name: "waits for endpoint", wantWait: true},
+		{name: "requires endpoint", wantErr: "control plane Elastic IP is not available"},
 		{name: "rejects invalid endpoint ID", endpoint: &infrav1alpha1.APIEndpointStatus{ID: "bad-id"}, wantErr: "invalid control plane Elastic IP ID"},
 	}
 
@@ -334,9 +345,6 @@ func TestExoscaleMachineReconciler_reconcileNormal_controlPlaneEndpoint(t *testi
 				return
 			}
 			assert.NoError(t, err)
-			if tc.wantWait {
-				assert.Equal(t, 15*time.Second, result.RequeueAfter)
-			}
 			ready := apimeta.FindStatusCondition(exoMachine.Status.Conditions, clusterv1.ReadyCondition)
 			if assert.NotNil(t, ready) {
 				assert.Equal(t, metav1.ConditionFalse, ready.Status)
@@ -367,7 +375,6 @@ func TestExoscaleMachineReconciler_Reconcile_waitsForInstanceRunning(t *testing.
 	updated := &infrav1alpha1.ExoscaleMachine{}
 	assert.NoError(t, client.Get(ctx, types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}, updated))
 	assert.Equal(t, instanceID.String(), updated.Status.InstanceID)
-	assert.Equal(t, "starting", updated.Status.InstanceState)
 	assert.False(t, updated.Status.Ready)
 	ready := apimeta.FindStatusCondition(updated.Status.Conditions, clusterv1.ReadyCondition)
 	if assert.NotNil(t, ready) {

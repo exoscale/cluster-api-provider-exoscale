@@ -5,6 +5,14 @@ metadata:
   namespace: ($namespace)
 spec:
   zone: ($zone)
+  securityGroupControlPlane:
+    rules:
+      - flowDirection: ingress
+        protocol: udp
+        startPort: 8472
+        endPort: 8472
+        securityGroup: itself
+        description: Flannel VXLAN between control-plane nodes
 ---
 apiVersion: cluster.x-k8s.io/v1beta2
 kind: Cluster
@@ -39,9 +47,12 @@ spec:
     metadata:
       labels:
         e2e.cluster.x-k8s.io/template: ($clusterName)
+      annotations:
+        e2e.cluster.x-k8s.io/template: ($clusterName)
     spec:
       template: ($template)
       instanceType: ($instanceType)
+      rootVolumeSizeGiB: 20
 ---
 apiVersion: controlplane.cluster.x-k8s.io/v1beta2
 kind: KubeadmControlPlane
@@ -50,7 +61,7 @@ metadata:
   namespace: ($namespace)
 spec:
   replicas: 1
-  version: v1.32.0
+  version: v1.32.13
   machineTemplate:
     spec:
       infrastructureRef:
@@ -93,7 +104,7 @@ spec:
       - curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.32/deb/Release.key | gpg --dearmor --yes -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
       - printf '%s\n' 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.32/deb/ /' > /etc/apt/sources.list.d/kubernetes.list
       - apt-get update
-      - DEBIAN_FRONTEND=noninteractive apt-get install -y kubelet=1.32.0-1.1 kubeadm=1.32.0-1.1
+      - DEBIAN_FRONTEND=noninteractive apt-get install -y kubelet=1.32.13-1.1 kubeadm=1.32.13-1.1
       - apt-mark hold kubelet kubeadm
       - >-
         instance_id="$(curl --fail --silent --show-error --retry 30 --retry-delay 2

@@ -40,16 +40,16 @@ func (_m *SecurityGroupService) EXPECT() *SecurityGroupService_Expecter {
 }
 
 // DeleteSecurityGroup provides a mock function for the type SecurityGroupService
-func (_mock *SecurityGroupService) DeleteSecurityGroup(ctx context.Context, id uuid.UUID) error {
-	ret := _mock.Called(ctx, id)
+func (_mock *SecurityGroupService) DeleteSecurityGroup(ctx context.Context, id uuid.UUID, name string) error {
+	ret := _mock.Called(ctx, id, name)
 
 	if len(ret) == 0 {
 		panic("no return value specified for DeleteSecurityGroup")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID) error); ok {
-		r0 = returnFunc(ctx, id)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID, string) error); ok {
+		r0 = returnFunc(ctx, id, name)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -64,11 +64,12 @@ type SecurityGroupService_DeleteSecurityGroup_Call struct {
 // DeleteSecurityGroup is a helper method to define mock.On call
 //   - ctx context.Context
 //   - id uuid.UUID
-func (_e *SecurityGroupService_Expecter) DeleteSecurityGroup(ctx any, id any) *SecurityGroupService_DeleteSecurityGroup_Call {
-	return &SecurityGroupService_DeleteSecurityGroup_Call{Call: _e.mock.On("DeleteSecurityGroup", ctx, id)}
+//   - name string
+func (_e *SecurityGroupService_Expecter) DeleteSecurityGroup(ctx any, id any, name any) *SecurityGroupService_DeleteSecurityGroup_Call {
+	return &SecurityGroupService_DeleteSecurityGroup_Call{Call: _e.mock.On("DeleteSecurityGroup", ctx, id, name)}
 }
 
-func (_c *SecurityGroupService_DeleteSecurityGroup_Call) Run(run func(ctx context.Context, id uuid.UUID)) *SecurityGroupService_DeleteSecurityGroup_Call {
+func (_c *SecurityGroupService_DeleteSecurityGroup_Call) Run(run func(ctx context.Context, id uuid.UUID, name string)) *SecurityGroupService_DeleteSecurityGroup_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -78,9 +79,14 @@ func (_c *SecurityGroupService_DeleteSecurityGroup_Call) Run(run func(ctx contex
 		if args[1] != nil {
 			arg1 = args[1].(uuid.UUID)
 		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
 		run(
 			arg0,
 			arg1,
+			arg2,
 		)
 	})
 	return _c
@@ -91,22 +97,88 @@ func (_c *SecurityGroupService_DeleteSecurityGroup_Call) Return(err error) *Secu
 	return _c
 }
 
-func (_c *SecurityGroupService_DeleteSecurityGroup_Call) RunAndReturn(run func(ctx context.Context, id uuid.UUID) error) *SecurityGroupService_DeleteSecurityGroup_Call {
+func (_c *SecurityGroupService_DeleteSecurityGroup_Call) RunAndReturn(run func(ctx context.Context, id uuid.UUID, name string) error) *SecurityGroupService_DeleteSecurityGroup_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// FindSecurityGroup provides a mock function for the type SecurityGroupService
+func (_mock *SecurityGroupService) FindSecurityGroup(ctx context.Context, name string) (domain.SecurityGroup, error) {
+	ret := _mock.Called(ctx, name)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FindSecurityGroup")
+	}
+
+	var r0 domain.SecurityGroup
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (domain.SecurityGroup, error)); ok {
+		return returnFunc(ctx, name)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) domain.SecurityGroup); ok {
+		r0 = returnFunc(ctx, name)
+	} else {
+		r0 = ret.Get(0).(domain.SecurityGroup)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, name)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// SecurityGroupService_FindSecurityGroup_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindSecurityGroup'
+type SecurityGroupService_FindSecurityGroup_Call struct {
+	*mock.Call
+}
+
+// FindSecurityGroup is a helper method to define mock.On call
+//   - ctx context.Context
+//   - name string
+func (_e *SecurityGroupService_Expecter) FindSecurityGroup(ctx any, name any) *SecurityGroupService_FindSecurityGroup_Call {
+	return &SecurityGroupService_FindSecurityGroup_Call{Call: _e.mock.On("FindSecurityGroup", ctx, name)}
+}
+
+func (_c *SecurityGroupService_FindSecurityGroup_Call) Run(run func(ctx context.Context, name string)) *SecurityGroupService_FindSecurityGroup_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *SecurityGroupService_FindSecurityGroup_Call) Return(securityGroup domain.SecurityGroup, err error) *SecurityGroupService_FindSecurityGroup_Call {
+	_c.Call.Return(securityGroup, err)
+	return _c
+}
+
+func (_c *SecurityGroupService_FindSecurityGroup_Call) RunAndReturn(run func(ctx context.Context, name string) (domain.SecurityGroup, error)) *SecurityGroupService_FindSecurityGroup_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // PurgeSecurityGroup provides a mock function for the type SecurityGroupService
-func (_mock *SecurityGroupService) PurgeSecurityGroup(ctx context.Context, sgID uuid.UUID) error {
-	ret := _mock.Called(ctx, sgID)
+func (_mock *SecurityGroupService) PurgeSecurityGroup(ctx context.Context, sgID uuid.UUID, name string) error {
+	ret := _mock.Called(ctx, sgID, name)
 
 	if len(ret) == 0 {
 		panic("no return value specified for PurgeSecurityGroup")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID) error); ok {
-		r0 = returnFunc(ctx, sgID)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID, string) error); ok {
+		r0 = returnFunc(ctx, sgID, name)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -121,11 +193,12 @@ type SecurityGroupService_PurgeSecurityGroup_Call struct {
 // PurgeSecurityGroup is a helper method to define mock.On call
 //   - ctx context.Context
 //   - sgID uuid.UUID
-func (_e *SecurityGroupService_Expecter) PurgeSecurityGroup(ctx any, sgID any) *SecurityGroupService_PurgeSecurityGroup_Call {
-	return &SecurityGroupService_PurgeSecurityGroup_Call{Call: _e.mock.On("PurgeSecurityGroup", ctx, sgID)}
+//   - name string
+func (_e *SecurityGroupService_Expecter) PurgeSecurityGroup(ctx any, sgID any, name any) *SecurityGroupService_PurgeSecurityGroup_Call {
+	return &SecurityGroupService_PurgeSecurityGroup_Call{Call: _e.mock.On("PurgeSecurityGroup", ctx, sgID, name)}
 }
 
-func (_c *SecurityGroupService_PurgeSecurityGroup_Call) Run(run func(ctx context.Context, sgID uuid.UUID)) *SecurityGroupService_PurgeSecurityGroup_Call {
+func (_c *SecurityGroupService_PurgeSecurityGroup_Call) Run(run func(ctx context.Context, sgID uuid.UUID, name string)) *SecurityGroupService_PurgeSecurityGroup_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -135,9 +208,14 @@ func (_c *SecurityGroupService_PurgeSecurityGroup_Call) Run(run func(ctx context
 		if args[1] != nil {
 			arg1 = args[1].(uuid.UUID)
 		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
 		run(
 			arg0,
 			arg1,
+			arg2,
 		)
 	})
 	return _c
@@ -148,7 +226,7 @@ func (_c *SecurityGroupService_PurgeSecurityGroup_Call) Return(err error) *Secur
 	return _c
 }
 
-func (_c *SecurityGroupService_PurgeSecurityGroup_Call) RunAndReturn(run func(ctx context.Context, sgID uuid.UUID) error) *SecurityGroupService_PurgeSecurityGroup_Call {
+func (_c *SecurityGroupService_PurgeSecurityGroup_Call) RunAndReturn(run func(ctx context.Context, sgID uuid.UUID, name string) error) *SecurityGroupService_PurgeSecurityGroup_Call {
 	_c.Call.Return(run)
 	return _c
 }

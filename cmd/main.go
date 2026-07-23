@@ -41,10 +41,8 @@ import (
 
 	infrastructurev1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/controller"
-	"github.com/exoscale/cluster-api-provider-exoscale/internal/domain"
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/service"
-	egoscale "github.com/exoscale/egoscale/v3"
-	"github.com/go-logr/logr"
+	webhookv1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/internal/webhook/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -69,7 +67,7 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
-	var exoscaleAPITraceLevel string
+	var exoscaleAPILogLevel string
 	var tlsOpts []func(*tls.Config)
 	// watchNamespace restricts the operator to a single namespace. This enables running multiple
 	// instances of the operator in the same cluster, each responsible for a different namespace,
@@ -100,8 +98,8 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
-	flag.StringVar(&exoscaleAPITraceLevel, "exoscale-api-trace-level", "off",
-		"Exoscale API trace level: off or metadata (method, host, path, status, duration).")
+	flag.StringVar(&exoscaleAPILogLevel, "exoscale-api-log-level", "off",
+		"Exoscale API log level: off or metadata (method, host, path, status, duration).")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -109,11 +107,11 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
-	if exoscaleAPITraceLevel != "off" && exoscaleAPITraceLevel != "metadata" {
-		setupLog.Error(fmt.Errorf("unsupported trace level %q", exoscaleAPITraceLevel), "Invalid Exoscale API trace level")
+	if exoscaleAPILogLevel != "off" && exoscaleAPILogLevel != "metadata" {
+		setupLog.Error(fmt.Errorf("unsupported API log level %q", exoscaleAPILogLevel), "Invalid Exoscale API log level")
 		os.Exit(1)
 	}
-	traceExoscaleAPI := exoscaleAPITraceLevel == "metadata"
+	logExoscaleAPI := exoscaleAPILogLevel == "metadata"
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
@@ -222,19 +220,24 @@ func main() {
 		os.Exit(1)
 	}
 	if err := (&controller.ExoscaleMachineReconciler{
-		Client:      mgr.GetClient(),
-		Scheme:      mgr.GetScheme(),
-		WatchFilter: watchFilter,
-		NewInstanceService: func(
-			apiKey, apiSecret string,
-			zone egoscale.ZoneName,
-			logger logr.Logger,
-		) (domain.InstanceService, error) {
-			return service.NewInstanceService(apiKey, apiSecret, zone, logger, traceExoscaleAPI)
-		},
+		Client:             mgr.GetClient(),
+		Scheme:             mgr.GetScheme(),
+		WatchFilter:        watchFilter,
+		NewInstanceService: service.NewInstanceServiceFactory(logExoscaleAPI),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "ExoscaleMachine")
 		os.Exit(1)
+	}
+	// nolint:goconst
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if err := webhookv1alpha1.SetupExoscaleClusterTemplateWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "Failed to create webhook", "webhook", "ExoscaleClusterTemplate")
+			os.Exit(1)
+		}
+		if err := webhookv1alpha1.SetupExoscaleMachineTemplateWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "Failed to create webhook", "webhook", "ExoscaleMachineTemplate")
+			os.Exit(1)
+		}
 	}
 	// +kubebuilder:scaffold:builder
 

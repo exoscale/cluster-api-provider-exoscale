@@ -4,6 +4,14 @@ metadata:
   name: "${CLUSTER_NAME}"
 spec:
   zone: "${EXOSCALE_ZONE}"
+  securityGroupControlPlane:
+    rules:
+      - flowDirection: ingress
+        protocol: udp
+        startPort: 8472
+        endPort: 8472
+        securityGroup: itself
+        description: Flannel VXLAN between control-plane nodes
 ---
 apiVersion: cluster.x-k8s.io/v1beta2
 kind: Cluster
@@ -36,6 +44,7 @@ spec:
     spec:
       template: "${EXOSCALE_TEMPLATE:=Linux Ubuntu 24.04 LTS 64-bit}"
       instanceType: "${EXOSCALE_INSTANCE_TYPE:=small}"
+      rootVolumeSizeGiB: ${EXOSCALE_ROOT_VOLUME_SIZE_GIB:=20}
 ---
 apiVersion: controlplane.cluster.x-k8s.io/v1beta2
 kind: KubeadmControlPlane

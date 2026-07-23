@@ -94,7 +94,7 @@ func newMachinePrerequisiteReconciler(t *testing.T, clusterInfrastructureReady, 
 	return context.Background(), &ExoscaleMachineReconciler{Client: client, Scheme: scheme}, client, exoscaleMachineName, ns
 }
 
-func newReadyMachineReconciler(t *testing.T, instance domain.Instance, upsertErr error, nodeSecurityGroupID *uuid.UUID) (context.Context, *ExoscaleMachineReconciler, crclient.Client, string, string) {
+func newReadyMachineReconciler(t *testing.T, instance domain.Instance, upsertErr error, nodeSecurityGroupID, currentInstanceID *uuid.UUID) (context.Context, *ExoscaleMachineReconciler, crclient.Client, string, string) {
 	t.Helper()
 
 	const (
@@ -119,7 +119,7 @@ func newReadyMachineReconciler(t *testing.T, instance domain.Instance, upsertErr
 	var securityGroupNode *infrav1alpha1.SecurityGroupStatus
 	if nodeSecurityGroupID != nil {
 		securityGroupNode = &infrav1alpha1.SecurityGroupStatus{ID: nodeSecurityGroupID.String()}
-		instanceSvc.EXPECT().UpsertInstance(ctx, domain.MachineID(machineUID.String()), (*uuid.UUID)(nil), domain.InstanceSpec{
+		instanceSvc.EXPECT().UpsertInstance(ctx, domain.MachineID(machineUID.String()), currentInstanceID, domain.InstanceSpec{
 			Name:             instanceName(ns, machineName),
 			Template:         templateID.String(),
 			InstanceType:     "standard.small",

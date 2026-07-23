@@ -286,7 +286,7 @@ func TestExoscaleMachineReconciler_Reconcile_prerequisites(t *testing.T) {
 func TestExoscaleMachineReconciler_Reconcile_waitsForNodeSecurityGroup(t *testing.T) {
 	t.Parallel()
 
-	ctx, r, client, exoscaleMachineName, ns := newReadyMachineReconciler(t, domain.Instance{}, nil, nil)
+	ctx, r, client, exoscaleMachineName, ns := newReadyMachineReconciler(t, domain.Instance{}, nil, nil, nil)
 
 	result, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}})
 
@@ -359,11 +359,20 @@ func TestExoscaleMachineReconciler_Reconcile_waitsForInstanceRunning(t *testing.
 	t.Parallel()
 
 	instanceID := uuid.New()
-	ctx, r, client, exoscaleMachineName, ns := newReadyMachineReconciler(t, domain.Instance{ID: instanceID, State: "starting"}, nil, new(uuid.New()))
+	currentInstanceID := uuid.New()
+	ctx, r, client, exoscaleMachineName, ns := newReadyMachineReconciler(t, domain.Instance{ID: instanceID, State: "starting"}, nil, new(uuid.New()), &currentInstanceID)
 	exoMachine := &infrav1alpha1.ExoscaleMachine{}
 	assert.NoError(t, client.Get(ctx, types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}, exoMachine))
+	providerID := "exoscale://" + uuid.NewString()
+	exoMachine.Spec.ProviderID = &providerID
+	assert.NoError(t, client.Update(ctx, exoMachine))
+	exoMachine.Status.InstanceID = currentInstanceID.String()
 	exoMachine.Status.Ready = true
 	exoMachine.Status.Initialization.Provisioned = new(true)
+	exoMachine.Status.Addresses = []clusterv1.MachineAddress{
+		{Type: clusterv1.MachineExternalIP, Address: "192.0.2.1"},
+		{Type: clusterv1.MachineInternalIP, Address: "192.0.2.2"},
+	}
 	conditions.Set(exoMachine, metav1.Condition{Type: clusterv1.ReadyCondition, Status: metav1.ConditionTrue, Reason: clusterv1.ReadyReason})
 	assert.NoError(t, client.Status().Update(ctx, exoMachine))
 
@@ -375,7 +384,9 @@ func TestExoscaleMachineReconciler_Reconcile_waitsForInstanceRunning(t *testing.
 	updated := &infrav1alpha1.ExoscaleMachine{}
 	assert.NoError(t, client.Get(ctx, types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}, updated))
 	assert.Equal(t, instanceID.String(), updated.Status.InstanceID)
+	assert.Equal(t, &providerID, updated.Spec.ProviderID)
 	assert.False(t, updated.Status.Ready)
+	assert.Equal(t, exoMachine.Status.Addresses, updated.Status.Addresses)
 	ready := apimeta.FindStatusCondition(updated.Status.Conditions, clusterv1.ReadyCondition)
 	if assert.NotNil(t, ready) {
 		assert.Equal(t, metav1.ConditionFalse, ready.Status)
@@ -389,7 +400,7 @@ func TestExoscaleMachineReconciler_Reconcile_waitsForInstanceRunning(t *testing.
 func TestExoscaleMachineReconciler_Reconcile_returnsInvalidStatusInstanceID(t *testing.T) {
 	t.Parallel()
 
-	ctx, r, client, exoscaleMachineName, ns := newReadyMachineReconciler(t, domain.Instance{}, nil, nil)
+	ctx, r, client, exoscaleMachineName, ns := newReadyMachineReconciler(t, domain.Instance{}, nil, nil, nil)
 	exoMachine := &infrav1alpha1.ExoscaleMachine{}
 	assert.NoError(t, client.Get(ctx, types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}, exoMachine))
 	exoMachine.Status.InstanceID = "not-a-uuid"
@@ -405,7 +416,7 @@ func TestExoscaleMachineReconciler_Reconcile_returnsInstanceServiceError(t *test
 	t.Parallel()
 
 	nodeSecurityGroupID := uuid.New()
-	ctx, r, client, exoscaleMachineName, ns := newReadyMachineReconciler(t, domain.Instance{}, assert.AnError, &nodeSecurityGroupID)
+	ctx, r, client, exoscaleMachineName, ns := newReadyMachineReconciler(t, domain.Instance{}, assert.AnError, &nodeSecurityGroupID, nil)
 
 	result, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}})
 

@@ -314,25 +314,46 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 		},
 	}
 
-	instance, err := instanceService.UpsertInstance(ctx, machineID, instanceID, spec)
+	decisionInput := machineDecisionInput{machineID: machineID, instanceID: instanceID, spec: spec}
+	action := decideMachine(decisionInput).upsert
+	instance, err := instanceService.UpsertInstance(ctx, action.machineID, action.instanceID, action.spec)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("upsert instance: %w", err)
 	}
 
-	exoMachine.Status.InstanceID = instance.ID.String()
-	if instance.State != "running" {
-		log.Info("instance not yet running", "state", instance.State)
-		setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.NotReadyReason, fmt.Sprintf("Instance state is %s", instance.State))
-		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
+	decisionInput.upsertResult = &instance
+	return applyMachineOutcome(log, exoMachine, *decideMachine(decisionInput).outcome), nil
+}
+
+func applyMachineOutcome(log logr.Logger, exoMachine *infrastructurev1alpha1.ExoscaleMachine, outcome machineOutcome) ctrl.Result {
+	exoMachine.Status.InstanceID = outcome.instanceID
+	if outcome.providerID != nil {
+		exoMachine.Spec.ProviderID = outcome.providerID
 	}
-
-	providerID := fmt.Sprintf("exoscale://%s", instance.ID)
-	exoMachine.Spec.ProviderID = &providerID
-	exoMachine.Status.Initialization.Provisioned = new(true)
-	exoMachine.Status.Addresses = buildAddresses(instance)
-	setMachineReady(exoMachine, metav1.ConditionTrue, clusterv1.ReadyReason, "Instance is running")
-
-	return ctrl.Result{}, nil
+	if outcome.provisioned != nil {
+		exoMachine.Status.Initialization.Provisioned = outcome.provisioned
+	}
+	if outcome.replaceAddresses {
+		var addresses []clusterv1.MachineAddress
+		if len(outcome.addresses) > 0 {
+			addresses = make([]clusterv1.MachineAddress, 0, len(outcome.addresses))
+		}
+		for _, address := range outcome.addresses {
+			addressType := clusterv1.MachineInternalIP
+			if address.public {
+				addressType = clusterv1.MachineExternalIP
+			}
+			addresses = append(addresses, clusterv1.MachineAddress{Type: addressType, Address: address.address})
+		}
+		exoMachine.Status.Addresses = addresses
+	}
+	if outcome.ready {
+		setMachineReady(exoMachine, metav1.ConditionTrue, clusterv1.ReadyReason, outcome.message)
+	} else {
+		log.Info("instance not yet running", "state", outcome.instanceState)
+		setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.NotReadyReason, outcome.message)
+	}
+	return ctrl.Result{RequeueAfter: outcome.requeueAfter}
 }
 
 func instanceName(namespace, name string) string {
@@ -595,21 +616,4 @@ func setMachineReady(exoMachine *infrastructurev1alpha1.ExoscaleMachine, status 
 		Reason:  reason,
 		Message: message,
 	})
-}
-
-func buildAddresses(instance domain.Instance) []clusterv1.MachineAddress {
-	var addrs []clusterv1.MachineAddress
-	if instance.PublicIP != "" {
-		addrs = append(addrs, clusterv1.MachineAddress{
-			Type:    clusterv1.MachineExternalIP,
-			Address: instance.PublicIP,
-		})
-	}
-	if instance.PrivateIP != "" {
-		addrs = append(addrs, clusterv1.MachineAddress{
-			Type:    clusterv1.MachineInternalIP,
-			Address: instance.PrivateIP,
-		})
-	}
-	return addrs
 }

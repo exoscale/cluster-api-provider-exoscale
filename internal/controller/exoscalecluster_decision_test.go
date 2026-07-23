@@ -48,3 +48,21 @@ func TestDecideCluster(t *testing.T) {
 		})
 	}
 }
+
+func TestClusterActionStrings(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, []string{
+		"skip-externally-managed",
+		"pause",
+		"reconcile",
+		"delete",
+		"complete-deletion",
+	}, []string{
+		string(clusterActionSkipExternallyManaged),
+		string(clusterActionPause),
+		string(clusterActionReconcile),
+		string(clusterActionDelete),
+		string(clusterActionCompleteDeletion),
+	})
+}

@@ -127,7 +127,12 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		if err != nil {
 			return ctrl.Result{}, err
 		}
+		action := machineActionDelete
 		if machineID == nil && instanceID == nil {
+			action = machineActionCompleteDeletion
+		}
+		log.V(2).Info("Machine decision", "action", action, "hasMachineID", machineID != nil, "hasInstanceID", instanceID != nil)
+		if action == machineActionCompleteDeletion {
 			controllerutil.RemoveFinalizer(exoMachine, machineFinalizer)
 			return ctrl.Result{}, nil
 		}
@@ -316,6 +321,7 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 
 	decisionInput := machineDecisionInput{machineID: machineID, instanceID: instanceID, spec: spec}
 	decision := decideMachine(decisionInput)
+	log.V(2).Info("Machine decision", "action", decision.action, "hasInstanceID", decisionInput.instanceID != nil)
 	switch decision.action {
 	case machineActionUpsert:
 		instance, err := instanceService.UpsertInstance(ctx, decision.upsert.machineID, decision.upsert.instanceID, decision.upsert.spec)
@@ -324,6 +330,7 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 		}
 		decisionInput.upsertResult = &instance
 		decision = decideMachine(decisionInput)
+		log.V(2).Info("Machine decision", "action", decision.action, "instanceState", decision.outcome.instanceState)
 	}
 
 	return applyMachineDecision(log, exoMachine, decision), nil

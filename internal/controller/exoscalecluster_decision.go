@@ -7,14 +7,14 @@ type clusterDecisionInput struct {
 	hasFinalizer      bool
 }
 
-type clusterAction uint8
+type clusterAction string
 
 const (
-	clusterActionSkipExternallyManaged clusterAction = iota
-	clusterActionPause
-	clusterActionReconcile
-	clusterActionDelete
-	clusterActionCompleteDeletion
+	clusterActionSkipExternallyManaged clusterAction = "skip-externally-managed"
+	clusterActionPause                 clusterAction = "pause"
+	clusterActionReconcile             clusterAction = "reconcile"
+	clusterActionDelete                clusterAction = "delete"
+	clusterActionCompleteDeletion      clusterAction = "complete-deletion"
 )
 
 func decideCluster(input clusterDecisionInput) clusterAction {

@@ -1,13 +1,14 @@
 package exoscale
 
 import (
-	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/hashicorp/go-retryablehttp"
 )
+
+const apiMetadataLogLevel = 4
 
 type metadataRoundTripper struct {
 	next   http.RoundTripper
@@ -24,8 +25,15 @@ func (t metadataRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 	resp, err := t.next.RoundTrip(req)
 	duration := time.Since(started).Round(time.Millisecond)
 	statusCode := 0
+	statusText := ""
 	if resp != nil {
 		statusCode = resp.StatusCode
+		statusText = http.StatusText(statusCode)
+	}
+	var safeErr requestError
+	if err != nil {
+		safeErr = requestError{cause: err}
+		statusText = safeErr.Error()
 	}
 	fields := []any{
 		"method", req.Method,
@@ -33,24 +41,25 @@ func (t metadataRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 		"path", req.URL.EscapedPath(),
 		"status", statusCode,
 		"duration", duration,
+		"statusText", statusText,
+	}
+	logger := t.logger.V(apiMetadataLogLevel)
+	if logger.Enabled() {
+		if err != nil {
+			logger.Error(safeErr, "Exoscale API request", fields...)
+		} else {
+			logger.Info("Exoscale API request", fields...)
+		}
 	}
 	if err != nil {
-		safeErr := requestError{cause: err}
-		t.logger.Error(safeErr, fmt.Sprintf("HTTP %s %s%s -> REQUEST ERROR (%s)", req.Method, req.URL.Host, req.URL.EscapedPath(), duration), fields...)
-		// http.Client includes req.URL in its outer error, so remove the query after a terminal failure.
+		// http.Client includes req.URL in its outer error, so retain only the safe host and path.
+		req.URL.User = nil
 		req.URL.RawQuery = ""
 		req.URL.ForceQuery = false
+		req.URL.Fragment = ""
+		req.URL.RawFragment = ""
 		return nil, safeErr
 	}
-
-	statusText := http.StatusText(statusCode)
-	if statusCode >= http.StatusBadRequest {
-		fields = append(fields, "httpError", statusText)
-	}
-	t.logger.Info(
-		fmt.Sprintf("HTTP %s %s%s -> %d %s (%s)", req.Method, req.URL.Host, req.URL.EscapedPath(), statusCode, statusText, duration),
-		fields...,
-	)
 	return resp, nil
 }
 

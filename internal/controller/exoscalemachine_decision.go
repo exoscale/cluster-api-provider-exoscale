@@ -15,12 +15,14 @@ type machineDecisionInput struct {
 	upsertResult *domain.Instance
 }
 
-type machineAction uint8
+type machineAction string
 
 const (
-	machineActionUpsert machineAction = iota
-	machineActionWait
-	machineActionReady
+	machineActionUpsert           machineAction = "upsert"
+	machineActionWait             machineAction = "wait"
+	machineActionReady            machineAction = "ready"
+	machineActionDelete           machineAction = "delete"
+	machineActionCompleteDeletion machineAction = "complete-deletion"
 )
 
 type machineDecision struct {

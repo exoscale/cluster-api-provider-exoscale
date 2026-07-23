@@ -44,7 +44,10 @@ func NewCloud(apiKey, apisecret string, zone egoscale.ZoneName) (*cloud, error) 
 	return newCloud(apiKey, apisecret, zone, nil)
 }
 
-func NewLoggingCloud(apiKey, apisecret string, zone egoscale.ZoneName, logger logr.Logger) (*cloud, error) {
+func NewCloudWithLogger(apiKey, apisecret string, zone egoscale.ZoneName, logger logr.Logger) (*cloud, error) {
+	if !logger.V(apiMetadataLogLevel).Enabled() {
+		return NewCloud(apiKey, apisecret, zone)
+	}
 	return newCloud(apiKey, apisecret, zone, metadataHTTPClient(logger))
 }
 

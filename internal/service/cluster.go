@@ -24,7 +24,7 @@ var _ domain.ClusterService = (*clusterService)(nil)
 var errInvalidID = errors.New("invalid id")
 
 func NewClusterService(apiKey, apisecret string, zone egoscale.ZoneName, logger logr.Logger) (domain.ClusterService, error) {
-	cloudClient, err := exoscale.NewCloud(apiKey, apisecret, zone)
+	cloudClient, err := exoscale.NewCloudWithLogger(apiKey, apisecret, zone, logger)
 	if err != nil {
 		return nil, err
 	}

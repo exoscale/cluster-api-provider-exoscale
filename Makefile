@@ -168,10 +168,11 @@ build: manifests generate fmt vet ## Build manager binary.
 	go build -o bin/manager cmd/main.go
 
 ENABLE_WEBHOOKS ?= false
+RUN_ARGS ?=
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
-	ENABLE_WEBHOOKS=$(ENABLE_WEBHOOKS) go run ./cmd/main.go
+	ENABLE_WEBHOOKS=$(ENABLE_WEBHOOKS) go run ./cmd/main.go $(RUN_ARGS)
 
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.

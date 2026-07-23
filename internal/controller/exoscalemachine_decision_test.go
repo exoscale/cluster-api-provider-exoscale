@@ -91,3 +91,15 @@ func TestDecideMachine(t *testing.T) {
 		})
 	}
 }
+
+func TestMachineActionStrings(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, []string{"upsert", "wait", "ready", "delete", "complete-deletion"}, []string{
+		string(machineActionUpsert),
+		string(machineActionWait),
+		string(machineActionReady),
+		string(machineActionDelete),
+		string(machineActionCompleteDeletion),
+	})
+}

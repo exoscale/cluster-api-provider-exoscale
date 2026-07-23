@@ -11,6 +11,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -119,7 +120,7 @@ func newReadyMachineReconciler(t *testing.T, instance domain.Instance, upsertErr
 	var securityGroupNode *infrav1alpha1.SecurityGroupStatus
 	if nodeSecurityGroupID != nil {
 		securityGroupNode = &infrav1alpha1.SecurityGroupStatus{ID: nodeSecurityGroupID.String()}
-		instanceSvc.EXPECT().UpsertInstance(ctx, domain.MachineID(machineUID.String()), currentInstanceID, domain.InstanceSpec{
+		instanceSvc.EXPECT().UpsertInstance(mock.Anything, domain.MachineID(machineUID.String()), currentInstanceID, domain.InstanceSpec{
 			Name:             instanceName(ns, machineName),
 			Template:         templateID.String(),
 			InstanceType:     "standard.small",

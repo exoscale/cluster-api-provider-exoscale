@@ -30,6 +30,11 @@ $> ENABLE_WEBHOOKS=false make run
 
 Keep the manager running and use another terminal for the remaining commands.
 
+Set `RUN_ARGS=--zap-log-level=2` to log controller decisions. Level `4` also
+logs one metadata entry per logical Exoscale SDK call with its method, host,
+path, final status, and total duration including retries. API logs never include
+query strings, headers, request or response bodies, or credentials.
+
 ### Deploy a simple cluster
 ```bash
 $> export EXOSCALE_API_KEY=<api-key>

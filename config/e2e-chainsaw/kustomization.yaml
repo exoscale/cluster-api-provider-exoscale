@@ -23,7 +23,7 @@ patches:
   - patch: |-
       - op: add
         path: /spec/template/spec/containers/0/args/-
-        value: --exoscale-api-log-level=metadata
+        value: --zap-log-level=4
     target:
       kind: Deployment
       name: cluster-api-provider-exoscale-controller-manager

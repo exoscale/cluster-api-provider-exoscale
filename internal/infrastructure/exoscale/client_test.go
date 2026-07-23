@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -32,57 +33,88 @@ func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 func Test_metadataRoundTripper(t *testing.T) {
 	t.Parallel()
 
+	transportErr := errors.New("dial https://other.example/raw-url-secret?credential=transport-secret with token-prefix-danger")
 	tests := []struct {
-		name          string
-		status        int
-		err           error
-		wantMessage   string
-		wantHTTPError string
+		name           string
+		verbosity      int
+		status         int
+		transportErr   error
+		wantOutput     bool
+		wantStatusText string
 	}{
-		{name: "success", status: http.StatusAccepted, wantMessage: "-> 202 Accepted"},
-		{name: "HTTP error", status: http.StatusConflict, wantMessage: "-> 409 Conflict", wantHTTPError: "Conflict"},
-		{name: "request error", err: errors.New("request failed for https://api.example.test/v2/instance?token=query-secret"), wantMessage: "-> REQUEST ERROR"},
+		{name: "V(4) success", verbosity: 4, status: http.StatusAccepted, wantOutput: true, wantStatusText: "Accepted"},
+		{name: "V(4) HTTP error", verbosity: 4, status: http.StatusConflict, wantOutput: true, wantStatusText: "Conflict"},
+		{name: "V(4) transport error", verbosity: 4, transportErr: transportErr, wantOutput: true, wantStatusText: "request failed"},
+		{name: "disabled success", status: http.StatusAccepted},
+		{name: "disabled transport error", transportErr: transportErr},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			var output string
-			logger := funcr.New(func(prefix, args string) { output += prefix + args }, funcr.Options{})
+			logger := funcr.New(func(prefix, args string) { output += prefix + args }, funcr.Options{Verbosity: tc.verbosity})
 			transport := metadataRoundTripper{
 				logger: logger,
 				next: roundTripFunc(func(*http.Request) (*http.Response, error) {
-					if tc.err != nil {
-						return nil, tc.err
+					if tc.transportErr != nil {
+						return nil, tc.transportErr
 					}
-					return &http.Response{StatusCode: tc.status, Body: http.NoBody}, nil
+					return &http.Response{
+						StatusCode: tc.status,
+						Header:     http.Header{"X-Response-Secret": []string{"response-header-secret"}},
+						Body:       io.NopCloser(strings.NewReader("response-body-secret")),
+					}, nil
 				}),
 			}
-			req, err := http.NewRequest(http.MethodPost, "https://api.example.test/v2/instance?token=query-secret", strings.NewReader("body-secret"))
+			req, err := http.NewRequest(
+				http.MethodPost,
+				"https://url-user:url-password@api.example.test/v2/instance%2Fsafe?token=query-secret#raw-url-fragment-secret",
+				strings.NewReader("bootstrap-user-data-secret"),
+			)
 			assert.NoError(t, err)
-			req.Header.Set("Authorization", "header-secret")
+			req.Header.Set("Authorization", "Bearer token-prefix-secret")
+			req.Header.Set("X-Credential", "credential-secret")
 
 			resp, err := (&http.Client{Transport: transport}).Do(req)
 
-			assert.ErrorIs(t, err, tc.err)
-			if tc.err == nil {
-				assert.Equal(t, tc.status, resp.StatusCode)
+			assert.ErrorIs(t, err, tc.transportErr)
+			if tc.transportErr == nil {
+				if assert.NotNil(t, resp) {
+					assert.Equal(t, tc.status, resp.StatusCode)
+					assert.NoError(t, resp.Body.Close())
+				}
 			} else {
 				assert.Nil(t, resp)
-				assert.NotContains(t, err.Error(), "query-secret")
+				var safeErr requestError
+				assert.ErrorAs(t, err, &safeErr)
+				assert.Equal(t, "request failed", safeErr.Error())
+				assert.Empty(t, req.URL.RawQuery)
+				assert.False(t, req.URL.ForceQuery)
+				assert.Nil(t, req.URL.User)
+				assert.Empty(t, req.URL.Fragment)
+				for _, secret := range []string{"url-user", "url-password", "query-secret", "raw-url-fragment-secret", "transport-secret"} {
+					assert.NotContains(t, err.Error(), secret)
+				}
 			}
-			assert.Contains(t, output, "HTTP POST api.example.test/v2/instance "+tc.wantMessage)
-			assert.Contains(t, output, `"method"="POST"`)
-			assert.Contains(t, output, `"host"="api.example.test"`)
-			assert.Contains(t, output, `"path"="/v2/instance"`)
-			assert.Contains(t, output, fmt.Sprintf(`"status"=%d`, tc.status))
-			assert.Contains(t, output, `"duration"=`)
-			if tc.wantHTTPError != "" {
-				assert.Contains(t, output, `"httpError"="`+tc.wantHTTPError+`"`)
+			if tc.wantOutput {
+				assert.Contains(t, output, "Exoscale API request")
+				assert.Contains(t, output, `"method"="POST"`)
+				assert.Contains(t, output, `"host"="api.example.test"`)
+				assert.Contains(t, output, `"path"="/v2/instance%2Fsafe"`)
+				assert.Contains(t, output, fmt.Sprintf(`"status"=%d`, tc.status))
+				assert.Contains(t, output, `"duration"=`)
+				assert.Contains(t, output, `"statusText"="`+tc.wantStatusText+`"`)
+			} else {
+				assert.Empty(t, output)
 			}
-			assert.NotContains(t, output, "query-secret")
-			assert.NotContains(t, output, "body-secret")
-			assert.NotContains(t, output, "header-secret")
-			assert.NotContains(t, output, "Authorization")
+			for _, secret := range []string{
+				"url-user", "url-password", "query-secret", "raw-url-fragment-secret",
+				"bootstrap-user-data-secret", "token-prefix-secret", "credential-secret",
+				"response-header-secret", "response-body-secret", "transport-secret", "token-prefix-danger",
+				"Authorization", "X-Credential", "X-Response-Secret",
+			} {
+				assert.NotContains(t, output, secret)
+			}
 		})
 	}
 }

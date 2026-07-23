@@ -71,7 +71,7 @@ type ExoscaleClusterReconciler struct {
 func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
 	log := logf.FromContext(ctx)
 
-	log.Info("Reconcile cluster", "req", req)
+	log.V(4).Info("Reconcile cluster", "req", req)
 
 	// fetch exoscale cluster.
 	var exoCluster infrav1alpha1.ExoscaleCluster
@@ -124,12 +124,20 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return reconcile.Result{}, nil
 	}
 
-	action := decideCluster(clusterDecisionInput{
+	decisionInput := clusterDecisionInput{
 		externallyManaged: annotations.IsExternallyManaged(cluster),
 		paused:            annotations.IsPaused(cluster, &exoCluster),
 		deleting:          !exoCluster.DeletionTimestamp.IsZero(),
 		hasFinalizer:      controllerutil.ContainsFinalizer(&exoCluster, infrav1alpha1.ExoscaleClusterFinalizer),
-	})
+	}
+	action := decideCluster(decisionInput)
+	log.V(2).Info("Cluster decision",
+		"action", action,
+		"externallyManaged", decisionInput.externallyManaged,
+		"paused", decisionInput.paused,
+		"deleting", decisionInput.deleting,
+		"hasFinalizer", decisionInput.hasFinalizer,
+	)
 	if action == clusterActionSkipExternallyManaged {
 		log.Info("Cluster is externally managed, skipping reconciliation")
 		return ctrl.Result{}, nil

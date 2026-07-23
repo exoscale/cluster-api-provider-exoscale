@@ -19,7 +19,6 @@ package main
 import (
 	"crypto/tls"
 	"flag"
-	"fmt"
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -67,7 +66,6 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
-	var exoscaleAPILogLevel string
 	var tlsOpts []func(*tls.Config)
 	// watchNamespace restricts the operator to a single namespace. This enables running multiple
 	// instances of the operator in the same cluster, each responsible for a different namespace,
@@ -98,8 +96,6 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
-	flag.StringVar(&exoscaleAPILogLevel, "exoscale-api-log-level", "off",
-		"Exoscale API log level: off or metadata (method, host, path, status, duration).")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -107,11 +103,6 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
-	if exoscaleAPILogLevel != "off" && exoscaleAPILogLevel != "metadata" {
-		setupLog.Error(fmt.Errorf("unsupported API log level %q", exoscaleAPILogLevel), "Invalid Exoscale API log level")
-		os.Exit(1)
-	}
-	logExoscaleAPI := exoscaleAPILogLevel == "metadata"
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
@@ -223,7 +214,7 @@ func main() {
 		Client:             mgr.GetClient(),
 		Scheme:             mgr.GetScheme(),
 		WatchFilter:        watchFilter,
-		NewInstanceService: service.NewInstanceServiceFactory(logExoscaleAPI),
+		NewInstanceService: service.NewInstanceService,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "ExoscaleMachine")
 		os.Exit(1)

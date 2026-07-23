@@ -124,12 +124,17 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return reconcile.Result{}, nil
 	}
 
-	// check if we need to continue the reconciliation.
-	if annotations.IsExternallyManaged(cluster) {
+	action := decideCluster(clusterDecisionInput{
+		externallyManaged: annotations.IsExternallyManaged(cluster),
+		paused:            annotations.IsPaused(cluster, &exoCluster),
+		deleting:          !exoCluster.DeletionTimestamp.IsZero(),
+		hasFinalizer:      controllerutil.ContainsFinalizer(&exoCluster, infrav1alpha1.ExoscaleClusterFinalizer),
+	})
+	if action == clusterActionSkipExternallyManaged {
 		log.Info("Cluster is externally managed, skipping reconciliation")
 		return ctrl.Result{}, nil
 	}
-	if annotations.IsPaused(cluster, &exoCluster) {
+	if action == clusterActionPause {
 		log.Info("InfraCluster is paused, skipping reconciliation")
 		conditions.Set(&exoCluster, metav1.Condition{
 			Type:    clusterv1.PausedCondition,
@@ -151,7 +156,7 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 	finalizerChanged := false
-	if exoCluster.DeletionTimestamp.IsZero() {
+	if action == clusterActionReconcile {
 		finalizerChanged = controllerutil.AddFinalizer(&exoCluster, infrav1alpha1.ExoscaleClusterFinalizer)
 	}
 	if finalizerChanged {
@@ -186,18 +191,18 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 
-	if !exoCluster.DeletionTimestamp.IsZero() {
-		if controllerutil.ContainsFinalizer(&exoCluster, infrav1alpha1.ExoscaleClusterFinalizer) {
-			exoCluster, err = clusterSvc.DeleteCluster(ctx, exoCluster)
-			if err != nil {
-				return ctrl.Result{}, err
-			}
-			log.Info("DELETE FINALIZER")
-			beforeFinalizerRemoval := exoCluster.DeepCopy()
-			controllerutil.RemoveFinalizer(&exoCluster, infrav1alpha1.ExoscaleClusterFinalizer)
-			skipDeferredPatch = true
-			return ctrl.Result{}, client.IgnoreNotFound(r.Patch(ctx, &exoCluster, client.MergeFrom(beforeFinalizerRemoval)))
+	if action == clusterActionDelete {
+		exoCluster, err = clusterSvc.DeleteCluster(ctx, exoCluster)
+		if err != nil {
+			return ctrl.Result{}, err
 		}
+		log.Info("DELETE FINALIZER")
+		beforeFinalizerRemoval := exoCluster.DeepCopy()
+		controllerutil.RemoveFinalizer(&exoCluster, infrav1alpha1.ExoscaleClusterFinalizer)
+		skipDeferredPatch = true
+		return ctrl.Result{}, client.IgnoreNotFound(r.Patch(ctx, &exoCluster, client.MergeFrom(beforeFinalizerRemoval)))
+	}
+	if action == clusterActionCompleteDeletion {
 		skipDeferredPatch = true
 		return ctrl.Result{}, nil
 	}

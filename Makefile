@@ -1,5 +1,6 @@
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
+RELEASE_DIR ?= out
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -190,16 +191,26 @@ docker-push: ## Push docker image with the manager.
 # - have enabled BuildKit. More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 # - be able to push the image to your registry (i.e. if you do not set a valid value via IMG=<myregistry/image:<tag>> then the export will fail)
 # To adequately provide solutions that are compatible with multiple platforms, you should consider using this option.
-PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x,linux/ppc64le
+PLATFORMS ?= linux/amd64,linux/arm64
 .PHONY: docker-buildx
 docker-buildx: ## Build and push docker image for the manager for cross-platform support
-	# copy existing Dockerfile and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile
-	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross
-	- $(CONTAINER_TOOL) buildx create --name cluster-api-provider-exoscale-builder
-	$(CONTAINER_TOOL) buildx use cluster-api-provider-exoscale-builder
-	- $(CONTAINER_TOOL) buildx build --push --platform=$(PLATFORMS) --tag ${IMG} -f Dockerfile.cross .
-	- $(CONTAINER_TOOL) buildx rm cluster-api-provider-exoscale-builder
-	rm Dockerfile.cross
+	$(CONTAINER_TOOL) buildx build --push --platform=$(PLATFORMS) --tag ${IMG} .
+
+.PHONY: release
+release: kustomize ## Build clusterctl release assets without changing source files.
+	@if [ "$(IMG)" = "controller:latest" ]; then echo "IMG must be a release image, not controller:latest"; exit 1; fi
+	@tmp="$$(mktemp -d)"; \
+		trap 'rm -rf "$$tmp"' EXIT; \
+		ln -s "$(CURDIR)/config/default" "$$tmp/base"; \
+		printf 'apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n  - base\n' > "$$tmp/kustomization.yaml"; \
+		cd "$$tmp"; \
+		"$(KUSTOMIZE)" edit set image controller=$(IMG); \
+		cd "$(CURDIR)"; \
+		rm -rf "$(RELEASE_DIR)"; \
+		mkdir -p "$(RELEASE_DIR)"; \
+		"$(KUSTOMIZE)" build --load-restrictor LoadRestrictionsNone "$$tmp" > "$(RELEASE_DIR)/infrastructure-components.yaml"; \
+		cp metadata.yaml "$(RELEASE_DIR)/metadata.yaml"; \
+		cp templates/cluster-template.yaml "$(RELEASE_DIR)/cluster-template.yaml"
 
 .PHONY: build-installer
 build-installer: manifests generate kustomize ## Generate a consolidated YAML with CRDs and deployment.

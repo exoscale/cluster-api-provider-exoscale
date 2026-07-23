@@ -1,0 +1,93 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    env:
+      IMAGE: ghcr.io/exoscale/cluster-api-provider-exoscale:${{ github.ref_name }}
+    steps:
+      - name: Validate tag
+        shell: bash
+        run: |
+          [[ "$GITHUB_REF_NAME" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]
+
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+
+      - name: Generate and validate release assets
+        shell: bash
+        run: |
+          make manifests generate
+          git diff --exit-code
+          make release IMG="$IMAGE"
+          make yq clusterctl
+
+          expected="$(printf '%s\n' cluster-template.yaml infrastructure-components.yaml metadata.yaml)"
+          actual="$(for file in out/*; do basename "$file"; done | sort)"
+          test "$actual" = "$expected"
+
+          for file in out/*.yaml; do
+            bin/yq eval-all 'true' "$file" >/dev/null
+          done
+          test "$(bin/yq '.apiVersion' out/metadata.yaml)" = clusterctl.cluster.x-k8s.io/v1alpha3
+          test "$(bin/yq '.kind' out/metadata.yaml)" = Metadata
+          test "$(bin/yq '.releaseSeries | length' out/metadata.yaml)" -eq 1
+          test "$(bin/yq '.releaseSeries[0].major' out/metadata.yaml)" -eq 0
+          test "$(bin/yq '.releaseSeries[0].minor' out/metadata.yaml)" -eq 1
+          test "$(bin/yq '.releaseSeries[0].contract' out/metadata.yaml)" = v1beta2
+          test "$(bin/yq 'select(.kind == "Deployment") | .spec.template.spec.containers[] | select(.name == "manager") | .image' out/infrastructure-components.yaml)" = "$IMAGE"
+          ! grep -q 'controller:latest' out/*.yaml
+          test -z "$(bin/yq eval-all 'select(.kind != null and .metadata.labels."cluster.x-k8s.io/provider" != "infrastructure-exoscale") | .kind' out/infrastructure-components.yaml)"
+          test "$(bin/yq eval-all 'select(.kind == "Namespace") | .kind' out/infrastructure-components.yaml | wc -l)" -eq 1
+
+          EXOSCALE_ZONE=ch-gva-2 bin/clusterctl generate cluster release-validation \
+            --from out/cluster-template.yaml \
+            --kubernetes-version v1.32.13 \
+            --target-namespace default > /tmp/rendered-cluster.yaml
+          bin/yq eval-all 'true' /tmp/rendered-cluster.yaml >/dev/null
+          test -z "$(bin/yq eval-all 'select(.metadata.namespace != "default") | .kind' /tmp/rendered-cluster.yaml)"
+          ! grep -q '\${' /tmp/rendered-cluster.yaml
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@06fb636fac595d6fb4b28a5dfcb21a6f5091859c # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        run: make docker-buildx IMG="$IMAGE" PLATFORMS=linux/amd64,linux/arm64
+
+      - name: Create GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          prerelease=()
+          [[ "$GITHUB_REF_NAME" == *-* ]] && prerelease=(--prerelease)
+          gh release create "$GITHUB_REF_NAME" out/* --verify-tag --generate-notes --title "$GITHUB_REF_NAME" "${prerelease[@]}"

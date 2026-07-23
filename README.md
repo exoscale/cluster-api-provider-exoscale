@@ -69,6 +69,50 @@ $> rm -f "$WORKLOAD_KUBECONFIG"
 The shared `exoscale` credential Secret is not owned by the Cluster and remains
 after Cluster deletion.
 
+### Generate a workload cluster with clusterctl
+
+As an alternative to the simple sample above, render the repository's
+`KubeadmControlPlane` template with `clusterctl`:
+
+```bash
+$> export EXOSCALE_ZONE=ch-gva-2
+$> ./bin/clusterctl generate cluster my-cluster \
+     --from ./templates/cluster-template.yaml \
+     --kubernetes-version v1.32.13 \
+     | kubectl apply -f -
+
+$> kubectl wait cluster/my-cluster --for=condition=ControlPlaneInitialized --timeout=20m
+$> ./bin/clusterctl get kubeconfig my-cluster > /tmp/my-cluster.kubeconfig
+$> kubectl --kubeconfig=/tmp/my-cluster.kubeconfig apply \
+     -f https://github.com/flannel-io/flannel/releases/download/v0.28.8/kube-flannel.yml
+$> kubectl --kubeconfig=/tmp/my-cluster.kubeconfig wait node --all --for=condition=Ready --timeout=10m
+$> kubectl delete cluster/my-cluster
+```
+
+### Use a released provider
+
+Register the provider in a local `clusterctl.yaml`:
+
+```yaml
+providers:
+  - name: exoscale
+    url: https://github.com/exoscale/cluster-api-provider-exoscale/releases/latest/infrastructure-components.yaml
+    type: InfrastructureProvider
+```
+
+Install a release and generate a workload cluster from its template:
+
+```bash
+$> clusterctl init --config clusterctl.yaml --infrastructure exoscale:v0.1.0
+$> export EXOSCALE_ZONE=ch-gva-2
+$> clusterctl generate cluster my-cluster \
+     --config clusterctl.yaml \
+     --infrastructure exoscale:v0.1.0 \
+     --kubernetes-version v1.32.13 \
+     --target-namespace default \
+     | kubectl apply -f -
+```
+
 ## End-to-End testing
 ```bash
 $> export EXOSCALE_API_KEY=<api-key>       # Optional if exocli is not configured

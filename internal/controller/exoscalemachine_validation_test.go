@@ -11,6 +11,8 @@ import (
 	infrav1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
 )
 
+const validationTestProviderID = "exoscale://8a991b98-e12e-4ef5-98ea-b44dd829be2f"
+
 var _ = Describe("ExoscaleMachine validation", func() {
 	It("keeps creation fields immutable while allowing providerID updates", func() {
 		machine := &infrav1alpha1.ExoscaleMachine{
@@ -27,7 +29,7 @@ var _ = Describe("ExoscaleMachine validation", func() {
 		Expect(k8sClient.Update(ctx, machine)).To(MatchError(ContainSubstring("instance creation fields are immutable")))
 
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(machine), machine)).To(Succeed())
-		providerID := "exoscale://8a991b98-e12e-4ef5-98ea-b44dd829be2f"
+		providerID := validationTestProviderID
 		machine.Spec.ProviderID = &providerID
 		Expect(k8sClient.Update(ctx, machine)).To(Succeed())
 
@@ -49,7 +51,7 @@ var _ = Describe("ExoscaleMachine validation", func() {
 		Expect(k8sClient.Create(ctx, machine)).To(Succeed())
 		DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, machine))).To(Succeed()) })
 
-		providerID := "exoscale://8a991b98-e12e-4ef5-98ea-b44dd829be2f"
+		providerID := validationTestProviderID
 		machine.Spec.ProviderID = &providerID
 		Expect(k8sClient.Update(ctx, machine)).To(Succeed())
 
@@ -83,5 +85,44 @@ var _ = Describe("ExoscaleMachine validation", func() {
 		machine.Spec.RootVolumeSizeGiB = &rootVolumeSize
 		machine.Spec.RootVolumeSizeGB = &rootVolumeSize
 		Expect(k8sClient.Create(ctx, machine)).To(MatchError(ContainSubstring("rootVolumeSizeGiB and rootVolumeSizeGB are mutually exclusive")))
+	})
+})
+
+var _ = Describe("ExoscaleMachineTemplate CRD validation", func() {
+	It("rejects providerID in templates", func() {
+		providerID := validationTestProviderID
+		template := &infrav1alpha1.ExoscaleMachineTemplate{
+			ObjectMeta: metav1.ObjectMeta{GenerateName: "invalid-machine-template-", Namespace: "default"},
+			Spec: infrav1alpha1.ExoscaleMachineTemplateSpec{
+				Template: infrav1alpha1.ExoscaleMachineTemplateResource{
+					Spec: infrav1alpha1.ExoscaleMachineSpec{
+						Template:     "ubuntu",
+						InstanceType: "small",
+						ProviderID:   &providerID,
+					},
+				},
+			},
+		}
+
+		Expect(k8sClient.Create(ctx, template)).To(MatchError(ContainSubstring("providerID must not be set")))
+	})
+
+	It("leaves template spec immutability to the topology-aware webhook", func() {
+		template := &infrav1alpha1.ExoscaleMachineTemplate{
+			ObjectMeta: metav1.ObjectMeta{GenerateName: "mutable-machine-template-", Namespace: "default"},
+			Spec: infrav1alpha1.ExoscaleMachineTemplateSpec{
+				Template: infrav1alpha1.ExoscaleMachineTemplateResource{
+					Spec: infrav1alpha1.ExoscaleMachineSpec{
+						Template:     "ubuntu",
+						InstanceType: "small",
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, template)).To(Succeed())
+		DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, template))).To(Succeed()) })
+
+		template.Spec.Template.Spec.InstanceType = "medium"
+		Expect(k8sClient.Update(ctx, template)).To(Succeed())
 	})
 })

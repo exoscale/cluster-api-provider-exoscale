@@ -1,10 +1,9 @@
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
 kind: ExoscaleCluster
 metadata:
-  name: ($clusterName)
-  namespace: ($namespace)
+  name: "${CLUSTER_NAME}"
 spec:
-  zone: ($zone)
+  zone: "${EXOSCALE_ZONE}"
   securityGroupControlPlane:
     rules:
       - flowDirection: ingress
@@ -17,8 +16,7 @@ spec:
 apiVersion: cluster.x-k8s.io/v1beta2
 kind: Cluster
 metadata:
-  name: ($clusterName)
-  namespace: ($namespace)
+  name: "${CLUSTER_NAME}"
 spec:
   clusterNetwork:
     pods:
@@ -31,43 +29,36 @@ spec:
   controlPlaneRef:
     apiGroup: controlplane.cluster.x-k8s.io
     kind: KubeadmControlPlane
-    name: ($clusterName)
+    name: "${CLUSTER_NAME}"
   infrastructureRef:
     apiGroup: infrastructure.cluster.x-k8s.io
     kind: ExoscaleCluster
-    name: ($clusterName)
+    name: "${CLUSTER_NAME}"
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
 kind: ExoscaleMachineTemplate
 metadata:
-  name: ($clusterName)
-  namespace: ($namespace)
+  name: "${CLUSTER_NAME}"
 spec:
   template:
-    metadata:
-      labels:
-        e2e.cluster.x-k8s.io/template: ($clusterName)
-      annotations:
-        e2e.cluster.x-k8s.io/template: ($clusterName)
     spec:
-      template: ($template)
-      instanceType: ($instanceType)
-      rootVolumeSizeGiB: 20
+      template: "${EXOSCALE_TEMPLATE:=Linux Ubuntu 24.04 LTS 64-bit}"
+      instanceType: "${EXOSCALE_INSTANCE_TYPE:=small}"
+      rootVolumeSizeGiB: ${EXOSCALE_ROOT_VOLUME_SIZE_GIB:=20}
 ---
 apiVersion: controlplane.cluster.x-k8s.io/v1beta2
 kind: KubeadmControlPlane
 metadata:
-  name: ($clusterName)
-  namespace: ($namespace)
+  name: "${CLUSTER_NAME}"
 spec:
-  replicas: 1
-  version: v1.32.13
+  replicas: ${CONTROL_PLANE_MACHINE_COUNT}
+  version: "${KUBERNETES_VERSION}"
   machineTemplate:
     spec:
       infrastructureRef:
         apiGroup: infrastructure.cluster.x-k8s.io
         kind: ExoscaleMachineTemplate
-        name: ($clusterName)
+        name: "${CLUSTER_NAME}"
   kubeadmConfigSpec:
     format: cloud-config
     initConfiguration:
@@ -101,11 +92,19 @@ spec:
       - sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
       - systemctl enable --now containerd
       - install -m 0755 -d /etc/apt/keyrings
-      - curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.32/deb/Release.key | gpg --dearmor --yes -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-      - printf '%s\n' 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.32/deb/ /' > /etc/apt/sources.list.d/kubernetes.list
-      - apt-get update
-      - DEBIAN_FRONTEND=noninteractive apt-get install -y kubelet=1.32.13-1.1 kubeadm=1.32.13-1.1
-      - apt-mark hold kubelet kubeadm
+      - >-
+        kubernetes_version='${KUBERNETES_VERSION}';
+        kubernetes_version="$${kubernetes_version#v}";
+        kubernetes_minor="$${kubernetes_version%.*}";
+        curl -fsSL "https://pkgs.k8s.io/core:/stable:/v$${kubernetes_minor}/deb/Release.key"
+        | gpg --dearmor --yes -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg;
+        printf '%s\n'
+        "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v$${kubernetes_minor}/deb/ /"
+        > /etc/apt/sources.list.d/kubernetes.list;
+        apt-get update;
+        DEBIAN_FRONTEND=noninteractive apt-get install -y
+        "kubelet=$${kubernetes_version}-1.1" "kubeadm=$${kubernetes_version}-1.1";
+        apt-mark hold kubelet kubeadm
       - >-
         instance_id="$(curl --fail --silent --show-error --retry 30 --retry-delay 2
         http://metadata.exoscale.com/latest/meta-data/instance-id | tr -d '\r\n')";

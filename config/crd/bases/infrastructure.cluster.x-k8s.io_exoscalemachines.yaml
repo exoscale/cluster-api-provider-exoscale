@@ -121,16 +121,6 @@ spec:
               rule: has(self.template) != has(self.templateID)
             - message: rootVolumeSizeGiB and rootVolumeSizeGB are mutually exclusive
               rule: '!(has(self.rootVolumeSizeGiB) && has(self.rootVolumeSizeGB))'
-            - message: instance creation fields are immutable
-              rule: '(has(self.template) ? self.template : self.templateID) == (has(oldSelf.template)
-                ? oldSelf.template : oldSelf.templateID) && self.instanceType == oldSelf.instanceType
-                && has(self.sshKey) == has(oldSelf.sshKey) && (!has(self.sshKey) ||
-                self.sshKey == oldSelf.sshKey) && has(self.securityGroups) == has(oldSelf.securityGroups)
-                && (!has(self.securityGroups) || self.securityGroups == oldSelf.securityGroups)
-                && (has(self.rootVolumeSizeGiB) ? self.rootVolumeSizeGiB : (has(self.rootVolumeSizeGB)
-                ? self.rootVolumeSizeGB : 0)) == (has(oldSelf.rootVolumeSizeGiB) ?
-                oldSelf.rootVolumeSizeGiB : (has(oldSelf.rootVolumeSizeGB) ? oldSelf.rootVolumeSizeGB
-                : 0))'
           status:
             description: |-
               ExoscaleMachineStatus defines the observed state of an ExoscaleMachine.
@@ -260,6 +250,18 @@ spec:
         required:
         - spec
         type: object
+        x-kubernetes-validations:
+        - message: instance creation fields are immutable
+          rule: '(has(self.spec.template) ? self.spec.template : self.spec.templateID)
+            == (has(oldSelf.spec.template) ? oldSelf.spec.template : oldSelf.spec.templateID)
+            && self.spec.instanceType == oldSelf.spec.instanceType && has(self.spec.sshKey)
+            == has(oldSelf.spec.sshKey) && (!has(self.spec.sshKey) || self.spec.sshKey
+            == oldSelf.spec.sshKey) && has(self.spec.securityGroups) == has(oldSelf.spec.securityGroups)
+            && (!has(self.spec.securityGroups) || self.spec.securityGroups == oldSelf.spec.securityGroups)
+            && (has(self.spec.rootVolumeSizeGiB) ? self.spec.rootVolumeSizeGiB : (has(self.spec.rootVolumeSizeGB)
+            ? self.spec.rootVolumeSizeGB : 0)) == (has(oldSelf.spec.rootVolumeSizeGiB)
+            ? oldSelf.spec.rootVolumeSizeGiB : (has(oldSelf.spec.rootVolumeSizeGB)
+            ? oldSelf.spec.rootVolumeSizeGB : 0))'
     served: true
     storage: true
     subresources:

@@ -58,12 +58,32 @@ $> kubectl delete cluster/my-cluster # also deletes its Machine and Exoscale res
 The shared `exoscale` credential Secret is not owned by the Cluster and remains
 after Cluster deletion.
 
+### Generate a workload cluster with clusterctl
+
+As an alternative to the simple sample above, render the repository's
+`KubeadmControlPlane` template with `clusterctl`:
+
+```bash
+$> export EXOSCALE_ZONE=ch-gva-2
+$> ./bin/clusterctl generate cluster my-cluster \
+     --from ./templates/cluster-template.yaml \
+     --kubernetes-version v1.32.13 \
+     | kubectl apply -f -
+
+$> kubectl wait cluster/my-cluster --for=condition=ControlPlaneInitialized --timeout=20m
+$> ./bin/clusterctl get kubeconfig my-cluster > /tmp/my-cluster.kubeconfig
+$> kubectl --kubeconfig=/tmp/my-cluster.kubeconfig apply \
+     -f https://github.com/flannel-io/flannel/releases/download/v0.28.8/kube-flannel.yml
+$> kubectl --kubeconfig=/tmp/my-cluster.kubeconfig wait node --all --for=condition=Ready --timeout=10m
+$> kubectl delete cluster/my-cluster
+```
+
 ## End-to-End testing
 ```bash
 $> export EXOSCALE_API_KEY=<api-key>       # Optional if exocli is not configured
 $> export EXOSCALE_API_SECRET=<api-secret> # Optional if exocli is not configured
 
-$> make chainsaw-test-e2e
+$> make chainsaw-test-e2e CHAINSAW_MACHINE_TEMPLATE="Linux Ubuntu 24.04 LTS 64-bit"
 ```
 
 ## License

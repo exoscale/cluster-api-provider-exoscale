@@ -1,0 +1,152 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.1
+  name: exoscalemachinetemplates.infrastructure.cluster.x-k8s.io
+spec:
+  group: infrastructure.cluster.x-k8s.io
+  names:
+    categories:
+    - cluster-api
+    kind: ExoscaleMachineTemplate
+    listKind: ExoscaleMachineTemplateList
+    plural: exoscalemachinetemplates
+    shortNames:
+    - exomt
+    singular: exoscalemachinetemplate
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: ExoscaleMachineTemplate is the Schema for the exoscalemachinetemplates
+          API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ExoscaleMachineTemplateSpec defines the desired state of
+              an ExoscaleMachineTemplate.
+            properties:
+              template:
+                description: template contains the metadata and spec copied into generated
+                  ExoscaleMachines.
+                properties:
+                  metadata:
+                    description: metadata is copied to generated ExoscaleMachines.
+                    minProperties: 1
+                    properties:
+                      annotations:
+                        additionalProperties:
+                          type: string
+                        description: |-
+                          annotations is an unstructured key value map stored with a resource that may be
+                          set by external tools to store and retrieve arbitrary metadata. They are not
+                          queryable and should be preserved when modifying objects.
+                          More info: http://kubernetes.io/docs/user-guide/annotations
+                        type: object
+                      labels:
+                        additionalProperties:
+                          type: string
+                        description: |-
+                          labels is a map of string keys and values that can be used to organize and categorize
+                          (scope and select) objects. May match selectors of replication controllers
+                          and services.
+                          More info: http://kubernetes.io/docs/user-guide/labels
+                        type: object
+                    type: object
+                  spec:
+                    description: spec is copied to generated ExoscaleMachines.
+                    properties:
+                      instanceType:
+                        description: |-
+                          instanceType is an Exoscale instance type UUID or a value in [family.]size
+                          format. For example, "small" is shorthand for "standard.small".
+                          The value is resolved against the Exoscale catalog during reconciliation.
+                          Run `exo compute instance-type list -v` to list available values.
+                        minLength: 1
+                        type: string
+                      providerID:
+                        description: |-
+                          providerID is the cloud-provider identifier for this instance in the form
+                          exoscale://<instance-uuid>. Set by the controller after the instance is created.
+                          CAPI uses this field to match the InfraMachine to the Node object.
+                        type: string
+                      rootVolumeSizeGB:
+                        description: |-
+                          rootVolumeSizeGB is the legacy spelling of rootVolumeSizeGiB.
+                          Deprecated: use rootVolumeSizeGiB.
+                        format: int64
+                        maximum: 10000
+                        minimum: 10
+                        type: integer
+                      rootVolumeSizeGiB:
+                        description: rootVolumeSizeGiB overrides the disk size declared
+                          by the template.
+                        format: int64
+                        maximum: 10000
+                        minimum: 10
+                        type: integer
+                      securityGroups:
+                        description: |-
+                          securityGroups lists UUIDs of Exoscale Security Groups to attach in addition
+                          to the cluster's control-plane or node security group.
+                        items:
+                          type: string
+                        type: array
+                      sshKey:
+                        description: sshKey is the name of a pre-existing SSH key
+                          registered in the Exoscale project.
+                        type: string
+                      template:
+                        description: |-
+                          template is an Exoscale instance template UUID or exact template name.
+                          UUIDs pin an exact template; names are resolved at create time.
+                        minLength: 1
+                        type: string
+                      templateID:
+                        description: |-
+                          templateID is the legacy UUID-only spelling of template.
+                          Deprecated: use template.
+                        pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+                        type: string
+                    required:
+                    - instanceType
+                    type: object
+                    x-kubernetes-validations:
+                    - message: exactly one of template or templateID must be set
+                      rule: has(self.template) != has(self.templateID)
+                    - message: rootVolumeSizeGiB and rootVolumeSizeGB are mutually
+                        exclusive
+                      rule: '!(has(self.rootVolumeSizeGiB) && has(self.rootVolumeSizeGB))'
+                required:
+                - spec
+                type: object
+                x-kubernetes-validations:
+                - message: providerID must not be set in an ExoscaleMachineTemplate
+                  rule: '!has(self.spec.providerID)'
+            required:
+            - template
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true

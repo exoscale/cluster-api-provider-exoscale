@@ -4,6 +4,7 @@
 resources:
 - bases/infrastructure.cluster.x-k8s.io_exoscaleclusters.yaml
 - bases/infrastructure.cluster.x-k8s.io_exoscalemachines.yaml
+- bases/infrastructure.cluster.x-k8s.io_exoscalemachinetemplates.yaml
 - bases/infrastructure.cluster.x-k8s.io_exoscaleclustertemplates.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 

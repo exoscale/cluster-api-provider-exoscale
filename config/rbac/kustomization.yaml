@@ -25,10 +25,12 @@ resources:
 - exoscaleclustertemplate_admin_role.yaml
 - exoscaleclustertemplate_editor_role.yaml
 - exoscaleclustertemplate_viewer_role.yaml
+- exoscalemachinetemplate_admin_role.yaml
+- exoscalemachinetemplate_editor_role.yaml
+- exoscalemachinetemplate_viewer_role.yaml
 - exoscalemachine_admin_role.yaml
 - exoscalemachine_editor_role.yaml
 - exoscalemachine_viewer_role.yaml
 - exoscalecluster_admin_role.yaml
 - exoscalecluster_editor_role.yaml
 - exoscalecluster_viewer_role.yaml
-

@@ -28,7 +28,6 @@ import (
 // instead of duplicating zone here.
 // +kubebuilder:validation:XValidation:rule="has(self.template) != has(self.templateID)",message="exactly one of template or templateID must be set"
 // +kubebuilder:validation:XValidation:rule="!(has(self.rootVolumeSizeGiB) && has(self.rootVolumeSizeGB))",message="rootVolumeSizeGiB and rootVolumeSizeGB are mutually exclusive"
-// +kubebuilder:validation:XValidation:rule="(has(self.template) ? self.template : self.templateID) == (has(oldSelf.template) ? oldSelf.template : oldSelf.templateID) && self.instanceType == oldSelf.instanceType && has(self.sshKey) == has(oldSelf.sshKey) && (!has(self.sshKey) || self.sshKey == oldSelf.sshKey) && has(self.securityGroups) == has(oldSelf.securityGroups) && (!has(self.securityGroups) || self.securityGroups == oldSelf.securityGroups) && (has(self.rootVolumeSizeGiB) ? self.rootVolumeSizeGiB : (has(self.rootVolumeSizeGB) ? self.rootVolumeSizeGB : 0)) == (has(oldSelf.rootVolumeSizeGiB) ? oldSelf.rootVolumeSizeGiB : (has(oldSelf.rootVolumeSizeGB) ? oldSelf.rootVolumeSizeGB : 0))",message="instance creation fields are immutable"
 type ExoscaleMachineSpec struct {
 	// template is an Exoscale instance template UUID or exact template name.
 	// UUIDs pin an exact template; names are resolved at create time.
@@ -149,6 +148,7 @@ type ExoscaleMachineStatus struct {
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.ready`
 // +kubebuilder:printcolumn:name="ProviderID",type=string,JSONPath=`.spec.providerID`
 // +kubebuilder:printcolumn:name="Machine",type=string,JSONPath=`.metadata.ownerReferences[?(@.kind=="Machine")].name`
+// +kubebuilder:validation:XValidation:rule="(has(self.spec.template) ? self.spec.template : self.spec.templateID) == (has(oldSelf.spec.template) ? oldSelf.spec.template : oldSelf.spec.templateID) && self.spec.instanceType == oldSelf.spec.instanceType && has(self.spec.sshKey) == has(oldSelf.spec.sshKey) && (!has(self.spec.sshKey) || self.spec.sshKey == oldSelf.spec.sshKey) && has(self.spec.securityGroups) == has(oldSelf.spec.securityGroups) && (!has(self.spec.securityGroups) || self.spec.securityGroups == oldSelf.spec.securityGroups) && (has(self.spec.rootVolumeSizeGiB) ? self.spec.rootVolumeSizeGiB : (has(self.spec.rootVolumeSizeGB) ? self.spec.rootVolumeSizeGB : 0)) == (has(oldSelf.spec.rootVolumeSizeGiB) ? oldSelf.spec.rootVolumeSizeGiB : (has(oldSelf.spec.rootVolumeSizeGB) ? oldSelf.spec.rootVolumeSizeGB : 0))",message="instance creation fields are immutable"
 
 // ExoscaleMachine is the Schema for the exoscalemachines API.
 type ExoscaleMachine struct {

@@ -66,6 +66,7 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
+	var unsafeExoscaleAPITrace bool
 	var tlsOpts []func(*tls.Config)
 	// watchNamespace restricts the operator to a single namespace. This enables running multiple
 	// instances of the operator in the same cluster, each responsible for a different namespace,
@@ -96,6 +97,8 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	flag.BoolVar(&unsafeExoscaleAPITrace, "unsafe-exoscale-api-trace", false,
+		"Enable unsafe Exoscale API request/response tracing at log level 9 or higher; exposes sensitive URIs, query parameters, headers, credentials, and at level 10 bodies.") //nolint:lll
 	opts := zap.Options{
 		Development: true,
 	}
@@ -103,6 +106,13 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	if unsafeExoscaleAPITrace {
+		setupLog.Info(
+			"Unsafe Exoscale API trace requested; logs may contain credentials and user data",
+			"enabled", ctrl.Log.V(9).Enabled(),
+			"includeBodies", ctrl.Log.V(10).Enabled(),
+		)
+	}
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
@@ -205,7 +215,7 @@ func main() {
 		Client:            mgr.GetClient(),
 		Scheme:            mgr.GetScheme(),
 		WatchFilter:       watchFilter,
-		NewClusterService: service.NewClusterService,
+		NewClusterService: service.NewClusterServiceFactory(unsafeExoscaleAPITrace),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "ExoscaleCluster")
 		os.Exit(1)
@@ -214,7 +224,7 @@ func main() {
 		Client:             mgr.GetClient(),
 		Scheme:             mgr.GetScheme(),
 		WatchFilter:        watchFilter,
-		NewInstanceService: service.NewInstanceService,
+		NewInstanceService: service.NewInstanceServiceFactory(unsafeExoscaleAPITrace),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "ExoscaleMachine")
 		os.Exit(1)

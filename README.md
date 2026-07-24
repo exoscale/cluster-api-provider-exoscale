@@ -30,10 +30,27 @@ $> ENABLE_WEBHOOKS=false make run
 
 Keep the manager running and use another terminal for the remaining commands.
 
-Set `RUN_ARGS=--zap-log-level=2` to log controller decisions. Level `4` also
-logs one metadata entry per logical Exoscale SDK call with its method, host,
-path, final status, and total duration including retries. API logs never include
-query strings, headers, request or response bodies, or credentials.
+CAPX uses these log verbosity levels:
+
+- V(2) logs controller decisions.
+- V(4) logs one safe metadata entry per logical Exoscale SDK call with its
+  method, host, path, final status, and total duration including retries. V(4)
+  does not include query strings, headers, request or response bodies, or
+  credentials.
+- V(9) adds one complete request dump and one response dump, including URI,
+  query parameters, and headers, only when `--unsafe-exoscale-api-trace` is also
+  set. Bodies are excluded.
+- V(10) is cumulative and adds request and response bodies to the same V(9)
+  dumps.
+
+> **Warning:** V(9) and V(10) can expose API credentials, bootstrap data, and
+> other secrets. Enable `--unsafe-exoscale-api-trace` only for short-lived
+> debugging in a secured log environment, then disable it and remove the logs.
+> The V(4) security guarantee applies only to the V(4) metadata entry, not to
+> V(9) or V(10) wire dumps.
+
+For example, use `RUN_ARGS=--zap-log-level=2` for decisions. Unsafe body tracing
+requires both `RUN_ARGS="--zap-log-level=10 --unsafe-exoscale-api-trace"`.
 
 ### Deploy a simple cluster
 ```bash

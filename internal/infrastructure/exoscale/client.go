@@ -44,11 +44,11 @@ func NewCloud(apiKey, apisecret string, zone egoscale.ZoneName) (*cloud, error) 
 	return newCloud(apiKey, apisecret, zone, nil)
 }
 
-func NewCloudWithLogger(apiKey, apisecret string, zone egoscale.ZoneName, logger logr.Logger) (*cloud, error) {
+func NewCloudWithLogger(apiKey, apisecret string, zone egoscale.ZoneName, logger logr.Logger, unsafeAPITrace bool) (*cloud, error) {
 	if !logger.V(apiMetadataLogLevel).Enabled() {
 		return NewCloud(apiKey, apisecret, zone)
 	}
-	return newCloud(apiKey, apisecret, zone, metadataHTTPClient(logger))
+	return newCloud(apiKey, apisecret, zone, loggingHTTPClient(logger, unsafeAPITrace))
 }
 
 func newCloud(apiKey, apisecret string, zone egoscale.ZoneName, httpClient *http.Client) (*cloud, error) {

@@ -119,6 +119,109 @@ func Test_metadataRoundTripper(t *testing.T) {
 	}
 }
 
+func Test_loggingRoundTripper_unsafeTrace(t *testing.T) {
+	t.Parallel()
+
+	const (
+		queryMarker        = "fake-query-marker"
+		requestHeader      = "fake-request-header-marker"
+		requestBody        = "fake-request-body-marker"
+		responseHeader     = "fake-response-header-marker"
+		responseBody       = "fake-response-body-marker"
+		requestLogMessage  = "Unsafe Exoscale API wire request"
+		responseLogMessage = "Unsafe Exoscale API wire response"
+	)
+	tests := []struct {
+		name       string
+		unsafe     bool
+		verbosity  int
+		wantTrace  bool
+		wantBodies bool
+	}{
+		{name: "flag false at V(10)", verbosity: 10},
+		{name: "flag true below V(9)", unsafe: true, verbosity: 8},
+		{name: "V(9) headers without bodies", unsafe: true, verbosity: 9, wantTrace: true},
+		{name: "V(10) headers and bodies", unsafe: true, verbosity: 10, wantTrace: true, wantBodies: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var output strings.Builder
+			logger := funcr.New(func(prefix, args string) { output.WriteString(prefix + args) }, funcr.Options{Verbosity: tc.verbosity})
+			var gotRequestBody string
+			transport := loggingRoundTripper(roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				body, err := io.ReadAll(req.Body)
+				assert.NoError(t, err)
+				gotRequestBody = string(body)
+				return &http.Response{
+					StatusCode:    http.StatusAccepted,
+					Header:        http.Header{"X-Response-Marker": []string{responseHeader}},
+					Body:          io.NopCloser(strings.NewReader(responseBody)),
+					ContentLength: int64(len(responseBody)),
+				}, nil
+			}), logger, tc.unsafe)
+			req, err := http.NewRequest(http.MethodPost, "https://api.example.test/v2/instance?trace="+queryMarker, strings.NewReader(requestBody))
+			assert.NoError(t, err)
+			req.Header.Set("X-Request-Marker", requestHeader)
+
+			resp, err := (&http.Client{Transport: transport}).Do(req)
+
+			assert.NoError(t, err)
+			assert.Equal(t, requestBody, gotRequestBody)
+			if assert.NotNil(t, resp) {
+				body, readErr := io.ReadAll(resp.Body)
+				assert.NoError(t, readErr)
+				assert.Equal(t, responseBody, string(body))
+				assert.NoError(t, resp.Body.Close())
+			}
+
+			logs := output.String()
+			if tc.wantTrace {
+				assert.Contains(t, logs, queryMarker)
+				assert.Contains(t, logs, requestHeader)
+				assert.Contains(t, logs, responseHeader)
+				assert.Equal(t, 1, strings.Count(logs, requestLogMessage))
+				assert.Equal(t, 1, strings.Count(logs, responseLogMessage))
+			} else {
+				assert.NotContains(t, logs, requestLogMessage)
+				assert.NotContains(t, logs, responseLogMessage)
+				for _, marker := range []string{queryMarker, requestHeader, requestBody, responseHeader, responseBody} {
+					assert.NotContains(t, logs, marker)
+				}
+			}
+			if tc.wantBodies {
+				assert.Contains(t, logs, requestBody)
+				assert.Contains(t, logs, responseBody)
+			} else {
+				assert.NotContains(t, logs, requestBody)
+				assert.NotContains(t, logs, responseBody)
+			}
+		})
+	}
+}
+
+func Test_loggingRoundTripper_returnedErrorRemainsSafe(t *testing.T) {
+	t.Parallel()
+
+	transportErr := errors.New("dial https://other.example/raw-url-secret?credential=fake-transport-secret")
+	logger := funcr.New(func(_, _ string) {}, funcr.Options{Verbosity: 10})
+	transport := loggingRoundTripper(roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return nil, transportErr
+	}), logger, true)
+	req, err := http.NewRequest(http.MethodGet, "https://fake-user:fake-password@api.example.test/v2/instance?token=fake-query-secret#fake-fragment-secret", nil)
+	assert.NoError(t, err)
+
+	resp, err := (&http.Client{Transport: transport}).Do(req)
+
+	assert.Nil(t, resp)
+	assert.ErrorIs(t, err, transportErr)
+	var safeErr requestError
+	assert.ErrorAs(t, err, &safeErr)
+	for _, secret := range []string{"fake-user", "fake-password", "fake-query-secret", "fake-fragment-secret", "fake-transport-secret"} {
+		assert.NotContains(t, err.Error(), secret)
+	}
+}
+
 func Test_NewCloud_rejectsIncompleteCredentials(t *testing.T) {
 	t.Parallel()
 

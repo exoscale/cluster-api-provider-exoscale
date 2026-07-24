@@ -43,11 +43,21 @@ type instanceCloud interface {
 	DeleteInstance(ctx context.Context, id uuid.UUID) error
 }
 
+func NewInstanceServiceFactory(unsafeAPITrace bool) func(string, string, egoscale.ZoneName, logr.Logger) (domain.InstanceService, error) {
+	return func(apiKey, apiSecret string, zone egoscale.ZoneName, logger logr.Logger) (domain.InstanceService, error) {
+		return newInstanceService(apiKey, apiSecret, zone, logger, unsafeAPITrace)
+	}
+}
+
 // NewInstanceService returns an InstanceService bound to the given Exoscale
 // zone and credentials. The underlying egoscale client is created lazily by
 // the Cloud adapter.
 func NewInstanceService(apiKey, apiSecret string, zone egoscale.ZoneName, logger logr.Logger) (domain.InstanceService, error) {
-	cloudClient, err := exoscale.NewCloudWithLogger(apiKey, apiSecret, zone, logger)
+	return newInstanceService(apiKey, apiSecret, zone, logger, false)
+}
+
+func newInstanceService(apiKey, apiSecret string, zone egoscale.ZoneName, logger logr.Logger, unsafeAPITrace bool) (domain.InstanceService, error) {
+	cloudClient, err := exoscale.NewCloudWithLogger(apiKey, apiSecret, zone, logger, unsafeAPITrace)
 	if err != nil {
 		return nil, err
 	}

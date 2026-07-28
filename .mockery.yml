@@ -27,10 +27,8 @@ packages:
     interfaces:
       ExoscaleClient:
       Cloud:
+      InstanceCloud:
       ElasticIPService:
       SecurityGroupService:
       ClusterService:
       InstanceService:
-  github.com/exoscale/cluster-api-provider-exoscale/internal/service:
-    interfaces:
-      InstanceClient:

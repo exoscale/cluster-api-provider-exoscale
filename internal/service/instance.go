@@ -20,22 +20,8 @@ const (
 	minimumDiskSizeGiB int64 = 10
 )
 
-// InstanceClient is the instance API used by the instance service.
-type InstanceClient interface {
-	ListInstances(ctx context.Context, label string) ([]domain.Instance, error)
-	ListInstanceTypes(ctx context.Context) ([]domain.InstanceType, error)
-	GetTemplate(ctx context.Context, id uuid.UUID) (domain.InstanceTemplate, error)
-	ListTemplates(ctx context.Context) ([]domain.InstanceTemplate, error)
-	CreateInstance(ctx context.Context, spec domain.ResolvedInstanceSpec) (uuid.UUID, error)
-	GetInstance(ctx context.Context, id uuid.UUID) (domain.Instance, error)
-	AttachInstanceToElasticIP(ctx context.Context, instanceID, elasticIPID uuid.UUID) error
-	AttachInstanceToSecurityGroup(ctx context.Context, instanceID, securityGroupID uuid.UUID) error
-	DetachInstanceFromSecurityGroup(ctx context.Context, instanceID, securityGroupID uuid.UUID) error
-	DeleteInstance(ctx context.Context, id uuid.UUID) error
-}
-
 type instanceService struct {
-	client InstanceClient
+	client domain.InstanceCloud
 	logger logr.Logger
 }
 

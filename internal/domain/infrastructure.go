@@ -60,6 +60,20 @@ type Cloud interface {
 	ListSecurityGroupRules(ctx context.Context, sgID uuid.UUID) ([]SecurityGroupRule, error)
 }
 
+// InstanceCloud is the cloud API used by the instance service.
+type InstanceCloud interface {
+	ListInstances(ctx context.Context, label string) ([]Instance, error)
+	ListInstanceTypes(ctx context.Context) ([]InstanceType, error)
+	GetTemplate(ctx context.Context, id uuid.UUID) (InstanceTemplate, error)
+	ListTemplates(ctx context.Context) ([]InstanceTemplate, error)
+	CreateInstance(ctx context.Context, spec ResolvedInstanceSpec) (uuid.UUID, error)
+	GetInstance(ctx context.Context, id uuid.UUID) (Instance, error)
+	AttachInstanceToElasticIP(ctx context.Context, instanceID, elasticIPID uuid.UUID) error
+	AttachInstanceToSecurityGroup(ctx context.Context, instanceID, securityGroupID uuid.UUID) error
+	DetachInstanceFromSecurityGroup(ctx context.Context, instanceID, securityGroupID uuid.UUID) error
+	DeleteInstance(ctx context.Context, id uuid.UUID) error
+}
+
 // ElasticIPService reconciles the Elastic IP owned by a cluster.
 type ElasticIPService interface {
 	UpsertElasticIP(ctx context.Context, clusterID uuid.UUID, eipID *uuid.UUID, port int32) (ElasticIP, error)

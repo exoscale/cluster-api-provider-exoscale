@@ -53,11 +53,10 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 		wantFinalizer    bool
 	}{
 		{name: "recovers instance by Machine UID", ownerReference: true, ownerMachine: true, wantService: true},
-		{name: "recovers instance when owner Machine is gone", ownerReference: true, wantService: true},
 		{name: "status instance without owner keeps finalizer", statusInstanceID: instanceID.String(), deleteErr: assert.AnError, wantService: true, wantErr: assert.AnError, wantFinalizer: true},
 		{name: "without either identifier removes finalizer"},
-		{name: "instance not found removes finalizer", ownerReference: true, statusInstanceID: instanceID.String(), deleteErr: domain.ErrInstanceNotFound, wantService: true},
-		{name: "delete error keeps finalizer", ownerReference: true, statusInstanceID: instanceID.String(), deleteErr: assert.AnError, wantService: true, wantErr: assert.AnError, wantFinalizer: true},
+		{name: "instance not found removes finalizer", ownerReference: true, ownerMachine: true, statusInstanceID: instanceID.String(), deleteErr: domain.ErrInstanceNotFound, wantService: true},
+		{name: "delete error keeps finalizer", ownerReference: true, ownerMachine: true, statusInstanceID: instanceID.String(), deleteErr: assert.AnError, wantService: true, wantErr: assert.AnError, wantFinalizer: true},
 		{name: "paused deletion keeps finalizer", ownerReference: true, paused: true, statusInstanceID: instanceID.String(), wantFinalizer: true},
 	}
 
@@ -69,7 +68,7 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 			instanceSvc := mocks.NewInstanceService(t)
 			var expectedMachineUID domain.MachineUID
 			var expectedInstanceID *uuid.UUID
-			if tc.ownerReference {
+			if tc.ownerMachine {
 				expectedMachineUID = machineUID
 			}
 			if tc.statusInstanceID != "" {
@@ -191,13 +190,13 @@ func Test_deletionInstanceIDs(t *testing.T) {
 
 	instanceID := uuid.New()
 	machineUID := domain.MachineUID("not-a-uuid")
-	controllerOwner := true
 	providerID := "exoscale://" + instanceID.String()
 	legacyProviderID := "exoscale:///" + instanceID.String()
 	invalidProviderID := "bad-id"
 	tests := []struct {
 		name           string
 		exoMachine     infrav1alpha1.ExoscaleMachine
+		machine        *clusterv1.Machine
 		wantMachineUID domain.MachineUID
 		wantInstanceID *uuid.UUID
 		wantErr        string
@@ -223,17 +222,15 @@ func Test_deletionInstanceIDs(t *testing.T) {
 			wantErr:    "invalid providerID",
 		},
 		{
-			name: "accepts non-UUID Machine UID",
-			exoMachine: infrav1alpha1.ExoscaleMachine{ObjectMeta: metav1.ObjectMeta{OwnerReferences: []metav1.OwnerReference{{
-				APIVersion: clusterv1.GroupVersion.String(), Kind: "Machine", UID: types.UID(machineUID), Controller: &controllerOwner,
-			}}}},
+			name:           "accepts non-UUID Machine UID",
+			machine:        &clusterv1.Machine{ObjectMeta: metav1.ObjectMeta{UID: types.UID(machineUID)}},
 			wantMachineUID: machineUID,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			gotMachineUID, gotInstanceID, err := getDeletionInstanceIDs(&tc.exoMachine)
+			gotMachineUID, gotInstanceID, err := getDeletionInstanceIDs(tc.machine, &tc.exoMachine)
 
 			if tc.wantErr != "" {
 				assert.ErrorContains(t, err, tc.wantErr)

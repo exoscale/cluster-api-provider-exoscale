@@ -97,7 +97,7 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	var machine *clusterv1.Machine
 	cluster, clusterErr := util.GetClusterFromMetadata(ctx, r.Client, exoMachine.ObjectMeta)
 
-	if annotations.HasPaused(exoMachine) || (clusterErr == nil && annotations.IsPaused(cluster, exoMachine)) {
+	if clusterErr == nil && annotations.IsPaused(cluster, exoMachine) {
 		log.Info("ExoscaleMachine or Cluster is paused")
 		setMachinePaused(exoMachine)
 		return ctrl.Result{}, nil
@@ -124,7 +124,12 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	if deleting {
 		setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.DeletingReason, "Deleting instance")
-		machineUID, instanceID, err := getDeletionInstanceIDs(exoMachine)
+		// Deletion returns before the normal owner lookup below, so fetch the Machine here for its ownership UID.
+		machine, err = util.GetOwnerMachine(ctx, r.Client, exoMachine.ObjectMeta)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		machineUID, instanceID, err := getDeletionInstanceIDs(machine, exoMachine)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -353,16 +358,20 @@ func (r *ExoscaleMachineReconciler) reconcileDelete(
 	return nil
 }
 
-func getDeletionInstanceIDs(exoMachine *infrastructurev1alpha1.ExoscaleMachine) (domain.MachineUID, *uuid.UUID, error) {
+func getDeletionInstanceIDs(
+	machine *clusterv1.Machine,
+	exoMachine *infrastructurev1alpha1.ExoscaleMachine,
+) (domain.MachineUID, *uuid.UUID, error) {
 	instanceID, err := exoscaleMachineInstanceID(exoMachine)
 	if err != nil {
 		return "", nil, err
 	}
-	owner := metav1.GetControllerOf(exoMachine)
-	if owner == nil || owner.Kind != "Machine" || owner.APIVersion != clusterv1.GroupVersion.String() {
+	if machine == nil {
+		// The instance service rejects deletion by instance ID alone when ownership cannot be verified.
 		return "", instanceID, nil
 	}
-	return domain.MachineUID(owner.UID), instanceID, nil
+
+	return domain.MachineUID(machine.GetUID()), instanceID, nil
 }
 
 func exoscaleClusterID(exoCluster *infrastructurev1alpha1.ExoscaleCluster) (uuid.UUID, error) {

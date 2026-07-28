@@ -68,7 +68,7 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 		UserData:          "#cloud-config",
 		Labels: map[string]string{
 			instanceClusterIDLabel: clusterID,
-			instanceRoleLabel:      "control-plane",
+			instanceRoleLabel:      string(MachineRoleControlPlane),
 		},
 	}).Return(domain.Instance{ID: instanceID, State: "running", PublicIP: "1.2.3.4", PrivateIP: "10.0.0.1"}, nil)
 

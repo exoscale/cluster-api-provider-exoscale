@@ -58,6 +58,7 @@ func newMachinePrerequisiteReconciler(t *testing.T, clusterInfrastructureReady, 
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      exoscaleMachineName,
 			Namespace: ns,
+			Labels:    map[string]string{clusterv1.ClusterNameLabel: clusterName},
 			OwnerReferences: []metav1.OwnerReference{
 				{APIVersion: clusterv1.GroupVersion.String(), Kind: "Machine", Name: machineName},
 			},
@@ -128,7 +129,7 @@ func newReadyMachineReconciler(t *testing.T, instance domain.Instance, upsertErr
 			UserData:         "#cloud-config",
 			Labels: map[string]string{
 				instanceClusterIDLabel: clusterID,
-				instanceRoleLabel:      "worker",
+				instanceRoleLabel:      string(MachineRoleWorker),
 			},
 		}).Return(instance, upsertErr)
 	}

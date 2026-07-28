@@ -5,7 +5,6 @@ kind: Test
 metadata:
   name: deploy-machine
 spec:
-  concurrent: false
   timeouts:
     delete: 10m
     cleanup: 10m

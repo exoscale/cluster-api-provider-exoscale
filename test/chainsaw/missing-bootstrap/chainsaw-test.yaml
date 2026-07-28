@@ -1,5 +1,5 @@
-# verifies no VM state is recorded while bootstrap data is unavailable,
-# and deletion still works.
+# Verifies that a Machine without bootstrap data records no VM or provider state
+# and can still be deleted before an instance exists.
 apiVersion: chainsaw.kyverno.io/v1alpha1
 kind: Test
 metadata:

@@ -16,9 +16,13 @@ type metadataRoundTripper struct {
 
 type requestError struct{ cause error }
 
-func (requestError) Error() string   { return "request failed" }
+// Error returns a safe message that omits request details.
+func (requestError) Error() string { return "request failed" }
+
+// Unwrap returns the underlying transport error.
 func (e requestError) Unwrap() error { return e.cause }
 
+// RoundTrip logs safe request metadata and removes query data from terminal errors.
 func (t metadataRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	started := time.Now()
 	resp, err := t.next.RoundTrip(req)

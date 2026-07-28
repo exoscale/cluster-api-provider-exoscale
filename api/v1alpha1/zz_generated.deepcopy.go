@@ -381,11 +381,6 @@ func (in *ExoscaleMachineSpec) DeepCopyInto(out *ExoscaleMachineSpec) {
 		*out = new(int64)
 		**out = **in
 	}
-	if in.RootVolumeSizeGB != nil {
-		in, out := &in.RootVolumeSizeGB, &out.RootVolumeSizeGB
-		*out = new(int64)
-		**out = **in
-	}
 	if in.ProviderID != nil {
 		in, out := &in.ProviderID, &out.ProviderID
 		*out = new(string)

@@ -18,7 +18,6 @@ package controller
 
 import (
 	"context"
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"strings"
@@ -28,7 +27,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -67,6 +65,13 @@ const (
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=exoscalemachines/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=exoscalemachines/finalizers,verbs=update
 
+type MachineRole string
+
+const (
+	MachineRoleControlPlane MachineRole = "control-plane"
+	MachineRoleWorker       MachineRole = "worker"
+)
+
 // ExoscaleMachineReconciler reconciles an ExoscaleMachine object.
 type ExoscaleMachineReconciler struct {
 	client.Client
@@ -88,14 +93,17 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 	defer func() { reterr = patchExoscaleMachine(ctx, patchHelper, exoMachine, reterr) }()
 
-	if annotations.HasPaused(exoMachine) {
-		setMachinePaused(exoMachine)
-		return ctrl.Result{}, nil
-	}
-
 	deleting := !exoMachine.DeletionTimestamp.IsZero()
 	var machine *clusterv1.Machine
 	cluster, clusterErr := util.GetClusterFromMetadata(ctx, r.Client, exoMachine.ObjectMeta)
+
+	if annotations.HasPaused(exoMachine) || (clusterErr == nil && annotations.IsPaused(cluster, exoMachine)) {
+		log.Info("ExoscaleMachine or Cluster is paused")
+		setMachinePaused(exoMachine)
+		return ctrl.Result{}, nil
+	}
+	conditions.Delete(exoMachine, clusterv1.PausedCondition)
+
 	if !deleting && clusterErr != nil {
 		machine, err = util.GetOwnerMachine(ctx, r.Client, exoMachine.ObjectMeta)
 		if err != nil {
@@ -114,20 +122,13 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		}
 	}
 
-	if clusterErr == nil && annotations.IsPaused(cluster, exoMachine) {
-		log.Info("ExoscaleMachine or Cluster is paused")
-		setMachinePaused(exoMachine)
-		return ctrl.Result{}, nil
-	}
-	conditions.Delete(exoMachine, clusterv1.PausedCondition)
-
 	if deleting {
 		setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.DeletingReason, "Deleting instance")
-		machineID, instanceID, err := deletionInstanceIDs(exoMachine)
+		machineUID, instanceID, err := getDeletionInstanceIDs(exoMachine)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
-		if machineID == nil && instanceID == nil {
+		if machineUID == "" && instanceID == nil {
 			controllerutil.RemoveFinalizer(exoMachine, machineFinalizer)
 			return ctrl.Result{}, nil
 		}
@@ -148,7 +149,7 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			return ctrl.Result{}, err
 		}
 
-		return ctrl.Result{}, r.reconcileDelete(ctx, exoMachine, instanceService, machineID, clusterID, instanceID)
+		return ctrl.Result{}, r.reconcileDelete(ctx, exoMachine, instanceService, machineUID, clusterID, instanceID)
 	}
 	if machine == nil {
 		machine, err = util.GetOwnerMachine(ctx, r.Client, exoMachine.ObjectMeta)
@@ -259,19 +260,27 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 		return ctrl.Result{}, err
 	}
 
-	isControlPlane := util.IsControlPlaneMachine(machine)
-	securityGroupIDs, err := securityGroupIDs(exoCluster, exoMachine, isControlPlane)
+	machineRole := MachineRoleWorker
+	if util.IsControlPlaneMachine(machine) {
+		machineRole = MachineRoleControlPlane
+	}
+
+	securityGroupIDs, err := securityGroupIDs(exoCluster, exoMachine, machineRole)
 	if err != nil {
+
+		log.Error(err, "Unable to fetch cluster machine security group", "machineRole", machineRole)
+		setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.NotReadyReason, err.Error())
+
 		return ctrl.Result{}, err
 	}
 	if len(securityGroupIDs) == 0 {
-		log.Info("Cluster machine security group not yet available", "controlPlane", isControlPlane)
+		log.Info("Cluster machine security group not yet available", "machineRole", machineRole)
 		setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.NotReadyReason, "Waiting for machine security group")
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 	}
 
 	var elasticIPID *uuid.UUID
-	if isControlPlane {
+	if machineRole == MachineRoleControlPlane {
 		if exoCluster.Status.ControlPlaneEndpoint == nil {
 			return ctrl.Result{}, fmt.Errorf("cluster control plane Elastic IP is not available")
 		}
@@ -285,36 +294,29 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	machineRole := "worker"
-	if isControlPlane {
-		machineRole = "control-plane"
-	}
-	machineID, annotationAdded, err := ensureMachineID(exoMachine, machine)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	if annotationAdded {
-		if err := patchHelper.Patch(ctx, exoMachine); err != nil {
-			return ctrl.Result{}, err
-		}
+
+	machineUID := domain.MachineUID(machine.GetUID())
+	if machineUID == "" {
+		return ctrl.Result{}, fmt.Errorf("machine UID is empty")
 	}
 
 	spec := domain.InstanceSpec{
-		Name:              instanceName(machine.Namespace, machine.Name),
-		Template:          exoMachine.Spec.TemplateRef(),
+		// Note: using GetUID on the premise that the machine UID is unique across namespaces
+		Name:              string(machineUID),
+		Template:          exoMachine.Spec.Template,
 		InstanceType:      exoMachine.Spec.InstanceType,
 		SSHKey:            exoMachine.Spec.SSHKey,
 		SecurityGroupIDs:  securityGroupIDs,
 		ElasticIPID:       elasticIPID,
-		RootVolumeSizeGiB: exoMachine.Spec.RootVolumeSize(),
+		RootVolumeSizeGiB: exoMachine.Spec.RootVolumeSizeGiB,
 		UserData:          userData,
 		Labels: map[string]string{
 			instanceClusterIDLabel: clusterID.String(),
-			instanceRoleLabel:      machineRole,
+			instanceRoleLabel:      string(machineRole),
 		},
 	}
 
-	instance, err := instanceService.UpsertInstance(ctx, machineID, instanceID, spec)
+	instance, err := instanceService.UpsertInstance(ctx, machineUID, instanceID, spec)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("upsert instance: %w", err)
 	}
@@ -335,24 +337,15 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 	return ctrl.Result{}, nil
 }
 
-func instanceName(namespace, name string) string {
-	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(namespace+"\x00"+name)))[:8]
-	base := namespace + "-" + name
-	if len(base) > 255-len(hash)-1 {
-		base = base[:255-len(hash)-1]
-	}
-	return base + "-" + hash
-}
-
 func (r *ExoscaleMachineReconciler) reconcileDelete(
 	ctx context.Context,
 	exoMachine *infrastructurev1alpha1.ExoscaleMachine,
 	instanceService domain.InstanceService,
-	machineID *domain.MachineID,
+	machineUID domain.MachineUID,
 	clusterID uuid.UUID,
 	instanceID *uuid.UUID,
 ) error {
-	if err := instanceService.DeleteInstance(ctx, machineID, clusterID, instanceID); err != nil && !errors.Is(err, domain.ErrInstanceNotFound) {
+	if err := instanceService.DeleteInstance(ctx, machineUID, clusterID, instanceID); err != nil && !errors.Is(err, domain.ErrInstanceNotFound) {
 		return fmt.Errorf("delete instance: %w", err)
 	}
 
@@ -360,73 +353,27 @@ func (r *ExoscaleMachineReconciler) reconcileDelete(
 	return nil
 }
 
-func deletionInstanceIDs(exoMachine *infrastructurev1alpha1.ExoscaleMachine) (*domain.MachineID, *uuid.UUID, error) {
+func getDeletionInstanceIDs(exoMachine *infrastructurev1alpha1.ExoscaleMachine) (domain.MachineUID, *uuid.UUID, error) {
 	instanceID, err := exoscaleMachineInstanceID(exoMachine)
 	if err != nil {
-		return nil, nil, err
+		return "", nil, err
 	}
-	if machineUID := exoMachine.Annotations[domain.MachineUIDKey]; machineUID != "" {
-		machineID := domain.MachineID(machineUID)
-		return &machineID, instanceID, nil
+	owner := metav1.GetControllerOf(exoMachine)
+	if owner == nil || owner.Kind != "Machine" || owner.APIVersion != clusterv1.GroupVersion.String() {
+		return "", instanceID, nil
 	}
-
-	for _, ref := range exoMachine.OwnerReferences {
-		if ref.Kind != "Machine" || ref.Controller == nil || !*ref.Controller {
-			continue
-		}
-		groupVersion, err := schema.ParseGroupVersion(ref.APIVersion)
-		if err != nil {
-			return nil, nil, fmt.Errorf("invalid owner API version %q: %w", ref.APIVersion, err)
-		}
-		if groupVersion.Group != clusterv1.GroupVersion.Group {
-			continue
-		}
-		if ref.UID == "" {
-			return nil, instanceID, nil
-		}
-		machineID := domain.MachineID(ref.UID)
-		return &machineID, instanceID, nil
-	}
-
-	return nil, instanceID, nil
+	return domain.MachineUID(owner.UID), instanceID, nil
 }
 
 func exoscaleClusterID(exoCluster *infrastructurev1alpha1.ExoscaleCluster) (uuid.UUID, error) {
-	annotationID := exoCluster.Annotations[domain.ClusterIDKey]
-	statusID := ""
-	if exoCluster.Status.ID != nil {
-		statusID = *exoCluster.Status.ID
-	}
-	if annotationID != "" && statusID != "" && annotationID != statusID {
-		return uuid.Nil, fmt.Errorf("cluster ID annotation %q does not match status %q", annotationID, statusID)
-	}
-
-	clusterID := annotationID
-	if clusterID == "" {
-		clusterID = statusID
-	}
-	if clusterID == "" {
+	if exoCluster.Status.ID == nil {
 		return uuid.Nil, fmt.Errorf("cluster ID is not available")
 	}
-	id, err := uuid.Parse(clusterID)
+	id, err := uuid.Parse(*exoCluster.Status.ID)
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("invalid cluster ID %q: %w", clusterID, err)
+		return uuid.Nil, fmt.Errorf("invalid cluster ID %q: %w", *exoCluster.Status.ID, err)
 	}
 	return id, nil
-}
-
-func ensureMachineID(exoMachine *infrastructurev1alpha1.ExoscaleMachine, machine *clusterv1.Machine) (domain.MachineID, bool, error) {
-	if machineUID := exoMachine.Annotations[domain.MachineUIDKey]; machineUID != "" {
-		return domain.MachineID(machineUID), false, nil
-	}
-	if machine.UID == "" {
-		return "", false, fmt.Errorf("machine UID is empty")
-	}
-	if exoMachine.Annotations == nil {
-		exoMachine.Annotations = map[string]string{}
-	}
-	exoMachine.Annotations[domain.MachineUIDKey] = string(machine.UID)
-	return domain.MachineID(machine.UID), true, nil
 }
 
 func exoscaleMachineInstanceID(exoMachine *infrastructurev1alpha1.ExoscaleMachine) (*uuid.UUID, error) {
@@ -476,11 +423,11 @@ func (r *ExoscaleMachineReconciler) bootstrapData(ctx context.Context, machine *
 func securityGroupIDs(
 	exoCluster *infrastructurev1alpha1.ExoscaleCluster,
 	exoMachine *infrastructurev1alpha1.ExoscaleMachine,
-	isControlPlane bool,
+	machineRole MachineRole,
 ) ([]uuid.UUID, error) {
 	managedSecurityGroup := exoCluster.Status.SecurityGroupNode
 	role := "node"
-	if isControlPlane {
+	if machineRole == MachineRoleControlPlane {
 		managedSecurityGroup = exoCluster.Status.SecurityGroupControlPlan
 		role = "control plane"
 	}
@@ -508,7 +455,7 @@ func securityGroupIDs(
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ExoscaleMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	predicateLog := mgr.GetLogger().WithValues("controller", "exoscalemachine")
+	logger := mgr.GetLogger()
 	clusterToExoscaleMachines, err := util.ClusterToTypedObjectsMapper(mgr.GetClient(), &infrastructurev1alpha1.ExoscaleMachineList{}, mgr.GetScheme())
 	if err != nil {
 		return err
@@ -520,9 +467,9 @@ func (r *ExoscaleMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	)
 	clusterToExoscaleMachines = filterExoscaleMachineRequests(mgr.GetClient(), r.WatchFilter, clusterToExoscaleMachines)
 
-	return capicontrollerutil.NewControllerManagedBy(mgr, predicateLog).
+	return capicontrollerutil.NewControllerManagedBy(mgr, logger).
 		For(&infrastructurev1alpha1.ExoscaleMachine{}).
-		WithEventFilter(capipredicates.ResourceHasFilterLabel(mgr.GetScheme(), predicateLog, r.WatchFilter)).
+		WithEventFilter(capipredicates.ResourceHasFilterLabel(mgr.GetScheme(), logger, r.WatchFilter)).
 		Watches(
 			&clusterv1.Machine{},
 			handler.EnqueueRequestsFromMapFunc(machineToExoscaleMachine),
@@ -531,8 +478,8 @@ func (r *ExoscaleMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(
 			&clusterv1.Cluster{},
 			handler.EnqueueRequestsFromMapFunc(clusterToExoscaleMachines),
-			capipredicates.ClusterPausedTransitionsOrInfrastructureProvisioned(mgr.GetScheme(), predicateLog),
-			capipredicates.ResourceHasFilterLabel(mgr.GetScheme(), predicateLog, r.WatchFilter),
+			capipredicates.ClusterPausedTransitionsOrInfrastructureProvisioned(mgr.GetScheme(), logger),
+			capipredicates.ResourceHasFilterLabel(mgr.GetScheme(), logger, r.WatchFilter),
 		).
 		// ExoscaleCluster status provides the shared security group and endpoint IDs required by its machines.
 		Watches(

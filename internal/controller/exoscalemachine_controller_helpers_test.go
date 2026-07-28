@@ -2,7 +2,6 @@ package controller
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	infrav1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
@@ -48,51 +47,20 @@ func TestExoscaleMachineReconciler_getExoscaleCluster(t *testing.T) {
 	})
 }
 
-func TestEnsureMachineID(t *testing.T) {
-	t.Parallel()
-
-	machine := &clusterv1.Machine{ObjectMeta: metav1.ObjectMeta{UID: "current-uid"}}
-	exoMachine := &infrav1alpha1.ExoscaleMachine{}
-
-	machineID, added, err := ensureMachineID(exoMachine, machine)
-
-	assert.NoError(t, err)
-	assert.True(t, added)
-	assert.Equal(t, domain.MachineID("current-uid"), machineID)
-	assert.Equal(t, "current-uid", exoMachine.Annotations[domain.MachineUIDKey])
-
-	exoMachine.Annotations[domain.MachineUIDKey] = "pre-move-uid"
-	machineID, added, err = ensureMachineID(exoMachine, machine)
-
-	assert.NoError(t, err)
-	assert.False(t, added)
-	assert.Equal(t, domain.MachineID("pre-move-uid"), machineID)
-}
-
 func TestExoscaleClusterID(t *testing.T) {
 	t.Parallel()
 
-	annotationID := uuid.New()
-	statusID := uuid.NewString()
+	statusID := uuid.New()
 
-	id, err := exoscaleClusterID(&infrav1alpha1.ExoscaleCluster{ObjectMeta: metav1.ObjectMeta{
-		Annotations: map[string]string{domain.ClusterIDKey: annotationID.String()},
-	}})
-	assert.NoError(t, err)
-	assert.Equal(t, annotationID, id)
+	_, err := exoscaleClusterID(&infrav1alpha1.ExoscaleCluster{})
+	assert.ErrorContains(t, err, "cluster ID is not available")
 
-	_, err = exoscaleClusterID(&infrav1alpha1.ExoscaleCluster{
-		ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{domain.ClusterIDKey: annotationID.String()}},
-		Status:     infrav1alpha1.ExoscaleClusterStatus{ID: &statusID},
+	rawStatusID := statusID.String()
+	id, err := exoscaleClusterID(&infrav1alpha1.ExoscaleCluster{
+		Status: infrav1alpha1.ExoscaleClusterStatus{ID: &rawStatusID},
 	})
-	assert.ErrorContains(t, err, "does not match status")
-}
-
-func TestInstanceName(t *testing.T) {
-	t.Parallel()
-
-	assert.NotEqual(t, instanceName("a-b", "c"), instanceName("a", "b-c"))
-	assert.Len(t, instanceName(strings.Repeat("a", 63), strings.Repeat("b", 253)), 255)
+	assert.NoError(t, err)
+	assert.Equal(t, statusID, id)
 }
 
 func TestExoscaleMachineReconciler_instanceService(t *testing.T) {
@@ -224,10 +192,10 @@ func Test_securityGroupIDs_rejectsInvalidIDs(t *testing.T) {
 	validID := uuid.New().String()
 
 	tests := map[string]struct {
-		cluster      infrav1alpha1.ExoscaleCluster
-		machine      infrav1alpha1.ExoscaleMachine
-		controlPlane bool
-		wantErr      string
+		cluster     infrav1alpha1.ExoscaleCluster
+		machine     infrav1alpha1.ExoscaleMachine
+		machineRole MachineRole
+		wantErr     string
 	}{
 		"invalid node security group": {
 			cluster: infrav1alpha1.ExoscaleCluster{
@@ -239,8 +207,8 @@ func Test_securityGroupIDs_rejectsInvalidIDs(t *testing.T) {
 			cluster: infrav1alpha1.ExoscaleCluster{
 				Status: infrav1alpha1.ExoscaleClusterStatus{SecurityGroupControlPlan: &infrav1alpha1.SecurityGroupStatus{ID: "bad-id"}},
 			},
-			controlPlane: true,
-			wantErr:      "invalid control plane security group ID",
+			machineRole: MachineRoleControlPlane,
+			wantErr:     "invalid control plane security group ID",
 		},
 		"invalid machine security group": {
 			cluster: infrav1alpha1.ExoscaleCluster{
@@ -253,7 +221,7 @@ func Test_securityGroupIDs_rejectsInvalidIDs(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			_, err := securityGroupIDs(&tc.cluster, &tc.machine, tc.controlPlane)
+			_, err := securityGroupIDs(&tc.cluster, &tc.machine, tc.machineRole)
 
 			assert.ErrorContains(t, err, tc.wantErr)
 		})
@@ -272,11 +240,11 @@ func Test_securityGroupIDs_selectsMachineRole(t *testing.T) {
 	}}
 	machine := infrav1alpha1.ExoscaleMachine{Spec: infrav1alpha1.ExoscaleMachineSpec{SecurityGroups: []string{customID.String()}}}
 
-	controlPlaneIDs, err := securityGroupIDs(&cluster, &machine, true)
+	controlPlaneIDs, err := securityGroupIDs(&cluster, &machine, MachineRoleControlPlane)
 	assert.NoError(t, err)
 	assert.Equal(t, []uuid.UUID{controlPlaneID, customID}, controlPlaneIDs)
 
-	nodeIDs, err := securityGroupIDs(&cluster, &machine, false)
+	nodeIDs, err := securityGroupIDs(&cluster, &machine, MachineRoleWorker)
 	assert.NoError(t, err)
 	assert.Equal(t, []uuid.UUID{nodeID, customID}, nodeIDs)
 }

@@ -36,14 +36,14 @@ var _ = Describe("ExoscaleMachine validation", func() {
 		Expect(k8sClient.Update(ctx, machine)).To(Succeed())
 	})
 
-	It("accepts legacy fields and an equal canonical migration", func() {
+	It("accepts a template UUID and rootVolumeSizeGiB", func() {
 		rootVolumeSize := int64(20)
 		machine := &infrav1alpha1.ExoscaleMachine{
 			ObjectMeta: metav1.ObjectMeta{GenerateName: "legacy-machine-", Namespace: "default"},
 			Spec: infrav1alpha1.ExoscaleMachineSpec{
-				TemplateID:       uuid.NewString(),
-				InstanceType:     "small",
-				RootVolumeSizeGB: &rootVolumeSize,
+				Template:          uuid.NewString(),
+				InstanceType:      "small",
+				RootVolumeSizeGiB: &rootVolumeSize,
 			},
 		}
 		Expect(k8sClient.Create(ctx, machine)).To(Succeed())
@@ -54,34 +54,21 @@ var _ = Describe("ExoscaleMachine validation", func() {
 		Expect(k8sClient.Update(ctx, machine)).To(Succeed())
 
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(machine), machine)).To(Succeed())
-		machine.Spec.Template = machine.Spec.TemplateID
-		machine.Spec.TemplateID = ""
-		machine.Spec.RootVolumeSizeGiB = machine.Spec.RootVolumeSizeGB
-		machine.Spec.RootVolumeSizeGB = nil
 		Expect(k8sClient.Update(ctx, machine)).To(Succeed())
 	})
 
-	It("rejects ambiguous or missing compatibility fields", func() {
-		base := func() *infrav1alpha1.ExoscaleMachine {
-			return &infrav1alpha1.ExoscaleMachine{
-				ObjectMeta: metav1.ObjectMeta{GenerateName: "invalid-machine-", Namespace: "default"},
-				Spec:       infrav1alpha1.ExoscaleMachineSpec{InstanceType: "small"},
-			}
+	It("requires a template", func() {
+		machine := &infrav1alpha1.ExoscaleMachine{
+			ObjectMeta: metav1.ObjectMeta{
+				GenerateName: "invalid-machine-",
+				Namespace:    "default",
+			},
+			Spec: infrav1alpha1.ExoscaleMachineSpec{
+				InstanceType: "small",
+			},
 		}
 
-		machine := base()
-		Expect(k8sClient.Create(ctx, machine)).To(MatchError(ContainSubstring("exactly one of template or templateID must be set")))
-
-		machine = base()
-		machine.Spec.Template = "ubuntu"
-		machine.Spec.TemplateID = uuid.NewString()
-		Expect(k8sClient.Create(ctx, machine)).To(MatchError(ContainSubstring("exactly one of template or templateID must be set")))
-
-		rootVolumeSize := int64(20)
-		machine = base()
-		machine.Spec.Template = "ubuntu"
-		machine.Spec.RootVolumeSizeGiB = &rootVolumeSize
-		machine.Spec.RootVolumeSizeGB = &rootVolumeSize
-		Expect(k8sClient.Create(ctx, machine)).To(MatchError(ContainSubstring("rootVolumeSizeGiB and rootVolumeSizeGB are mutually exclusive")))
+		Expect(k8sClient.Create(ctx, machine)).
+			To(MatchError(ContainSubstring("spec.template")))
 	})
 })

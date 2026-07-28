@@ -12,39 +12,11 @@ spec:
   - name: namespace
     value: default
   steps:
-    - name: validate cluster template webhook
+    - name: apply resources
       try:
         - apply:
             file: exoscaleclustertemplate.yaml
-        - patch:
-            resource:
-              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
-              kind: ExoscaleClusterTemplate
-              metadata:
-                name: ($templateName)
-                namespace: ($namespace)
-              spec:
-                template:
-                  metadata:
-                    labels:
-                      e2e.cluster.x-k8s.io/mutable: "true"
-                    annotations:
-                      e2e.cluster.x-k8s.io/mutable: "true"
-        - assert:
-            resource:
-              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
-              kind: ExoscaleClusterTemplate
-              metadata:
-                name: ($templateName)
-                namespace: ($namespace)
-              spec:
-                template:
-                  metadata:
-                    labels:
-                      e2e.cluster.x-k8s.io/mutable: "true"
-                    annotations:
-                      e2e.cluster.x-k8s.io/mutable: "true"
-        - patch:
+        - update:
             resource:
               apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
               kind: ExoscaleClusterTemplate
@@ -54,11 +26,11 @@ spec:
               spec:
                 template:
                   spec:
-                    zone: ch-gva-2
+                    zone: ch-gva-2   # trying to change the zone
             expect:
               - match:
                   apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
                   kind: ExoscaleClusterTemplate
                 check:
                   ($error != null): true
-                  (contains($error, 'spec.template.spec is immutable')): true
+                  (contains($error, 'ExoscaleClusterTemplate.spec is immutable')): true

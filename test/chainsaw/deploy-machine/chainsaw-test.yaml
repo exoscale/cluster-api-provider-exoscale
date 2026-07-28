@@ -1,8 +1,5 @@
-# verifies the full real VM lifecycle:
-# - create VM,
-# - mark machine ready,
-# - set providerID, then
-# - delete VM.
+# Verifies bootstrap generation and the full real VM lifecycle, including
+# readiness, addresses, providerID propagation to CAPI, and VM deletion.
 apiVersion: chainsaw.kyverno.io/v1alpha1
 kind: Test
 metadata:

@@ -31,17 +31,6 @@ packages:
       SecurityGroupService:
       ClusterService:
       InstanceService:
-  github.com/exoscale/cluster-api-provider-exoscale/internal/infrastructure/exoscale:
-    config:
-      dir: '{{.InterfaceDir}}/../../mocks'
-    interfaces:
-      instanceClient:
-        config:
-          structname: InstanceClient
-          filename: instance_client.go
   github.com/exoscale/cluster-api-provider-exoscale/internal/service:
     interfaces:
-      instanceCloud:
-        config:
-          structname: InstanceCloud
-          filename: instance_cloud.go
+      InstanceClient:

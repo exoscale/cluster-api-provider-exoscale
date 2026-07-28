@@ -1,11 +1,11 @@
 # Kubernetes Cluster API Provider Exoscale
 
-## What is the Cluster API Provider Exoscale (CAPX)
+## What is the Cluster API Provider Exoscale
 
 The [Cluster API][cluster_api] brings declarative, Kubernetes-style APIs to
 cluster creation, configuration and management.
 
-CAPX is an infrastructure provider that provisions and manages Exoscale
+Exoscale CAPI is an infrastructure provider that provisions and manages Exoscale
 resources for self-managed Kubernetes clusters. It currently reconciles
 `ExoscaleCluster` and `ExoscaleMachine` resources into the required cloud
 infrastructure.
@@ -22,10 +22,10 @@ $> kind create cluster --name capi-test
 $> ./bin/clusterctl init --infrastructure - # installs CAPI core and kubeadm providers
 ```
 
-### Run CAPX
+### Run CAPI
 ```bash
 $> make generate manifests install
-$> ENABLE_WEBHOOKS=false make run
+$> make run
 ```
 
 Keep the manager running and use another terminal for the remaining commands.
@@ -40,7 +40,7 @@ $> kubectl apply -k config/samples/cluster/
 
 #### Wait for the workload cluster
 ```bash
-$> kubectl wait cluster/my-cluster --for=condition=ControlPlaneInitialized --timeout=20m
+$> kubectl wait cluster/my-cluster --for=condition=ControlPlaneInitialized --timeout=10m
 $> ./bin/clusterctl get kubeconfig my-cluster > /tmp/my-cluster.kubeconfig
 $> kubectl --kubeconfig=/tmp/my-cluster.kubeconfig wait node --all --for=condition=Ready --timeout=10m
 $> kubectl wait cluster/my-cluster --for=condition=RemoteConnectionProbe --timeout=5m
@@ -49,6 +49,13 @@ $> kubectl --kubeconfig=/tmp/my-cluster.kubeconfig get nodes
 
 $> kubectl get exoscalecluster,machine,exoscalemachine,kubeadmconfig
 ```
+
+#### Run a workload smoke test
+```bash
+kubectl --kubeconfig=/tmp/my-cluster.kubeconfig run smoke --image=busybox:1.36 --restart=Never --rm --attach --command -- sh -c 'echo "Hello from $(hostname)"'
+```
+
+This creates a Pod, prints its hostname, and deletes it after completion.
 
 ### Delete simple cluster
 ```bash

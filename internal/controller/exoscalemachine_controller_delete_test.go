@@ -36,7 +36,7 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 
 	ctx := context.Background()
 	deleteTime := metav1.Now()
-	machineUID := domain.MachineID("machine-id")
+	machineUID := domain.MachineUID("machine-id")
 	instanceID := uuid.New()
 	clusterID := uuid.New()
 	controllerOwner := true
@@ -67,16 +67,16 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 
 			scheme := newExoscaleMachineTestScheme(t)
 			instanceSvc := mocks.NewInstanceService(t)
-			var expectedMachineID *domain.MachineID
+			var expectedMachineUID domain.MachineUID
 			var expectedInstanceID *uuid.UUID
 			if tc.ownerReference {
-				expectedMachineID = &machineUID
+				expectedMachineUID = machineUID
 			}
 			if tc.statusInstanceID != "" {
 				expectedInstanceID = &instanceID
 			}
 			if tc.wantService {
-				instanceSvc.EXPECT().DeleteInstance(ctx, expectedMachineID, clusterID, expectedInstanceID).Return(tc.deleteErr)
+				instanceSvc.EXPECT().DeleteInstance(ctx, expectedMachineUID, clusterID, expectedInstanceID).Return(tc.deleteErr)
 			}
 
 			objects := []crclient.Object{
@@ -91,10 +91,7 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 					},
 				},
 				&infrav1alpha1.ExoscaleCluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: exoscaleClusterName, Namespace: ns,
-						Annotations: map[string]string{domain.ClusterIDKey: clusterID.String()},
-					},
+					ObjectMeta: metav1.ObjectMeta{Name: exoscaleClusterName, Namespace: ns},
 					Spec: infrav1alpha1.ExoscaleClusterSpec{
 						Zone: "ch-gva-2",
 						ExoscaleSecret: infrav1alpha1.ExoscaleSecretRef{
@@ -103,6 +100,7 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 							APISecret: "apisecret",
 						},
 					},
+					Status: infrav1alpha1.ExoscaleClusterStatus{ID: new(clusterID.String())},
 				},
 				&corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: ns},
@@ -192,104 +190,57 @@ func Test_deletionInstanceIDs(t *testing.T) {
 	t.Parallel()
 
 	instanceID := uuid.New()
-	machineID := domain.MachineID("not-a-uuid")
-	preMoveMachineID := domain.MachineID("pre-move-uid")
+	machineUID := domain.MachineUID("not-a-uuid")
+	controllerOwner := true
 	providerID := "exoscale://" + instanceID.String()
 	legacyProviderID := "exoscale:///" + instanceID.String()
 	invalidProviderID := "bad-id"
-	controllerOwner := true
-	notController := false
 	tests := []struct {
 		name           string
-		machine        infrav1alpha1.ExoscaleMachine
-		wantMachineID  *domain.MachineID
+		exoMachine     infrav1alpha1.ExoscaleMachine
+		wantMachineUID domain.MachineUID
 		wantInstanceID *uuid.UUID
 		wantErr        string
 	}{
 		{
-			name:    "invalid status instance ID",
-			machine: infrav1alpha1.ExoscaleMachine{Status: infrav1alpha1.ExoscaleMachineStatus{InstanceID: "bad-id"}},
-			wantErr: "invalid instanceID in status",
+			name:       "invalid status instance ID",
+			exoMachine: infrav1alpha1.ExoscaleMachine{Status: infrav1alpha1.ExoscaleMachineStatus{InstanceID: "bad-id"}},
+			wantErr:    "invalid instanceID in status",
 		},
 		{
 			name:           "recovers instance ID from provider ID after move",
-			machine:        infrav1alpha1.ExoscaleMachine{Spec: infrav1alpha1.ExoscaleMachineSpec{ProviderID: &providerID}},
+			exoMachine:     infrav1alpha1.ExoscaleMachine{Spec: infrav1alpha1.ExoscaleMachineSpec{ProviderID: &providerID}},
 			wantInstanceID: &instanceID,
 		},
 		{
 			name:           "accepts provider ID with path separator",
-			machine:        infrav1alpha1.ExoscaleMachine{Spec: infrav1alpha1.ExoscaleMachineSpec{ProviderID: &legacyProviderID}},
+			exoMachine:     infrav1alpha1.ExoscaleMachine{Spec: infrav1alpha1.ExoscaleMachineSpec{ProviderID: &legacyProviderID}},
 			wantInstanceID: &instanceID,
 		},
 		{
-			name:    "invalid provider ID",
-			machine: infrav1alpha1.ExoscaleMachine{Spec: infrav1alpha1.ExoscaleMachineSpec{ProviderID: &invalidProviderID}},
-			wantErr: "invalid providerID",
+			name:       "invalid provider ID",
+			exoMachine: infrav1alpha1.ExoscaleMachine{Spec: infrav1alpha1.ExoscaleMachineSpec{ProviderID: &invalidProviderID}},
+			wantErr:    "invalid providerID",
 		},
 		{
-			name: "invalid owner API version",
-			machine: infrav1alpha1.ExoscaleMachine{ObjectMeta: metav1.ObjectMeta{OwnerReferences: []metav1.OwnerReference{{
-				APIVersion: "cluster.x-k8s.io/v1beta2/extra", Kind: "Machine", UID: types.UID(machineID), Controller: &controllerOwner,
+			name: "accepts non-UUID Machine UID",
+			exoMachine: infrav1alpha1.ExoscaleMachine{ObjectMeta: metav1.ObjectMeta{OwnerReferences: []metav1.OwnerReference{{
+				APIVersion: clusterv1.GroupVersion.String(), Kind: "Machine", UID: types.UID(machineUID), Controller: &controllerOwner,
 			}}}},
-			wantErr: "invalid owner API version",
-		},
-		{
-			name: "accepts non-UUID Machine owner UID",
-			machine: infrav1alpha1.ExoscaleMachine{ObjectMeta: metav1.ObjectMeta{OwnerReferences: []metav1.OwnerReference{{
-				APIVersion: clusterv1.GroupVersion.String(), Kind: "Machine", UID: types.UID(machineID), Controller: &controllerOwner,
-			}}}},
-			wantMachineID: &machineID,
-		},
-		{
-			name: "uses persisted pre-move Machine UID",
-			machine: infrav1alpha1.ExoscaleMachine{ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{domain.MachineUIDKey: preMoveMachineID.String()},
-				OwnerReferences: []metav1.OwnerReference{{
-					APIVersion: clusterv1.GroupVersion.String(), Kind: "Machine", UID: types.UID(machineID), Controller: &controllerOwner,
-				}},
-			}},
-			wantMachineID: &preMoveMachineID,
-		},
-		{
-			name: "ignores Machine owner without controller flag",
-			machine: infrav1alpha1.ExoscaleMachine{ObjectMeta: metav1.ObjectMeta{OwnerReferences: []metav1.OwnerReference{{
-				APIVersion: clusterv1.GroupVersion.String(), Kind: "Machine", UID: types.UID(machineID),
-			}}}},
-		},
-		{
-			name: "ignores non-controller Machine owner",
-			machine: infrav1alpha1.ExoscaleMachine{ObjectMeta: metav1.ObjectMeta{OwnerReferences: []metav1.OwnerReference{{
-				APIVersion: clusterv1.GroupVersion.String(), Kind: "Machine", UID: types.UID(machineID), Controller: &notController,
-			}}}},
-		},
-		{
-			name: "ignores malformed non-Machine owner",
-			machine: infrav1alpha1.ExoscaleMachine{ObjectMeta: metav1.ObjectMeta{OwnerReferences: []metav1.OwnerReference{{
-				APIVersion: "bad/version/extra", Kind: "Other", UID: "bad-id",
-			}}}},
-		},
-		{
-			name: "ignores foreign Machine owner",
-			machine: infrav1alpha1.ExoscaleMachine{
-				ObjectMeta: metav1.ObjectMeta{OwnerReferences: []metav1.OwnerReference{{
-					APIVersion: "other.example.io/v1", Kind: "Machine", UID: "bad-id", Controller: &controllerOwner,
-				}}},
-				Status: infrav1alpha1.ExoscaleMachineStatus{InstanceID: instanceID.String()},
-			},
-			wantInstanceID: &instanceID,
+			wantMachineUID: machineUID,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			gotMachineID, gotInstanceID, err := deletionInstanceIDs(&tc.machine)
+			gotMachineUID, gotInstanceID, err := getDeletionInstanceIDs(&tc.exoMachine)
 
 			if tc.wantErr != "" {
 				assert.ErrorContains(t, err, tc.wantErr)
 				return
 			}
 			assert.NoError(t, err)
-			assert.Equal(t, tc.wantMachineID, gotMachineID)
+			assert.Equal(t, tc.wantMachineUID, gotMachineUID)
 			assert.Equal(t, tc.wantInstanceID, gotInstanceID)
 		})
 	}

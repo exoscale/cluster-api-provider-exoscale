@@ -1,3 +1,5 @@
+# Verifies that a machine remains unprovisioned while its cluster is paused and
+# resumes reconciliation when the cluster is unpaused.
 apiVersion: chainsaw.kyverno.io/v1alpha1
 kind: Test
 metadata:

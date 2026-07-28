@@ -21,8 +21,8 @@ import (
 	"reflect"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	"sigs.k8s.io/cluster-api/util/topology"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -49,37 +49,27 @@ type ExoscaleClusterTemplateCustomValidator struct{}
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type ExoscaleClusterTemplate.
 func (v *ExoscaleClusterTemplateCustomValidator) ValidateCreate(_ context.Context, obj *infrastructurev1alpha1.ExoscaleClusterTemplate) (admission.Warnings, error) {
-	allErrs := obj.Spec.Template.ObjectMeta.Validate(field.NewPath("spec", "template", "metadata"))
-	if len(allErrs) == 0 {
-		return nil, nil
-	}
-	return nil, apierrors.NewInvalid(
-		infrastructurev1alpha1.GroupVersion.WithKind("ExoscaleClusterTemplate").GroupKind(),
-		obj.Name,
-		allErrs,
-	)
+	return nil, nil
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type ExoscaleClusterTemplate.
-func (v *ExoscaleClusterTemplateCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *infrastructurev1alpha1.ExoscaleClusterTemplate) (admission.Warnings, error) {
+func (v *ExoscaleClusterTemplateCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj *infrastructurev1alpha1.ExoscaleClusterTemplate) (admission.Warnings, error) {
 	exoscaleclustertemplatelog.Info("Validation for ExoscaleClusterTemplate upon update", "name", newObj.GetName())
 
-	allErrs := newObj.Spec.Template.ObjectMeta.Validate(field.NewPath("spec", "template", "metadata"))
-	req, _ := admission.RequestFromContext(ctx)
-	if !topology.IsDryRunRequest(req, newObj) && !reflect.DeepEqual(oldObj.Spec.Template.Spec, newObj.Spec.Template.Spec) {
-		allErrs = append(allErrs, field.Forbidden(
-			field.NewPath("spec", "template", "spec"),
-			"ExoscaleClusterTemplate.spec.template.spec is immutable, create a new template instead",
-		))
+	if !reflect.DeepEqual(oldObj.Spec, newObj.Spec) {
+		return nil, apierrors.NewInvalid(
+			schema.GroupKind{
+				Group: infrastructurev1alpha1.SchemeGroupVersion.Group,
+				Kind:  "ExoscaleClusterTemplate",
+			},
+			newObj.Name,
+			field.ErrorList{
+				field.Forbidden(field.NewPath("spec"), "ExoscaleClusterTemplate.spec is immutable, create a new template instead"),
+			},
+		)
 	}
-	if len(allErrs) == 0 {
-		return nil, nil
-	}
-	return nil, apierrors.NewInvalid(
-		infrastructurev1alpha1.GroupVersion.WithKind("ExoscaleClusterTemplate").GroupKind(),
-		newObj.Name,
-		allErrs,
-	)
+
+	return nil, nil
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type ExoscaleClusterTemplate.

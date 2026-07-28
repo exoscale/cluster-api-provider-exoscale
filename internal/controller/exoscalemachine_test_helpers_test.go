@@ -119,8 +119,8 @@ func newReadyMachineReconciler(t *testing.T, instance domain.Instance, upsertErr
 	var securityGroupNode *infrav1alpha1.SecurityGroupStatus
 	if nodeSecurityGroupID != nil {
 		securityGroupNode = &infrav1alpha1.SecurityGroupStatus{ID: nodeSecurityGroupID.String()}
-		instanceSvc.EXPECT().UpsertInstance(ctx, domain.MachineID(machineUID.String()), (*uuid.UUID)(nil), domain.InstanceSpec{
-			Name:             instanceName(ns, machineName),
+		instanceSvc.EXPECT().UpsertInstance(ctx, domain.MachineUID(machineUID.String()), (*uuid.UUID)(nil), domain.InstanceSpec{
+			Name:             machineUID.String(),
 			Template:         templateID.String(),
 			InstanceType:     "standard.small",
 			SSHKey:           "ssh-key",

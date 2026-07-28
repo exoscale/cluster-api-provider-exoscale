@@ -26,21 +26,13 @@ import (
 // Zone is inherited from ExoscaleCluster.spec.zone. If multi-zone support is
 // added later, use CAPI Machine.spec.failureDomain to pick the target zone
 // instead of duplicating zone here.
-// +kubebuilder:validation:XValidation:rule="has(self.template) != has(self.templateID)",message="exactly one of template or templateID must be set"
-// +kubebuilder:validation:XValidation:rule="!(has(self.rootVolumeSizeGiB) && has(self.rootVolumeSizeGB))",message="rootVolumeSizeGiB and rootVolumeSizeGB are mutually exclusive"
-// +kubebuilder:validation:XValidation:rule="(has(self.template) ? self.template : self.templateID) == (has(oldSelf.template) ? oldSelf.template : oldSelf.templateID) && self.instanceType == oldSelf.instanceType && has(self.sshKey) == has(oldSelf.sshKey) && (!has(self.sshKey) || self.sshKey == oldSelf.sshKey) && has(self.securityGroups) == has(oldSelf.securityGroups) && (!has(self.securityGroups) || self.securityGroups == oldSelf.securityGroups) && (has(self.rootVolumeSizeGiB) ? self.rootVolumeSizeGiB : (has(self.rootVolumeSizeGB) ? self.rootVolumeSizeGB : 0)) == (has(oldSelf.rootVolumeSizeGiB) ? oldSelf.rootVolumeSizeGiB : (has(oldSelf.rootVolumeSizeGB) ? oldSelf.rootVolumeSizeGB : 0))",message="instance creation fields are immutable"
+// +kubebuilder:validation:XValidation:rule="self.template == oldSelf.template && self.instanceType == oldSelf.instanceType && has(self.sshKey) == has(oldSelf.sshKey) && (!has(self.sshKey) || self.sshKey == oldSelf.sshKey) && has(self.securityGroups) == has(oldSelf.securityGroups) && (!has(self.securityGroups) || self.securityGroups == oldSelf.securityGroups) && has(self.rootVolumeSizeGiB) == has(oldSelf.rootVolumeSizeGiB) && (!has(self.rootVolumeSizeGiB) || self.rootVolumeSizeGiB == oldSelf.rootVolumeSizeGiB)",message="instance creation fields are immutable"
 type ExoscaleMachineSpec struct {
 	// template is an Exoscale instance template UUID or exact template name.
 	// UUIDs pin an exact template; names are resolved at create time.
-	// +optional
+	// +required
 	// +kubebuilder:validation:MinLength=1
-	Template string `json:"template,omitempty"`
-
-	// templateID is the legacy UUID-only spelling of template.
-	// Deprecated: use template.
-	// +optional
-	// +kubebuilder:validation:Pattern=`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
-	TemplateID string `json:"templateID,omitempty"`
+	Template string `json:"template"`
 
 	// instanceType is an Exoscale instance type UUID or a value in [family.]size
 	// format. For example, "small" is shorthand for "standard.small".
@@ -65,34 +57,11 @@ type ExoscaleMachineSpec struct {
 	// +kubebuilder:validation:Maximum=10000
 	RootVolumeSizeGiB *int64 `json:"rootVolumeSizeGiB,omitempty"`
 
-	// rootVolumeSizeGB is the legacy spelling of rootVolumeSizeGiB.
-	// Deprecated: use rootVolumeSizeGiB.
-	// +optional
-	// +kubebuilder:validation:Minimum=10
-	// +kubebuilder:validation:Maximum=10000
-	RootVolumeSizeGB *int64 `json:"rootVolumeSizeGB,omitempty"`
-
 	// providerID is the cloud-provider identifier for this instance in the form
 	// exoscale://<instance-uuid>. Set by the controller after the instance is created.
 	// CAPI uses this field to match the InfraMachine to the Node object.
 	// +optional
 	ProviderID *string `json:"providerID,omitempty"`
-}
-
-// TemplateRef returns the canonical or legacy instance template reference.
-func (s ExoscaleMachineSpec) TemplateRef() string {
-	if s.Template != "" {
-		return s.Template
-	}
-	return s.TemplateID
-}
-
-// RootVolumeSize returns the canonical or legacy root volume size in GiB.
-func (s ExoscaleMachineSpec) RootVolumeSize() *int64 {
-	if s.RootVolumeSizeGiB != nil {
-		return s.RootVolumeSizeGiB
-	}
-	return s.RootVolumeSizeGB
 }
 
 // ExoscaleMachineInitializationStatus provides observations of the ExoscaleMachine initialization process.
@@ -164,12 +133,12 @@ type ExoscaleMachine struct {
 	Status ExoscaleMachineStatus `json:"status,omitzero"`
 }
 
-func (in *ExoscaleMachine) GetConditions() []metav1.Condition {
-	return in.Status.Conditions
+func (e *ExoscaleMachine) GetConditions() []metav1.Condition {
+	return e.Status.Conditions
 }
 
-func (in *ExoscaleMachine) SetConditions(conditions []metav1.Condition) {
-	in.Status.Conditions = conditions
+func (e *ExoscaleMachine) SetConditions(conditions []metav1.Condition) {
+	e.Status.Conditions = conditions
 }
 
 // +kubebuilder:object:root=true

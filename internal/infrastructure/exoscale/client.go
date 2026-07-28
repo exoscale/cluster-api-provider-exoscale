@@ -13,21 +13,20 @@ import (
 
 const operationWaitTimeout = 10 * time.Minute
 
-func New(apiKey, apiSecret string, zone egoscale.ZoneName) (*egoscale.Client, error) {
-	return newClient(apiKey, apiSecret, zone, nil)
-}
-
-// NewCloud returns the cluster-scoped cloud API backed by the current adapter.
-func NewCloud(apiKey, apiSecret string, zone egoscale.ZoneName) (*Adapter, error) {
-	client, err := New(apiKey, apiSecret, zone)
+func NewCloudWithLogging(apiKey, apiSecret string, zone egoscale.ZoneName, logger logr.Logger) (*Adapter, error) {
+	client, err := newClient(apiKey, apiSecret, zone, metadataHTTPClient(logger))
 	if err != nil {
 		return nil, err
 	}
-	return NewAdapter(client), nil
+	return &Adapter{client: client}, nil
 }
 
-func NewLogging(apiKey, apiSecret string, zone egoscale.ZoneName, logger logr.Logger) (*egoscale.Client, error) {
-	return newClient(apiKey, apiSecret, zone, metadataHTTPClient(logger))
+func NewCloud(apiKey, apiSecret string, zone egoscale.ZoneName) (*Adapter, error) {
+	client, err := newClient(apiKey, apiSecret, zone, nil)
+	if err != nil {
+		return nil, err
+	}
+	return &Adapter{client: client}, nil
 }
 
 func newClient(apiKey, apiSecret string, zone egoscale.ZoneName, httpClient *http.Client) (*egoscale.Client, error) {

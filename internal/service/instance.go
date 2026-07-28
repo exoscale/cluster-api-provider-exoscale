@@ -15,13 +15,16 @@ import (
 	"github.com/google/uuid"
 )
 
+// ExoscaleClient =>
+//
+
 const (
 	bytesPerGiB        int64 = 1024 * 1024 * 1024
 	minimumDiskSizeGiB int64 = 10
 )
 
 type instanceService struct {
-	client domain.InstanceCloud
+	client domain.Cloud
 	logger logr.Logger
 }
 
@@ -36,18 +39,18 @@ func NewInstanceServiceFactory(logAPI bool) func(string, string, egoscale.ZoneNa
 
 // NewInstanceService returns an InstanceService bound to the given Exoscale zone and credentials.
 func NewInstanceService(apiKey, apiSecret string, zone egoscale.ZoneName, logger logr.Logger, logAPI bool) (domain.InstanceService, error) {
-	var sdkClient *egoscale.Client
+	var sdkClient domain.Cloud
 	var err error
 	if logAPI {
-		sdkClient, err = exoscale.NewLogging(apiKey, apiSecret, zone, logger)
+		sdkClient, err = exoscale.NewCloudWithLogging(apiKey, apiSecret, zone, logger)
 	} else {
-		sdkClient, err = exoscale.New(apiKey, apiSecret, zone)
+		sdkClient, err = exoscale.NewCloud(apiKey, apiSecret, zone)
 	}
 	if err != nil {
 		return nil, err
 	}
 
-	return &instanceService{client: exoscale.NewAdapter(sdkClient), logger: logger}, nil
+	return &instanceService{client: sdkClient, logger: logger}, nil
 }
 
 // UpsertInstance creates, recovers, or updates the instance owned by a Machine.

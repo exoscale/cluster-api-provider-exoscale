@@ -58,10 +58,7 @@ type Cloud interface {
 	CreateSecurityGroupRule(ctx context.Context, sgID uuid.UUID, rule SecurityGroupRule) (uuid.UUID, error)
 	DeleteSecurityGroupRule(ctx context.Context, sgID, ruleID uuid.UUID) error
 	ListSecurityGroupRules(ctx context.Context, sgID uuid.UUID) ([]SecurityGroupRule, error)
-}
 
-// InstanceCloud is the cloud API used by the instance service.
-type InstanceCloud interface {
 	ListInstances(ctx context.Context, label string) ([]Instance, error)
 	ListInstanceTypes(ctx context.Context) ([]InstanceType, error)
 	GetTemplate(ctx context.Context, id uuid.UUID) (InstanceTemplate, error)

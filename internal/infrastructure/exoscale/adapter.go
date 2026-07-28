@@ -14,14 +14,11 @@ import (
 	"github.com/google/uuid"
 )
 
+var _ domain.Cloud = (*Adapter)(nil)
+
 // Adapter translates infrastructure operations between domain types and the egoscale SDK.
 type Adapter struct {
 	client domain.ExoscaleClient
-}
-
-// NewAdapter returns an infrastructure adapter backed by the given egoscale SDK client.
-func NewAdapter(client domain.ExoscaleClient) *Adapter {
-	return &Adapter{client: client}
 }
 
 func (a *Adapter) waitForSuccess(ctx context.Context, op *egoscale.Operation) (*egoscale.Operation, error) {

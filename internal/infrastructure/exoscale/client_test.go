@@ -80,7 +80,7 @@ func Test_metadataRoundTripper(t *testing.T) {
 func Test_New_rejectsIncompleteCredentials(t *testing.T) {
 	t.Parallel()
 
-	client, err := New("key", "", egoscale.ZoneNameCHGva2)
+	client, err := NewCloud("key", "", egoscale.ZoneNameCHGva2)
 
 	assert.Nil(t, client)
 	assert.ErrorIs(t, err, credentials.ErrMissingIncomplete)

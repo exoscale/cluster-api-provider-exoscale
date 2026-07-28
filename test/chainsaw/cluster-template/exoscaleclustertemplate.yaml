@@ -7,19 +7,3 @@ spec:
   template:
     spec:
       zone: bg-sof-1
-      securityGroupControlPlane:
-        rules:
-          - description: allow ssh
-            network: "0.0.0.0/0"
-            endPort: 22
-            startPort: 22
-            protocol: tcp
-            flowDirection: ingress
-      securityGroupNode:
-        rules:
-          - description: allow ssh
-            network: "0.0.0.0/0"
-            endPort: 22
-            startPort: 22
-            protocol: tcp
-            flowDirection: ingress

@@ -22,9 +22,6 @@ spec:
     - jsonPath: .metadata.labels.cluster\.x-k8s\.io/cluster-name
       name: Cluster
       type: string
-    - jsonPath: .status.instanceState
-      name: State
-      type: string
     - jsonPath: .status.ready
       name: Ready
       type: string
@@ -65,55 +62,21 @@ spec:
               instead of duplicating zone here.
             properties:
               instanceType:
-                description: instanceType is the Exoscale service offering (e.g. "standard-2",
-                  "gpu-plus").
-                enum:
-                - small
-                - medium
-                - large
-                - extra-large
-                - huge
-                - gpu-plus
-                - gpu-2plus
-                - dev
-                - startup-2
-                - startup-4
-                - startup-8
-                - startup-16
-                - standard
-                - standard-2
-                - standard-4
-                - standard-8
-                - standard-12
-                - standard-16
-                - standard-20
-                - standard-24
-                - standard-32
-                - memory
-                - memory-2
-                - memory-4
-                - memory-8
-                - memory-12
-                - memory-16
-                - memory-20
-                - memory-24
-                - compute
-                - compute-2
-                - compute-4
-                - compute-8
-                - compute-12
-                - compute-16
-                - compute-20
-                - compute-24
+                description: |-
+                  instanceType is an Exoscale instance type UUID or a value in [family.]size
+                  format. For example, "small" is shorthand for "standard.small".
+                  The value is resolved against the Exoscale catalog during reconciliation.
+                  Run `exo compute instance-type list -v` to list available values.
+                minLength: 1
                 type: string
               providerID:
                 description: |-
                   providerID is the cloud-provider identifier for this instance in the form
-                  exoscale:///<instance-uuid>. Set by the controller after the instance is created.
+                  exoscale://<instance-uuid>. Set by the controller after the instance is created.
                   CAPI uses this field to match the InfraMachine to the Node object.
                 type: string
-              rootVolumeSizeGB:
-                description: rootVolumeSizeGB overrides the disk size declared by
+              rootVolumeSizeGiB:
+                description: rootVolumeSizeGiB overrides the disk size declared by
                   the template.
                 format: int64
                 maximum: 10000
@@ -122,7 +85,7 @@ spec:
               securityGroups:
                 description: |-
                   securityGroups lists UUIDs of Exoscale Security Groups to attach in addition
-                  to the cluster's node security group.
+                  to the cluster's control-plane or node security group.
                 items:
                   type: string
                 type: array
@@ -130,16 +93,24 @@ spec:
                 description: sshKey is the name of a pre-existing SSH key registered
                   in the Exoscale project.
                 type: string
-              templateID:
-                description: templateID is the UUID of an existing Exoscale instance
-                  template.
-                pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+              template:
+                description: |-
+                  template is an Exoscale instance template UUID or exact template name.
+                  UUIDs pin an exact template; names are resolved at create time.
+                minLength: 1
                 type: string
             required:
             - instanceType
-            - sshKey
-            - templateID
+            - template
             type: object
+            x-kubernetes-validations:
+            - message: instance creation fields are immutable
+              rule: self.template == oldSelf.template && self.instanceType == oldSelf.instanceType
+                && has(self.sshKey) == has(oldSelf.sshKey) && (!has(self.sshKey) ||
+                self.sshKey == oldSelf.sshKey) && has(self.securityGroups) == has(oldSelf.securityGroups)
+                && (!has(self.securityGroups) || self.securityGroups == oldSelf.securityGroups)
+                && has(self.rootVolumeSizeGiB) == has(oldSelf.rootVolumeSizeGiB) &&
+                (!has(self.rootVolumeSizeGiB) || self.rootVolumeSizeGiB == oldSelf.rootVolumeSizeGiB)
           status:
             description: |-
               ExoscaleMachineStatus defines the observed state of an ExoscaleMachine.
@@ -242,14 +213,22 @@ spec:
                 description: failureReason is a short machine-readable token set on
                   terminal errors.
                 type: string
+              initialization:
+                description: initialization provides observations of the Machine infrastructure
+                  initialization process.
+                minProperties: 1
+                properties:
+                  provisioned:
+                    description: |-
+                      provisioned is true when the infrastructure provider reports that the Machine's infrastructure is fully provisioned.
+                      NOTE: this field is part of the Cluster API contract, and it is used to orchestrate Machine provisioning.
+                      see: https://cluster-api.sigs.k8s.io/developer/providers/contracts/infra-machine#inframachine-initialization-completed
+                    type: boolean
+                type: object
               instanceID:
                 description: instanceID is the Exoscale instance UUID assigned after
                   creation.
                 pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
-                type: string
-              instanceState:
-                description: instanceState is the Exoscale instance state (e.g. "running",
-                  "stopped").
                 type: string
               ready:
                 description: ready is true when the Exoscale instance is running and

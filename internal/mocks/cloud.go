@@ -39,6 +39,132 @@ func (_m *Cloud) EXPECT() *Cloud_Expecter {
 	return &Cloud_Expecter{mock: &_m.Mock}
 }
 
+// AttachInstanceToElasticIP provides a mock function for the type Cloud
+func (_mock *Cloud) AttachInstanceToElasticIP(ctx context.Context, instanceID uuid.UUID, elasticIPID uuid.UUID) error {
+	ret := _mock.Called(ctx, instanceID, elasticIPID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for AttachInstanceToElasticIP")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID, uuid.UUID) error); ok {
+		r0 = returnFunc(ctx, instanceID, elasticIPID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// Cloud_AttachInstanceToElasticIP_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AttachInstanceToElasticIP'
+type Cloud_AttachInstanceToElasticIP_Call struct {
+	*mock.Call
+}
+
+// AttachInstanceToElasticIP is a helper method to define mock.On call
+//   - ctx context.Context
+//   - instanceID uuid.UUID
+//   - elasticIPID uuid.UUID
+func (_e *Cloud_Expecter) AttachInstanceToElasticIP(ctx any, instanceID any, elasticIPID any) *Cloud_AttachInstanceToElasticIP_Call {
+	return &Cloud_AttachInstanceToElasticIP_Call{Call: _e.mock.On("AttachInstanceToElasticIP", ctx, instanceID, elasticIPID)}
+}
+
+func (_c *Cloud_AttachInstanceToElasticIP_Call) Run(run func(ctx context.Context, instanceID uuid.UUID, elasticIPID uuid.UUID)) *Cloud_AttachInstanceToElasticIP_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 uuid.UUID
+		if args[1] != nil {
+			arg1 = args[1].(uuid.UUID)
+		}
+		var arg2 uuid.UUID
+		if args[2] != nil {
+			arg2 = args[2].(uuid.UUID)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *Cloud_AttachInstanceToElasticIP_Call) Return(err error) *Cloud_AttachInstanceToElasticIP_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *Cloud_AttachInstanceToElasticIP_Call) RunAndReturn(run func(ctx context.Context, instanceID uuid.UUID, elasticIPID uuid.UUID) error) *Cloud_AttachInstanceToElasticIP_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// AttachInstanceToSecurityGroup provides a mock function for the type Cloud
+func (_mock *Cloud) AttachInstanceToSecurityGroup(ctx context.Context, instanceID uuid.UUID, securityGroupID uuid.UUID) error {
+	ret := _mock.Called(ctx, instanceID, securityGroupID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for AttachInstanceToSecurityGroup")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID, uuid.UUID) error); ok {
+		r0 = returnFunc(ctx, instanceID, securityGroupID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// Cloud_AttachInstanceToSecurityGroup_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AttachInstanceToSecurityGroup'
+type Cloud_AttachInstanceToSecurityGroup_Call struct {
+	*mock.Call
+}
+
+// AttachInstanceToSecurityGroup is a helper method to define mock.On call
+//   - ctx context.Context
+//   - instanceID uuid.UUID
+//   - securityGroupID uuid.UUID
+func (_e *Cloud_Expecter) AttachInstanceToSecurityGroup(ctx any, instanceID any, securityGroupID any) *Cloud_AttachInstanceToSecurityGroup_Call {
+	return &Cloud_AttachInstanceToSecurityGroup_Call{Call: _e.mock.On("AttachInstanceToSecurityGroup", ctx, instanceID, securityGroupID)}
+}
+
+func (_c *Cloud_AttachInstanceToSecurityGroup_Call) Run(run func(ctx context.Context, instanceID uuid.UUID, securityGroupID uuid.UUID)) *Cloud_AttachInstanceToSecurityGroup_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 uuid.UUID
+		if args[1] != nil {
+			arg1 = args[1].(uuid.UUID)
+		}
+		var arg2 uuid.UUID
+		if args[2] != nil {
+			arg2 = args[2].(uuid.UUID)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *Cloud_AttachInstanceToSecurityGroup_Call) Return(err error) *Cloud_AttachInstanceToSecurityGroup_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *Cloud_AttachInstanceToSecurityGroup_Call) RunAndReturn(run func(ctx context.Context, instanceID uuid.UUID, securityGroupID uuid.UUID) error) *Cloud_AttachInstanceToSecurityGroup_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreateElasticIP provides a mock function for the type Cloud
 func (_mock *Cloud) CreateElasticIP(ctx context.Context, healthCheckPort int32, description string) (uuid.UUID, error) {
 	ret := _mock.Called(ctx, healthCheckPort, description)
@@ -109,6 +235,74 @@ func (_c *Cloud_CreateElasticIP_Call) Return(uUID uuid.UUID, err error) *Cloud_C
 }
 
 func (_c *Cloud_CreateElasticIP_Call) RunAndReturn(run func(ctx context.Context, healthCheckPort int32, description string) (uuid.UUID, error)) *Cloud_CreateElasticIP_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// CreateInstance provides a mock function for the type Cloud
+func (_mock *Cloud) CreateInstance(ctx context.Context, spec domain.ResolvedInstanceSpec) (uuid.UUID, error) {
+	ret := _mock.Called(ctx, spec)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreateInstance")
+	}
+
+	var r0 uuid.UUID
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, domain.ResolvedInstanceSpec) (uuid.UUID, error)); ok {
+		return returnFunc(ctx, spec)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, domain.ResolvedInstanceSpec) uuid.UUID); ok {
+		r0 = returnFunc(ctx, spec)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(uuid.UUID)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, domain.ResolvedInstanceSpec) error); ok {
+		r1 = returnFunc(ctx, spec)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// Cloud_CreateInstance_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateInstance'
+type Cloud_CreateInstance_Call struct {
+	*mock.Call
+}
+
+// CreateInstance is a helper method to define mock.On call
+//   - ctx context.Context
+//   - spec domain.ResolvedInstanceSpec
+func (_e *Cloud_Expecter) CreateInstance(ctx any, spec any) *Cloud_CreateInstance_Call {
+	return &Cloud_CreateInstance_Call{Call: _e.mock.On("CreateInstance", ctx, spec)}
+}
+
+func (_c *Cloud_CreateInstance_Call) Run(run func(ctx context.Context, spec domain.ResolvedInstanceSpec)) *Cloud_CreateInstance_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 domain.ResolvedInstanceSpec
+		if args[1] != nil {
+			arg1 = args[1].(domain.ResolvedInstanceSpec)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *Cloud_CreateInstance_Call) Return(uUID uuid.UUID, err error) *Cloud_CreateInstance_Call {
+	_c.Call.Return(uUID, err)
+	return _c
+}
+
+func (_c *Cloud_CreateInstance_Call) RunAndReturn(run func(ctx context.Context, spec domain.ResolvedInstanceSpec) (uuid.UUID, error)) *Cloud_CreateInstance_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -312,6 +506,63 @@ func (_c *Cloud_DeleteElasticIP_Call) RunAndReturn(run func(ctx context.Context,
 	return _c
 }
 
+// DeleteInstance provides a mock function for the type Cloud
+func (_mock *Cloud) DeleteInstance(ctx context.Context, id uuid.UUID) error {
+	ret := _mock.Called(ctx, id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteInstance")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID) error); ok {
+		r0 = returnFunc(ctx, id)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// Cloud_DeleteInstance_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteInstance'
+type Cloud_DeleteInstance_Call struct {
+	*mock.Call
+}
+
+// DeleteInstance is a helper method to define mock.On call
+//   - ctx context.Context
+//   - id uuid.UUID
+func (_e *Cloud_Expecter) DeleteInstance(ctx any, id any) *Cloud_DeleteInstance_Call {
+	return &Cloud_DeleteInstance_Call{Call: _e.mock.On("DeleteInstance", ctx, id)}
+}
+
+func (_c *Cloud_DeleteInstance_Call) Run(run func(ctx context.Context, id uuid.UUID)) *Cloud_DeleteInstance_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 uuid.UUID
+		if args[1] != nil {
+			arg1 = args[1].(uuid.UUID)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *Cloud_DeleteInstance_Call) Return(err error) *Cloud_DeleteInstance_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *Cloud_DeleteInstance_Call) RunAndReturn(run func(ctx context.Context, id uuid.UUID) error) *Cloud_DeleteInstance_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // DeleteSecurityGroup provides a mock function for the type Cloud
 func (_mock *Cloud) DeleteSecurityGroup(ctx context.Context, id uuid.UUID) error {
 	ret := _mock.Called(ctx, id)
@@ -432,6 +683,69 @@ func (_c *Cloud_DeleteSecurityGroupRule_Call) RunAndReturn(run func(ctx context.
 	return _c
 }
 
+// DetachInstanceFromSecurityGroup provides a mock function for the type Cloud
+func (_mock *Cloud) DetachInstanceFromSecurityGroup(ctx context.Context, instanceID uuid.UUID, securityGroupID uuid.UUID) error {
+	ret := _mock.Called(ctx, instanceID, securityGroupID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DetachInstanceFromSecurityGroup")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID, uuid.UUID) error); ok {
+		r0 = returnFunc(ctx, instanceID, securityGroupID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// Cloud_DetachInstanceFromSecurityGroup_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DetachInstanceFromSecurityGroup'
+type Cloud_DetachInstanceFromSecurityGroup_Call struct {
+	*mock.Call
+}
+
+// DetachInstanceFromSecurityGroup is a helper method to define mock.On call
+//   - ctx context.Context
+//   - instanceID uuid.UUID
+//   - securityGroupID uuid.UUID
+func (_e *Cloud_Expecter) DetachInstanceFromSecurityGroup(ctx any, instanceID any, securityGroupID any) *Cloud_DetachInstanceFromSecurityGroup_Call {
+	return &Cloud_DetachInstanceFromSecurityGroup_Call{Call: _e.mock.On("DetachInstanceFromSecurityGroup", ctx, instanceID, securityGroupID)}
+}
+
+func (_c *Cloud_DetachInstanceFromSecurityGroup_Call) Run(run func(ctx context.Context, instanceID uuid.UUID, securityGroupID uuid.UUID)) *Cloud_DetachInstanceFromSecurityGroup_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 uuid.UUID
+		if args[1] != nil {
+			arg1 = args[1].(uuid.UUID)
+		}
+		var arg2 uuid.UUID
+		if args[2] != nil {
+			arg2 = args[2].(uuid.UUID)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *Cloud_DetachInstanceFromSecurityGroup_Call) Return(err error) *Cloud_DetachInstanceFromSecurityGroup_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *Cloud_DetachInstanceFromSecurityGroup_Call) RunAndReturn(run func(ctx context.Context, instanceID uuid.UUID, securityGroupID uuid.UUID) error) *Cloud_DetachInstanceFromSecurityGroup_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetElasticIP provides a mock function for the type Cloud
 func (_mock *Cloud) GetElasticIP(ctx context.Context, id uuid.UUID) (domain.ElasticIP, error) {
 	ret := _mock.Called(ctx, id)
@@ -494,6 +808,72 @@ func (_c *Cloud_GetElasticIP_Call) Return(elasticIP domain.ElasticIP, err error)
 }
 
 func (_c *Cloud_GetElasticIP_Call) RunAndReturn(run func(ctx context.Context, id uuid.UUID) (domain.ElasticIP, error)) *Cloud_GetElasticIP_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetInstance provides a mock function for the type Cloud
+func (_mock *Cloud) GetInstance(ctx context.Context, id uuid.UUID) (domain.Instance, error) {
+	ret := _mock.Called(ctx, id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetInstance")
+	}
+
+	var r0 domain.Instance
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID) (domain.Instance, error)); ok {
+		return returnFunc(ctx, id)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID) domain.Instance); ok {
+		r0 = returnFunc(ctx, id)
+	} else {
+		r0 = ret.Get(0).(domain.Instance)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, uuid.UUID) error); ok {
+		r1 = returnFunc(ctx, id)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// Cloud_GetInstance_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetInstance'
+type Cloud_GetInstance_Call struct {
+	*mock.Call
+}
+
+// GetInstance is a helper method to define mock.On call
+//   - ctx context.Context
+//   - id uuid.UUID
+func (_e *Cloud_Expecter) GetInstance(ctx any, id any) *Cloud_GetInstance_Call {
+	return &Cloud_GetInstance_Call{Call: _e.mock.On("GetInstance", ctx, id)}
+}
+
+func (_c *Cloud_GetInstance_Call) Run(run func(ctx context.Context, id uuid.UUID)) *Cloud_GetInstance_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 uuid.UUID
+		if args[1] != nil {
+			arg1 = args[1].(uuid.UUID)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *Cloud_GetInstance_Call) Return(instance domain.Instance, err error) *Cloud_GetInstance_Call {
+	_c.Call.Return(instance, err)
+	return _c
+}
+
+func (_c *Cloud_GetInstance_Call) RunAndReturn(run func(ctx context.Context, id uuid.UUID) (domain.Instance, error)) *Cloud_GetInstance_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -564,6 +944,72 @@ func (_c *Cloud_GetSecurityGroup_Call) RunAndReturn(run func(ctx context.Context
 	return _c
 }
 
+// GetTemplate provides a mock function for the type Cloud
+func (_mock *Cloud) GetTemplate(ctx context.Context, id uuid.UUID) (domain.InstanceTemplate, error) {
+	ret := _mock.Called(ctx, id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetTemplate")
+	}
+
+	var r0 domain.InstanceTemplate
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID) (domain.InstanceTemplate, error)); ok {
+		return returnFunc(ctx, id)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID) domain.InstanceTemplate); ok {
+		r0 = returnFunc(ctx, id)
+	} else {
+		r0 = ret.Get(0).(domain.InstanceTemplate)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, uuid.UUID) error); ok {
+		r1 = returnFunc(ctx, id)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// Cloud_GetTemplate_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetTemplate'
+type Cloud_GetTemplate_Call struct {
+	*mock.Call
+}
+
+// GetTemplate is a helper method to define mock.On call
+//   - ctx context.Context
+//   - id uuid.UUID
+func (_e *Cloud_Expecter) GetTemplate(ctx any, id any) *Cloud_GetTemplate_Call {
+	return &Cloud_GetTemplate_Call{Call: _e.mock.On("GetTemplate", ctx, id)}
+}
+
+func (_c *Cloud_GetTemplate_Call) Run(run func(ctx context.Context, id uuid.UUID)) *Cloud_GetTemplate_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 uuid.UUID
+		if args[1] != nil {
+			arg1 = args[1].(uuid.UUID)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *Cloud_GetTemplate_Call) Return(instanceTemplate domain.InstanceTemplate, err error) *Cloud_GetTemplate_Call {
+	_c.Call.Return(instanceTemplate, err)
+	return _c
+}
+
+func (_c *Cloud_GetTemplate_Call) RunAndReturn(run func(ctx context.Context, id uuid.UUID) (domain.InstanceTemplate, error)) *Cloud_GetTemplate_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListElasticIPs provides a mock function for the type Cloud
 func (_mock *Cloud) ListElasticIPs(ctx context.Context) ([]domain.ElasticIP, error) {
 	ret := _mock.Called(ctx)
@@ -622,6 +1068,136 @@ func (_c *Cloud_ListElasticIPs_Call) Return(elasticIPs []domain.ElasticIP, err e
 }
 
 func (_c *Cloud_ListElasticIPs_Call) RunAndReturn(run func(ctx context.Context) ([]domain.ElasticIP, error)) *Cloud_ListElasticIPs_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListInstanceTypes provides a mock function for the type Cloud
+func (_mock *Cloud) ListInstanceTypes(ctx context.Context) ([]domain.InstanceType, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListInstanceTypes")
+	}
+
+	var r0 []domain.InstanceType
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) ([]domain.InstanceType, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) []domain.InstanceType); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]domain.InstanceType)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// Cloud_ListInstanceTypes_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListInstanceTypes'
+type Cloud_ListInstanceTypes_Call struct {
+	*mock.Call
+}
+
+// ListInstanceTypes is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *Cloud_Expecter) ListInstanceTypes(ctx any) *Cloud_ListInstanceTypes_Call {
+	return &Cloud_ListInstanceTypes_Call{Call: _e.mock.On("ListInstanceTypes", ctx)}
+}
+
+func (_c *Cloud_ListInstanceTypes_Call) Run(run func(ctx context.Context)) *Cloud_ListInstanceTypes_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *Cloud_ListInstanceTypes_Call) Return(instanceTypes []domain.InstanceType, err error) *Cloud_ListInstanceTypes_Call {
+	_c.Call.Return(instanceTypes, err)
+	return _c
+}
+
+func (_c *Cloud_ListInstanceTypes_Call) RunAndReturn(run func(ctx context.Context) ([]domain.InstanceType, error)) *Cloud_ListInstanceTypes_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListInstances provides a mock function for the type Cloud
+func (_mock *Cloud) ListInstances(ctx context.Context, label string) ([]domain.Instance, error) {
+	ret := _mock.Called(ctx, label)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListInstances")
+	}
+
+	var r0 []domain.Instance
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) ([]domain.Instance, error)); ok {
+		return returnFunc(ctx, label)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) []domain.Instance); ok {
+		r0 = returnFunc(ctx, label)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]domain.Instance)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, label)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// Cloud_ListInstances_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListInstances'
+type Cloud_ListInstances_Call struct {
+	*mock.Call
+}
+
+// ListInstances is a helper method to define mock.On call
+//   - ctx context.Context
+//   - label string
+func (_e *Cloud_Expecter) ListInstances(ctx any, label any) *Cloud_ListInstances_Call {
+	return &Cloud_ListInstances_Call{Call: _e.mock.On("ListInstances", ctx, label)}
+}
+
+func (_c *Cloud_ListInstances_Call) Run(run func(ctx context.Context, label string)) *Cloud_ListInstances_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *Cloud_ListInstances_Call) Return(instances []domain.Instance, err error) *Cloud_ListInstances_Call {
+	_c.Call.Return(instances, err)
+	return _c
+}
+
+func (_c *Cloud_ListInstances_Call) RunAndReturn(run func(ctx context.Context, label string) ([]domain.Instance, error)) *Cloud_ListInstances_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -690,6 +1266,68 @@ func (_c *Cloud_ListSecurityGroupRules_Call) Return(securityGroupRules []domain.
 }
 
 func (_c *Cloud_ListSecurityGroupRules_Call) RunAndReturn(run func(ctx context.Context, sgID uuid.UUID) ([]domain.SecurityGroupRule, error)) *Cloud_ListSecurityGroupRules_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListTemplates provides a mock function for the type Cloud
+func (_mock *Cloud) ListTemplates(ctx context.Context) ([]domain.InstanceTemplate, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListTemplates")
+	}
+
+	var r0 []domain.InstanceTemplate
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) ([]domain.InstanceTemplate, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) []domain.InstanceTemplate); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]domain.InstanceTemplate)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// Cloud_ListTemplates_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListTemplates'
+type Cloud_ListTemplates_Call struct {
+	*mock.Call
+}
+
+// ListTemplates is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *Cloud_Expecter) ListTemplates(ctx any) *Cloud_ListTemplates_Call {
+	return &Cloud_ListTemplates_Call{Call: _e.mock.On("ListTemplates", ctx)}
+}
+
+func (_c *Cloud_ListTemplates_Call) Run(run func(ctx context.Context)) *Cloud_ListTemplates_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *Cloud_ListTemplates_Call) Return(instanceTemplates []domain.InstanceTemplate, err error) *Cloud_ListTemplates_Call {
+	_c.Call.Return(instanceTemplates, err)
+	return _c
+}
+
+func (_c *Cloud_ListTemplates_Call) RunAndReturn(run func(ctx context.Context) ([]domain.InstanceTemplate, error)) *Cloud_ListTemplates_Call {
 	_c.Call.Return(run)
 	return _c
 }

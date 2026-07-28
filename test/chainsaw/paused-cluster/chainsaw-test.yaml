@@ -1,3 +1,5 @@
+# Verifies that a paused Exoscale cluster defers infrastructure provisioning and
+# becomes ready after it is unpaused.
 apiVersion: chainsaw.kyverno.io/v1alpha1
 kind: Test
 metadata:

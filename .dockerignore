@@ -12,3 +12,13 @@
 # Re-include Go module files
 !go.mod
 !go.sum
+
+## ---
+# TODO see how we can make this work without mass reincluding: make -C /home/natalie/Work/Repositories/cluster-api-provider-exoscale docker-build
+# See error:
+#Step 9/14 : RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o manager cmd/main.go
+# ---> Running in 6d125c5eb0f7
+#package cmd/main.go is not in std (/usr/local/go/src/cmd/main.go)
+#The command '/bin/sh -c CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o manager cmd/main.go' returned a non-zero code: 1
+#make: *** [Makefile:176: docker-build] Error 1
+#make: Leaving directory '/home/natalie/Work/Repositories/cluster-api-provider-exoscale'

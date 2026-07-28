@@ -18,7 +18,6 @@ package controller
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	v1 "k8s.io/api/core/v1"
@@ -147,7 +146,6 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	// reconcile cluster.
 	clusterSvc, err := r.NewClusterService(apiKey, apiSecret, exoCluster.Spec.Zone, log)
 	if err != nil {
-		log.Error(errors.New("invalid creds error"), "invalid creds", "apikey", apiKey, "apiSecret", apiSecret)
 		return ctrl.Result{}, err
 	}
 

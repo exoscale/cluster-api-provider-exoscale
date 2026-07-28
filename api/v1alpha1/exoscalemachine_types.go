@@ -26,43 +26,62 @@ import (
 // Zone is inherited from ExoscaleCluster.spec.zone. If multi-zone support is
 // added later, use CAPI Machine.spec.failureDomain to pick the target zone
 // instead of duplicating zone here.
+// +kubebuilder:validation:XValidation:rule="self.template == oldSelf.template && self.instanceType == oldSelf.instanceType && has(self.sshKey) == has(oldSelf.sshKey) && (!has(self.sshKey) || self.sshKey == oldSelf.sshKey) && has(self.securityGroups) == has(oldSelf.securityGroups) && (!has(self.securityGroups) || self.securityGroups == oldSelf.securityGroups) && has(self.rootVolumeSizeGiB) == has(oldSelf.rootVolumeSizeGiB) && (!has(self.rootVolumeSizeGiB) || self.rootVolumeSizeGiB == oldSelf.rootVolumeSizeGiB)",message="instance creation fields are immutable"
 type ExoscaleMachineSpec struct {
-	// templateID is the UUID of an existing Exoscale instance template.
+	// template is an Exoscale instance template UUID or exact template name.
+	// UUIDs pin an exact template; names are resolved at create time.
 	// +required
-	// +kubebuilder:validation:Pattern=`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
-	TemplateID string `json:"templateID"`
+	// +kubebuilder:validation:MinLength=1
+	Template string `json:"template"`
 
-	// instanceType is the Exoscale service offering (e.g. "standard-2", "gpu-plus").
+	// instanceType is an Exoscale instance type UUID or a value in [family.]size
+	// format. For example, "small" is shorthand for "standard.small".
+	// The value is resolved against the Exoscale catalog during reconciliation.
+	// Run `exo compute instance-type list -v` to list available values.
 	// +required
-	// +kubebuilder:validation:Enum=small;medium;large;extra-large;huge;gpu-plus;gpu-2plus;dev;startup-2;startup-4;startup-8;startup-16;standard;standard-2;standard-4;standard-8;standard-12;standard-16;standard-20;standard-24;standard-32;memory;memory-2;memory-4;memory-8;memory-12;memory-16;memory-20;memory-24;compute;compute-2;compute-4;compute-8;compute-12;compute-16;compute-20;compute-24
+	// +kubebuilder:validation:MinLength=1
 	InstanceType string `json:"instanceType"`
 
 	// sshKey is the name of a pre-existing SSH key registered in the Exoscale project.
-	// +required
-	SSHKey string `json:"sshKey"`
+	// +optional
+	SSHKey string `json:"sshKey,omitempty"`
 
 	// securityGroups lists UUIDs of Exoscale Security Groups to attach in addition
-	// to the cluster's node security group.
+	// to the cluster's control-plane or node security group.
 	// +optional
 	SecurityGroups []string `json:"securityGroups,omitempty"`
 
-	// rootVolumeSizeGB overrides the disk size declared by the template.
+	// rootVolumeSizeGiB overrides the disk size declared by the template.
 	// +optional
 	// +kubebuilder:validation:Minimum=10
 	// +kubebuilder:validation:Maximum=10000
-	RootVolumeSizeGB *int64 `json:"rootVolumeSizeGB,omitempty"`
+	RootVolumeSizeGiB *int64 `json:"rootVolumeSizeGiB,omitempty"`
 
 	// providerID is the cloud-provider identifier for this instance in the form
-	// exoscale:///<instance-uuid>. Set by the controller after the instance is created.
+	// exoscale://<instance-uuid>. Set by the controller after the instance is created.
 	// CAPI uses this field to match the InfraMachine to the Node object.
 	// +optional
 	ProviderID *string `json:"providerID,omitempty"`
+}
+
+// ExoscaleMachineInitializationStatus provides observations of the ExoscaleMachine initialization process.
+// +kubebuilder:validation:MinProperties=1
+type ExoscaleMachineInitializationStatus struct {
+	// provisioned is true when the infrastructure provider reports that the Machine's infrastructure is fully provisioned.
+	// NOTE: this field is part of the Cluster API contract, and it is used to orchestrate Machine provisioning.
+	// see: https://cluster-api.sigs.k8s.io/developer/providers/contracts/infra-machine#inframachine-initialization-completed
+	// +optional
+	Provisioned *bool `json:"provisioned,omitempty"`
 }
 
 // ExoscaleMachineStatus defines the observed state of an ExoscaleMachine.
 // Fields follow the CAPI InfraMachine contract:
 // https://cluster-api.sigs.k8s.io/developer/providers/contracts/infra-machine
 type ExoscaleMachineStatus struct {
+	// initialization provides observations of the Machine infrastructure initialization process.
+	// +optional
+	Initialization ExoscaleMachineInitializationStatus `json:"initialization,omitempty,omitzero"`
+
 	// ready is true when the Exoscale instance is running and reachable.
 	Ready bool `json:"ready"`
 
@@ -70,10 +89,6 @@ type ExoscaleMachineStatus struct {
 	// +optional
 	// +kubebuilder:validation:Pattern=`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
 	InstanceID string `json:"instanceID,omitempty"`
-
-	// instanceState is the Exoscale instance state (e.g. "running", "stopped").
-	// +optional
-	InstanceState string `json:"instanceState,omitempty"`
 
 	// addresses are the network addresses of the instance (public and private IPs).
 	// +optional
@@ -100,7 +115,6 @@ type ExoscaleMachineStatus struct {
 // +kubebuilder:resource:path=exoscalemachines,scope=Namespaced,categories=cluster-api,shortName=exom
 // +kubebuilder:storageversion
 // +kubebuilder:printcolumn:name="Cluster",type=string,JSONPath=`.metadata.labels.cluster\.x-k8s\.io/cluster-name`
-// +kubebuilder:printcolumn:name="State",type=string,JSONPath=`.status.instanceState`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.ready`
 // +kubebuilder:printcolumn:name="ProviderID",type=string,JSONPath=`.spec.providerID`
 // +kubebuilder:printcolumn:name="Machine",type=string,JSONPath=`.metadata.ownerReferences[?(@.kind=="Machine")].name`
@@ -119,12 +133,12 @@ type ExoscaleMachine struct {
 	Status ExoscaleMachineStatus `json:"status,omitzero"`
 }
 
-func (in *ExoscaleMachine) GetConditions() []metav1.Condition {
-	return in.Status.Conditions
+func (e *ExoscaleMachine) GetConditions() []metav1.Condition {
+	return e.Status.Conditions
 }
 
-func (in *ExoscaleMachine) SetConditions(conditions []metav1.Condition) {
-	in.Status.Conditions = conditions
+func (e *ExoscaleMachine) SetConditions(conditions []metav1.Condition) {
+	e.Status.Conditions = conditions
 }
 
 // +kubebuilder:object:root=true

@@ -1,0 +1,91 @@
+# Verifies that a machine remains unprovisioned while its cluster is paused and
+# resumes reconciliation when the cluster is unpaused.
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: paused-machine
+spec:
+  # concurrent: false because, when running the chainsaw test we get the following:
+  # === NAME  chainsaw/deploy-cluster-paused
+  #    | 14:47:01 | deploy-cluster-paused | assert exoscale cluster is paused | ASSERT    | ERROR | infrastructure.cluster.x-k8s.io/v1alpha1/ExoscaleCluster @ default/capi-cluster-paused-local
+  #        === ERROR
+  #        ------------------------------------------------------------------------------------------
+  #        infrastructure.cluster.x-k8s.io/v1alpha1/ExoscaleCluster/default/capi-cluster-paused-local
+  #        ------------------------------------------------------------------------------------------
+  #        * status.conditions: Required value: field not found in the input object
+  #
+  #        --- expected
+  concurrent: false
+  timeouts:
+    delete: 5m
+    cleanup: 5m
+  bindings:
+    - name: zone
+      value: ($values.zone || 'bg-sof-1')
+    - name: clusterName
+      value: (join('-', ['exo-pm', ($values.suffix || 'local')]))
+    - name: machineName
+      value: (join('-', ['machine-paused', ($values.suffix || 'local')]))
+    - name: namespace
+      value: default
+  steps:
+    - name: apply paused cluster
+      try:
+        - apply:
+            file: cluster.yaml
+
+    - name: apply machine
+      try:
+        - apply:
+            file: exoscalemachine.yaml
+
+    - name: assert machine paused
+      try:
+        - assert:
+            timeout: 1m
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleMachine
+              metadata:
+                name: ($machineName)
+                namespace: ($namespace)
+              spec:
+                (providerID == null): true
+              status:
+                conditions:
+                  - type: Paused
+                    reason: Paused
+                    status: "True"
+                (instanceID == null): true
+
+    - name: assert cluster transition reconciles machine
+      try:
+        - sleep:
+            duration: 3s
+        - patch:
+            resource:
+              apiVersion: cluster.x-k8s.io/v1beta2
+              kind: Cluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+              spec:
+                paused: false
+        - sleep:
+            duration: 3s
+        - assert:
+            timeout: 1m
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleMachine
+              metadata:
+                name: ($machineName)
+                namespace: ($namespace)
+              spec:
+                (providerID == null): true
+              status:
+                conditions:
+                  - type: Ready
+                    reason: NotReady
+                    status: "False"
+                (instanceID == null): true

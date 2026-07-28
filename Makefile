@@ -82,22 +82,24 @@ setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
 	esac
 
 .PHONY: test-e2e
-test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expected an isolated environment using Kind.
-	KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v
-	$(MAKE) cleanup-test-e2e
+test-e2e: setup-test-e2e manifests generate fmt vet clusterctl ## Run the e2e tests. Expected an isolated environment using Kind.
+	@status=0; \
+		"$(CLUSTERCTL)" init --infrastructure - && \
+		KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v || status=$$?; \
+		$(MAKE) cleanup-test-e2e KIND_CLUSTER=$(KIND_CLUSTER); \
+		exit $$status
 
 CHAINSAW_VALUES_SUFFIX ?=
 CHAINSAW_VALUES_ZONE ?=
-CHAINSAW_MACHINE_TEMPLATE_ID ?=
-CHAINSAW_MACHINE_SSH_KEY ?=
+CHAINSAW_MACHINE_TEMPLATE ?=
 CHAINSAW_MACHINE_INSTANCE_TYPE ?= small
 CHAINSAW_ALL_TEST_DIRS := $(shell ls -d -1 test/chainsaw/*)
 CHAINSAW_MACHINE_TEST_DIR := test/chainsaw/deploy-machine
-CHAINSAW_TEST_DIRS ?= $(if $(and $(CHAINSAW_MACHINE_TEMPLATE_ID),$(CHAINSAW_MACHINE_SSH_KEY)),$(CHAINSAW_ALL_TEST_DIRS),$(filter-out $(CHAINSAW_MACHINE_TEST_DIR),$(CHAINSAW_ALL_TEST_DIRS)))
+CHAINSAW_TEST_DIRS ?= $(if $(CHAINSAW_MACHINE_TEMPLATE),$(CHAINSAW_ALL_TEST_DIRS),$(filter-out $(CHAINSAW_MACHINE_TEST_DIR),$(CHAINSAW_ALL_TEST_DIRS)))
 
 .PHONY: chainsaw-test-e2e
 chainsaw-test-e2e: setup-test-e2e-chainsaw chainsaw ## Run the e2e tests. Expected an isolated environment using Kind.
-	$(CHAINSAW) test --set='suffix=$(CHAINSAW_VALUES_SUFFIX),zone=$(CHAINSAW_VALUES_ZONE),templateID=$(CHAINSAW_MACHINE_TEMPLATE_ID),sshKey=$(CHAINSAW_MACHINE_SSH_KEY),instanceType=$(CHAINSAW_MACHINE_INSTANCE_TYPE)' $(CHAINSAW_TEST_DIRS)
+	$(CHAINSAW) test --set='suffix=$(CHAINSAW_VALUES_SUFFIX),zone=$(CHAINSAW_VALUES_ZONE),template=$(CHAINSAW_MACHINE_TEMPLATE),instanceType=$(CHAINSAW_MACHINE_INSTANCE_TYPE),image=$(IMG)' $(CHAINSAW_TEST_DIRS)
 
 ## Exoscale credentials: use env vars if already set, otherwise read from config file.
 EXOSCALE_CONFIG      ?= $(HOME)/.config/exoscale/exoscale.toml
@@ -133,7 +135,7 @@ setup-test-e2e-chainsaw: check-exoscale-creds setup-test-e2e docker-build manife
 		--namespace cluster-api-provider-exoscale-system \
 		--for=condition=Available
 
-	$(KUBECTL) create secret generic exoscale \
+	@$(KUBECTL) create secret generic exoscale \
 		--from-literal=apikey=$(EXOSCALE_API_KEY) \
 		--from-literal=apisecret=$(EXOSCALE_API_SECRET) \
 		--dry-run=client -o yaml | $(KUBECTL) apply -f -
@@ -218,8 +220,13 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 
 .PHONY: deploy
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	cd config/manager && "$(KUSTOMIZE)" edit set image controller=${IMG}
-	"$(KUSTOMIZE)" build config/default | "$(KUBECTL)" apply -f -
+	@tmp="$$(mktemp -d)"; \
+		trap 'rm -rf "$$tmp"' EXIT; \
+		ln -s "$(CURDIR)/config/default" "$$tmp/base"; \
+		printf 'apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n  - base\n' > "$$tmp/kustomization.yaml"; \
+		cd "$$tmp"; \
+		"$(KUSTOMIZE)" edit set image controller=${IMG}; \
+		"$(KUSTOMIZE)" build --load-restrictor LoadRestrictionsNone . | "$(KUBECTL)" apply -f -
 
 .PHONY: undeploy
 undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.

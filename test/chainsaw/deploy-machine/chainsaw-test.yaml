@@ -1,3 +1,5 @@
+# Verifies bootstrap generation and the full real VM lifecycle, including
+# readiness, addresses, providerID propagation to CAPI, and VM deletion.
 apiVersion: chainsaw.kyverno.io/v1alpha1
 kind: Test
 metadata:
@@ -7,64 +9,80 @@ spec:
     delete: 10m
     cleanup: 10m
   bindings:
-  - name: zone
-    value: ($values.zone || 'bg-sof-1')
-  - name: clusterName
-    value: (join('-', ['exo-dm', ($values.suffix || 'local')]))
-  - name: machineName
-    value: (join('-', ['machine', ($values.suffix || 'local')]))
-  - name: bootstrapSecretName
-    value: (join('-', ['bootstrap', ($values.suffix || 'local')]))
-  - name: namespace
-    value: default
-  - name: templateID
-    value: ($values.templateID)
-  - name: sshKey
-    value: ($values.sshKey)
-  - name: instanceType
-    value: ($values.instanceType || 'small')
+    - name: zone
+      value: ($values.zone || 'bg-sof-1')
+    - name: clusterName
+      value: (join('-', ['exo-dm', ($values.suffix || 'local')]))
+    - name: machineName
+      value: (join('-', ['machine', ($values.suffix || 'local')]))
+    - name: namespace
+      value: default
+    - name: template
+      value: ($values.template)
+    - name: instanceType
+      value: ($values.instanceType || 'small')
   steps:
     - name: apply cluster
       try:
         - apply:
             file: cluster.yaml
 
-    - name: assert cluster ready
-      try:
-        - assert:
-            timeout: 5m
-            resource:
-              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
-              kind: ExoscaleCluster
-              metadata:
-                name: ($clusterName)
-                namespace: ($namespace)
-              status:
-                initialization:
-                  provisioned: true
-                securityGroupNode:
-                  (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
-                conditions:
-                  - type: Ready
-                    reason: ReconcileSuccess
-                    status: "True"
-
     - name: apply machine
       try:
         - apply:
             file: machine.yaml
-        - script:
-            timeout: 10s
-            env:
-              - name: MACHINE_NAME
-                value: ($machineName)
-            content: |
-              kubectl get machine "$MACHINE_NAME" -n default -o jsonpath='{.metadata.uid}'
             outputs:
-              - name: machineUID
-                value: ($stdout)
+              - name: machine
+                match:
+                  apiVersion: cluster.x-k8s.io/v1beta2
+                  kind: Machine
+                  metadata:
+                    name: ($machineName)
+                value: (@)
+        - apply:
+            file: kubeadmconfig.yaml
         - apply:
             file: exoscalemachine.yaml
+
+    - name: assert requested machine inputs
+      try:
+        - assert:
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleMachine
+              metadata:
+                name: ($machineName)
+                namespace: ($namespace)
+              spec:
+                template: ($template)
+                instanceType: ($instanceType)
+                (sshKey == null): true
+
+    - name: assert bootstrap data generated
+      try:
+        - assert:
+            timeout: 5m
+            resource:
+              apiVersion: bootstrap.cluster.x-k8s.io/v1beta2
+              kind: KubeadmConfig
+              metadata:
+                name: ($machineName)
+                namespace: ($namespace)
+              status:
+                initialization:
+                  dataSecretCreated: true
+                (dataSecretName != ''): true
+        - assert:
+            timeout: 2m
+            resource:
+              apiVersion: cluster.x-k8s.io/v1beta2
+              kind: Machine
+              metadata:
+                name: ($machineName)
+                namespace: ($namespace)
+              spec:
+                bootstrap:
+                  (dataSecretName != ''): true
 
     - name: assert machine ready
       try:
@@ -77,27 +95,54 @@ spec:
                 name: ($machineName)
                 namespace: ($namespace)
               status:
+                initialization:
+                  provisioned: true
                 ready: true
-                instanceState: running
+                conditions:
+                  - type: Ready
+                    reason: Ready
+                    status: "True"
+                addresses:
+                  - type: ExternalIP
+                    (address != ''): true
+        - assert:
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleMachine
+              metadata:
+                name: ($machineName)
+                namespace: ($namespace)
+              (spec.providerID == join('', ['exoscale://', status.instanceID])): true
+              status:
                 (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', instanceID)): true
-                (length(addresses[?type == 'ExternalIP'])): 1
-        - script:
-            timeout: 10s
-            env:
-              - name: MACHINE_NAME
-                value: ($machineName)
-            content: |
-              instance_id=$(kubectl get exoscalemachine "$MACHINE_NAME" -n default -o jsonpath='{.status.instanceID}')
-              provider_id=$(kubectl get exoscalemachine "$MACHINE_NAME" -n default -o jsonpath='{.spec.providerID}')
-              test "$provider_id" = "exoscale:///$instance_id"
 
-    - name: delete machine
+    - name: assert capi machine registered infra machine
       try:
-        - script:
+        - assert:
+            timeout: 2m
+            bindings:
+              - name: infraMachine
+                value: (x_k8s_get($client, 'infrastructure.cluster.x-k8s.io/v1alpha1', 'ExoscaleMachine', $namespace, $machineName))
+            resource:
+              apiVersion: cluster.x-k8s.io/v1beta2
+              kind: Machine
+              metadata:
+                name: ($machineName)
+                namespace: ($namespace)
+              (spec.providerID == $infraMachine.spec.providerID): true
+              status:
+                initialization:
+                  infrastructureProvisioned: true
+                addresses:
+                  - type: ExternalIP
+                    (address != ''): true
+
+    - name: delete CAPI machine
+      try:
+        - delete:
             timeout: 10m
-            env:
-              - name: MACHINE_NAME
-                value: ($machineName)
-            content: |
-              kubectl delete exoscalemachine "$MACHINE_NAME" -n default --timeout=10m
-              kubectl wait --for=delete exoscalemachine/"$MACHINE_NAME" -n default --timeout=10m
+            ref:
+              apiVersion: cluster.x-k8s.io/v1beta2
+              kind: Machine
+              name: ($machineName)
+              namespace: ($namespace)

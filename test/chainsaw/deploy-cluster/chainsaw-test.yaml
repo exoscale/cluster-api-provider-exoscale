@@ -1,3 +1,5 @@
+# Verifies cluster provisioning, security group rules, and control plane endpoint
+# consistency between the Exoscale and CAPI cluster resources.
 apiVersion: chainsaw.kyverno.io/v1alpha1
 kind: Test
 metadata:

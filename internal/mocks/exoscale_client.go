@@ -112,6 +112,154 @@ func (_c *ExoscaleClient_AddRuleToSecurityGroup_Call) RunAndReturn(run func(ctx 
 	return _c
 }
 
+// AttachInstanceToElasticIP provides a mock function for the type ExoscaleClient
+func (_mock *ExoscaleClient) AttachInstanceToElasticIP(ctx context.Context, id v3.UUID, req v3.AttachInstanceToElasticIPRequest) (*v3.Operation, error) {
+	ret := _mock.Called(ctx, id, req)
+
+	if len(ret) == 0 {
+		panic("no return value specified for AttachInstanceToElasticIP")
+	}
+
+	var r0 *v3.Operation
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v3.UUID, v3.AttachInstanceToElasticIPRequest) (*v3.Operation, error)); ok {
+		return returnFunc(ctx, id, req)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v3.UUID, v3.AttachInstanceToElasticIPRequest) *v3.Operation); ok {
+		r0 = returnFunc(ctx, id, req)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*v3.Operation)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, v3.UUID, v3.AttachInstanceToElasticIPRequest) error); ok {
+		r1 = returnFunc(ctx, id, req)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// ExoscaleClient_AttachInstanceToElasticIP_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AttachInstanceToElasticIP'
+type ExoscaleClient_AttachInstanceToElasticIP_Call struct {
+	*mock.Call
+}
+
+// AttachInstanceToElasticIP is a helper method to define mock.On call
+//   - ctx context.Context
+//   - id v3.UUID
+//   - req v3.AttachInstanceToElasticIPRequest
+func (_e *ExoscaleClient_Expecter) AttachInstanceToElasticIP(ctx any, id any, req any) *ExoscaleClient_AttachInstanceToElasticIP_Call {
+	return &ExoscaleClient_AttachInstanceToElasticIP_Call{Call: _e.mock.On("AttachInstanceToElasticIP", ctx, id, req)}
+}
+
+func (_c *ExoscaleClient_AttachInstanceToElasticIP_Call) Run(run func(ctx context.Context, id v3.UUID, req v3.AttachInstanceToElasticIPRequest)) *ExoscaleClient_AttachInstanceToElasticIP_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 v3.UUID
+		if args[1] != nil {
+			arg1 = args[1].(v3.UUID)
+		}
+		var arg2 v3.AttachInstanceToElasticIPRequest
+		if args[2] != nil {
+			arg2 = args[2].(v3.AttachInstanceToElasticIPRequest)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *ExoscaleClient_AttachInstanceToElasticIP_Call) Return(operation *v3.Operation, err error) *ExoscaleClient_AttachInstanceToElasticIP_Call {
+	_c.Call.Return(operation, err)
+	return _c
+}
+
+func (_c *ExoscaleClient_AttachInstanceToElasticIP_Call) RunAndReturn(run func(ctx context.Context, id v3.UUID, req v3.AttachInstanceToElasticIPRequest) (*v3.Operation, error)) *ExoscaleClient_AttachInstanceToElasticIP_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// AttachInstanceToSecurityGroup provides a mock function for the type ExoscaleClient
+func (_mock *ExoscaleClient) AttachInstanceToSecurityGroup(ctx context.Context, id v3.UUID, req v3.AttachInstanceToSecurityGroupRequest) (*v3.Operation, error) {
+	ret := _mock.Called(ctx, id, req)
+
+	if len(ret) == 0 {
+		panic("no return value specified for AttachInstanceToSecurityGroup")
+	}
+
+	var r0 *v3.Operation
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v3.UUID, v3.AttachInstanceToSecurityGroupRequest) (*v3.Operation, error)); ok {
+		return returnFunc(ctx, id, req)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v3.UUID, v3.AttachInstanceToSecurityGroupRequest) *v3.Operation); ok {
+		r0 = returnFunc(ctx, id, req)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*v3.Operation)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, v3.UUID, v3.AttachInstanceToSecurityGroupRequest) error); ok {
+		r1 = returnFunc(ctx, id, req)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// ExoscaleClient_AttachInstanceToSecurityGroup_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AttachInstanceToSecurityGroup'
+type ExoscaleClient_AttachInstanceToSecurityGroup_Call struct {
+	*mock.Call
+}
+
+// AttachInstanceToSecurityGroup is a helper method to define mock.On call
+//   - ctx context.Context
+//   - id v3.UUID
+//   - req v3.AttachInstanceToSecurityGroupRequest
+func (_e *ExoscaleClient_Expecter) AttachInstanceToSecurityGroup(ctx any, id any, req any) *ExoscaleClient_AttachInstanceToSecurityGroup_Call {
+	return &ExoscaleClient_AttachInstanceToSecurityGroup_Call{Call: _e.mock.On("AttachInstanceToSecurityGroup", ctx, id, req)}
+}
+
+func (_c *ExoscaleClient_AttachInstanceToSecurityGroup_Call) Run(run func(ctx context.Context, id v3.UUID, req v3.AttachInstanceToSecurityGroupRequest)) *ExoscaleClient_AttachInstanceToSecurityGroup_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 v3.UUID
+		if args[1] != nil {
+			arg1 = args[1].(v3.UUID)
+		}
+		var arg2 v3.AttachInstanceToSecurityGroupRequest
+		if args[2] != nil {
+			arg2 = args[2].(v3.AttachInstanceToSecurityGroupRequest)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *ExoscaleClient_AttachInstanceToSecurityGroup_Call) Return(operation *v3.Operation, err error) *ExoscaleClient_AttachInstanceToSecurityGroup_Call {
+	_c.Call.Return(operation, err)
+	return _c
+}
+
+func (_c *ExoscaleClient_AttachInstanceToSecurityGroup_Call) RunAndReturn(run func(ctx context.Context, id v3.UUID, req v3.AttachInstanceToSecurityGroupRequest) (*v3.Operation, error)) *ExoscaleClient_AttachInstanceToSecurityGroup_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreateElasticIP provides a mock function for the type ExoscaleClient
 func (_mock *ExoscaleClient) CreateElasticIP(ctx context.Context, req v3.CreateElasticIPRequest) (*v3.Operation, error) {
 	ret := _mock.Called(ctx, req)
@@ -176,6 +324,74 @@ func (_c *ExoscaleClient_CreateElasticIP_Call) Return(operation *v3.Operation, e
 }
 
 func (_c *ExoscaleClient_CreateElasticIP_Call) RunAndReturn(run func(ctx context.Context, req v3.CreateElasticIPRequest) (*v3.Operation, error)) *ExoscaleClient_CreateElasticIP_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// CreateInstance provides a mock function for the type ExoscaleClient
+func (_mock *ExoscaleClient) CreateInstance(ctx context.Context, req v3.CreateInstanceRequest) (*v3.Operation, error) {
+	ret := _mock.Called(ctx, req)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreateInstance")
+	}
+
+	var r0 *v3.Operation
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v3.CreateInstanceRequest) (*v3.Operation, error)); ok {
+		return returnFunc(ctx, req)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v3.CreateInstanceRequest) *v3.Operation); ok {
+		r0 = returnFunc(ctx, req)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*v3.Operation)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, v3.CreateInstanceRequest) error); ok {
+		r1 = returnFunc(ctx, req)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// ExoscaleClient_CreateInstance_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateInstance'
+type ExoscaleClient_CreateInstance_Call struct {
+	*mock.Call
+}
+
+// CreateInstance is a helper method to define mock.On call
+//   - ctx context.Context
+//   - req v3.CreateInstanceRequest
+func (_e *ExoscaleClient_Expecter) CreateInstance(ctx any, req any) *ExoscaleClient_CreateInstance_Call {
+	return &ExoscaleClient_CreateInstance_Call{Call: _e.mock.On("CreateInstance", ctx, req)}
+}
+
+func (_c *ExoscaleClient_CreateInstance_Call) Run(run func(ctx context.Context, req v3.CreateInstanceRequest)) *ExoscaleClient_CreateInstance_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 v3.CreateInstanceRequest
+		if args[1] != nil {
+			arg1 = args[1].(v3.CreateInstanceRequest)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *ExoscaleClient_CreateInstance_Call) Return(operation *v3.Operation, err error) *ExoscaleClient_CreateInstance_Call {
+	_c.Call.Return(operation, err)
+	return _c
+}
+
+func (_c *ExoscaleClient_CreateInstance_Call) RunAndReturn(run func(ctx context.Context, req v3.CreateInstanceRequest) (*v3.Operation, error)) *ExoscaleClient_CreateInstance_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -312,6 +528,74 @@ func (_c *ExoscaleClient_DeleteElasticIP_Call) Return(operation *v3.Operation, e
 }
 
 func (_c *ExoscaleClient_DeleteElasticIP_Call) RunAndReturn(run func(ctx context.Context, id v3.UUID) (*v3.Operation, error)) *ExoscaleClient_DeleteElasticIP_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// DeleteInstance provides a mock function for the type ExoscaleClient
+func (_mock *ExoscaleClient) DeleteInstance(ctx context.Context, id v3.UUID) (*v3.Operation, error) {
+	ret := _mock.Called(ctx, id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteInstance")
+	}
+
+	var r0 *v3.Operation
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v3.UUID) (*v3.Operation, error)); ok {
+		return returnFunc(ctx, id)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v3.UUID) *v3.Operation); ok {
+		r0 = returnFunc(ctx, id)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*v3.Operation)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, v3.UUID) error); ok {
+		r1 = returnFunc(ctx, id)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// ExoscaleClient_DeleteInstance_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteInstance'
+type ExoscaleClient_DeleteInstance_Call struct {
+	*mock.Call
+}
+
+// DeleteInstance is a helper method to define mock.On call
+//   - ctx context.Context
+//   - id v3.UUID
+func (_e *ExoscaleClient_Expecter) DeleteInstance(ctx any, id any) *ExoscaleClient_DeleteInstance_Call {
+	return &ExoscaleClient_DeleteInstance_Call{Call: _e.mock.On("DeleteInstance", ctx, id)}
+}
+
+func (_c *ExoscaleClient_DeleteInstance_Call) Run(run func(ctx context.Context, id v3.UUID)) *ExoscaleClient_DeleteInstance_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 v3.UUID
+		if args[1] != nil {
+			arg1 = args[1].(v3.UUID)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *ExoscaleClient_DeleteInstance_Call) Return(operation *v3.Operation, err error) *ExoscaleClient_DeleteInstance_Call {
+	_c.Call.Return(operation, err)
+	return _c
+}
+
+func (_c *ExoscaleClient_DeleteInstance_Call) RunAndReturn(run func(ctx context.Context, id v3.UUID) (*v3.Operation, error)) *ExoscaleClient_DeleteInstance_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -458,6 +742,80 @@ func (_c *ExoscaleClient_DeleteSecurityGroup_Call) RunAndReturn(run func(ctx con
 	return _c
 }
 
+// DetachInstanceFromSecurityGroup provides a mock function for the type ExoscaleClient
+func (_mock *ExoscaleClient) DetachInstanceFromSecurityGroup(ctx context.Context, id v3.UUID, req v3.DetachInstanceFromSecurityGroupRequest) (*v3.Operation, error) {
+	ret := _mock.Called(ctx, id, req)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DetachInstanceFromSecurityGroup")
+	}
+
+	var r0 *v3.Operation
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v3.UUID, v3.DetachInstanceFromSecurityGroupRequest) (*v3.Operation, error)); ok {
+		return returnFunc(ctx, id, req)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v3.UUID, v3.DetachInstanceFromSecurityGroupRequest) *v3.Operation); ok {
+		r0 = returnFunc(ctx, id, req)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*v3.Operation)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, v3.UUID, v3.DetachInstanceFromSecurityGroupRequest) error); ok {
+		r1 = returnFunc(ctx, id, req)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// ExoscaleClient_DetachInstanceFromSecurityGroup_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DetachInstanceFromSecurityGroup'
+type ExoscaleClient_DetachInstanceFromSecurityGroup_Call struct {
+	*mock.Call
+}
+
+// DetachInstanceFromSecurityGroup is a helper method to define mock.On call
+//   - ctx context.Context
+//   - id v3.UUID
+//   - req v3.DetachInstanceFromSecurityGroupRequest
+func (_e *ExoscaleClient_Expecter) DetachInstanceFromSecurityGroup(ctx any, id any, req any) *ExoscaleClient_DetachInstanceFromSecurityGroup_Call {
+	return &ExoscaleClient_DetachInstanceFromSecurityGroup_Call{Call: _e.mock.On("DetachInstanceFromSecurityGroup", ctx, id, req)}
+}
+
+func (_c *ExoscaleClient_DetachInstanceFromSecurityGroup_Call) Run(run func(ctx context.Context, id v3.UUID, req v3.DetachInstanceFromSecurityGroupRequest)) *ExoscaleClient_DetachInstanceFromSecurityGroup_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 v3.UUID
+		if args[1] != nil {
+			arg1 = args[1].(v3.UUID)
+		}
+		var arg2 v3.DetachInstanceFromSecurityGroupRequest
+		if args[2] != nil {
+			arg2 = args[2].(v3.DetachInstanceFromSecurityGroupRequest)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *ExoscaleClient_DetachInstanceFromSecurityGroup_Call) Return(operation *v3.Operation, err error) *ExoscaleClient_DetachInstanceFromSecurityGroup_Call {
+	_c.Call.Return(operation, err)
+	return _c
+}
+
+func (_c *ExoscaleClient_DetachInstanceFromSecurityGroup_Call) RunAndReturn(run func(ctx context.Context, id v3.UUID, req v3.DetachInstanceFromSecurityGroupRequest) (*v3.Operation, error)) *ExoscaleClient_DetachInstanceFromSecurityGroup_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetElasticIP provides a mock function for the type ExoscaleClient
 func (_mock *ExoscaleClient) GetElasticIP(ctx context.Context, id v3.UUID) (*v3.ElasticIP, error) {
 	ret := _mock.Called(ctx, id)
@@ -522,6 +880,74 @@ func (_c *ExoscaleClient_GetElasticIP_Call) Return(elasticIP *v3.ElasticIP, err 
 }
 
 func (_c *ExoscaleClient_GetElasticIP_Call) RunAndReturn(run func(ctx context.Context, id v3.UUID) (*v3.ElasticIP, error)) *ExoscaleClient_GetElasticIP_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetInstance provides a mock function for the type ExoscaleClient
+func (_mock *ExoscaleClient) GetInstance(ctx context.Context, id v3.UUID) (*v3.Instance, error) {
+	ret := _mock.Called(ctx, id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetInstance")
+	}
+
+	var r0 *v3.Instance
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v3.UUID) (*v3.Instance, error)); ok {
+		return returnFunc(ctx, id)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v3.UUID) *v3.Instance); ok {
+		r0 = returnFunc(ctx, id)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*v3.Instance)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, v3.UUID) error); ok {
+		r1 = returnFunc(ctx, id)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// ExoscaleClient_GetInstance_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetInstance'
+type ExoscaleClient_GetInstance_Call struct {
+	*mock.Call
+}
+
+// GetInstance is a helper method to define mock.On call
+//   - ctx context.Context
+//   - id v3.UUID
+func (_e *ExoscaleClient_Expecter) GetInstance(ctx any, id any) *ExoscaleClient_GetInstance_Call {
+	return &ExoscaleClient_GetInstance_Call{Call: _e.mock.On("GetInstance", ctx, id)}
+}
+
+func (_c *ExoscaleClient_GetInstance_Call) Run(run func(ctx context.Context, id v3.UUID)) *ExoscaleClient_GetInstance_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 v3.UUID
+		if args[1] != nil {
+			arg1 = args[1].(v3.UUID)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *ExoscaleClient_GetInstance_Call) Return(instance *v3.Instance, err error) *ExoscaleClient_GetInstance_Call {
+	_c.Call.Return(instance, err)
+	return _c
+}
+
+func (_c *ExoscaleClient_GetInstance_Call) RunAndReturn(run func(ctx context.Context, id v3.UUID) (*v3.Instance, error)) *ExoscaleClient_GetInstance_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -594,6 +1020,74 @@ func (_c *ExoscaleClient_GetSecurityGroup_Call) RunAndReturn(run func(ctx contex
 	return _c
 }
 
+// GetTemplate provides a mock function for the type ExoscaleClient
+func (_mock *ExoscaleClient) GetTemplate(ctx context.Context, id v3.UUID) (*v3.Template, error) {
+	ret := _mock.Called(ctx, id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetTemplate")
+	}
+
+	var r0 *v3.Template
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v3.UUID) (*v3.Template, error)); ok {
+		return returnFunc(ctx, id)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, v3.UUID) *v3.Template); ok {
+		r0 = returnFunc(ctx, id)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*v3.Template)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, v3.UUID) error); ok {
+		r1 = returnFunc(ctx, id)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// ExoscaleClient_GetTemplate_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetTemplate'
+type ExoscaleClient_GetTemplate_Call struct {
+	*mock.Call
+}
+
+// GetTemplate is a helper method to define mock.On call
+//   - ctx context.Context
+//   - id v3.UUID
+func (_e *ExoscaleClient_Expecter) GetTemplate(ctx any, id any) *ExoscaleClient_GetTemplate_Call {
+	return &ExoscaleClient_GetTemplate_Call{Call: _e.mock.On("GetTemplate", ctx, id)}
+}
+
+func (_c *ExoscaleClient_GetTemplate_Call) Run(run func(ctx context.Context, id v3.UUID)) *ExoscaleClient_GetTemplate_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 v3.UUID
+		if args[1] != nil {
+			arg1 = args[1].(v3.UUID)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *ExoscaleClient_GetTemplate_Call) Return(template *v3.Template, err error) *ExoscaleClient_GetTemplate_Call {
+	_c.Call.Return(template, err)
+	return _c
+}
+
+func (_c *ExoscaleClient_GetTemplate_Call) RunAndReturn(run func(ctx context.Context, id v3.UUID) (*v3.Template, error)) *ExoscaleClient_GetTemplate_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListElasticIPS provides a mock function for the type ExoscaleClient
 func (_mock *ExoscaleClient) ListElasticIPS(ctx context.Context) (*v3.ListElasticIPSResponse, error) {
 	ret := _mock.Called(ctx)
@@ -652,6 +1146,222 @@ func (_c *ExoscaleClient_ListElasticIPS_Call) Return(listElasticIPSResponse *v3.
 }
 
 func (_c *ExoscaleClient_ListElasticIPS_Call) RunAndReturn(run func(ctx context.Context) (*v3.ListElasticIPSResponse, error)) *ExoscaleClient_ListElasticIPS_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListInstanceTypes provides a mock function for the type ExoscaleClient
+func (_mock *ExoscaleClient) ListInstanceTypes(ctx context.Context) (*v3.ListInstanceTypesResponse, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListInstanceTypes")
+	}
+
+	var r0 *v3.ListInstanceTypesResponse
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) (*v3.ListInstanceTypesResponse, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) *v3.ListInstanceTypesResponse); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*v3.ListInstanceTypesResponse)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// ExoscaleClient_ListInstanceTypes_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListInstanceTypes'
+type ExoscaleClient_ListInstanceTypes_Call struct {
+	*mock.Call
+}
+
+// ListInstanceTypes is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *ExoscaleClient_Expecter) ListInstanceTypes(ctx any) *ExoscaleClient_ListInstanceTypes_Call {
+	return &ExoscaleClient_ListInstanceTypes_Call{Call: _e.mock.On("ListInstanceTypes", ctx)}
+}
+
+func (_c *ExoscaleClient_ListInstanceTypes_Call) Run(run func(ctx context.Context)) *ExoscaleClient_ListInstanceTypes_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *ExoscaleClient_ListInstanceTypes_Call) Return(listInstanceTypesResponse *v3.ListInstanceTypesResponse, err error) *ExoscaleClient_ListInstanceTypes_Call {
+	_c.Call.Return(listInstanceTypesResponse, err)
+	return _c
+}
+
+func (_c *ExoscaleClient_ListInstanceTypes_Call) RunAndReturn(run func(ctx context.Context) (*v3.ListInstanceTypesResponse, error)) *ExoscaleClient_ListInstanceTypes_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListInstances provides a mock function for the type ExoscaleClient
+func (_mock *ExoscaleClient) ListInstances(ctx context.Context, opts ...v3.ListInstancesOpt) (*v3.ListInstancesResponse, error) {
+	var tmpRet mock.Arguments
+	if len(opts) > 0 {
+		tmpRet = _mock.Called(ctx, opts)
+	} else {
+		tmpRet = _mock.Called(ctx)
+	}
+	ret := tmpRet
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListInstances")
+	}
+
+	var r0 *v3.ListInstancesResponse
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, ...v3.ListInstancesOpt) (*v3.ListInstancesResponse, error)); ok {
+		return returnFunc(ctx, opts...)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, ...v3.ListInstancesOpt) *v3.ListInstancesResponse); ok {
+		r0 = returnFunc(ctx, opts...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*v3.ListInstancesResponse)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, ...v3.ListInstancesOpt) error); ok {
+		r1 = returnFunc(ctx, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// ExoscaleClient_ListInstances_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListInstances'
+type ExoscaleClient_ListInstances_Call struct {
+	*mock.Call
+}
+
+// ListInstances is a helper method to define mock.On call
+//   - ctx context.Context
+//   - opts ...v3.ListInstancesOpt
+func (_e *ExoscaleClient_Expecter) ListInstances(ctx any, opts ...any) *ExoscaleClient_ListInstances_Call {
+	return &ExoscaleClient_ListInstances_Call{Call: _e.mock.On("ListInstances",
+		append([]any{ctx}, opts...)...)}
+}
+
+func (_c *ExoscaleClient_ListInstances_Call) Run(run func(ctx context.Context, opts ...v3.ListInstancesOpt)) *ExoscaleClient_ListInstances_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 []v3.ListInstancesOpt
+		var variadicArgs []v3.ListInstancesOpt
+		if len(args) > 1 {
+			variadicArgs = args[1].([]v3.ListInstancesOpt)
+		}
+		arg1 = variadicArgs
+		run(
+			arg0,
+			arg1...,
+		)
+	})
+	return _c
+}
+
+func (_c *ExoscaleClient_ListInstances_Call) Return(listInstancesResponse *v3.ListInstancesResponse, err error) *ExoscaleClient_ListInstances_Call {
+	_c.Call.Return(listInstancesResponse, err)
+	return _c
+}
+
+func (_c *ExoscaleClient_ListInstances_Call) RunAndReturn(run func(ctx context.Context, opts ...v3.ListInstancesOpt) (*v3.ListInstancesResponse, error)) *ExoscaleClient_ListInstances_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListTemplates provides a mock function for the type ExoscaleClient
+func (_mock *ExoscaleClient) ListTemplates(ctx context.Context, opts ...v3.ListTemplatesOpt) (*v3.ListTemplatesResponse, error) {
+	var tmpRet mock.Arguments
+	if len(opts) > 0 {
+		tmpRet = _mock.Called(ctx, opts)
+	} else {
+		tmpRet = _mock.Called(ctx)
+	}
+	ret := tmpRet
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListTemplates")
+	}
+
+	var r0 *v3.ListTemplatesResponse
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, ...v3.ListTemplatesOpt) (*v3.ListTemplatesResponse, error)); ok {
+		return returnFunc(ctx, opts...)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, ...v3.ListTemplatesOpt) *v3.ListTemplatesResponse); ok {
+		r0 = returnFunc(ctx, opts...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*v3.ListTemplatesResponse)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, ...v3.ListTemplatesOpt) error); ok {
+		r1 = returnFunc(ctx, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// ExoscaleClient_ListTemplates_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListTemplates'
+type ExoscaleClient_ListTemplates_Call struct {
+	*mock.Call
+}
+
+// ListTemplates is a helper method to define mock.On call
+//   - ctx context.Context
+//   - opts ...v3.ListTemplatesOpt
+func (_e *ExoscaleClient_Expecter) ListTemplates(ctx any, opts ...any) *ExoscaleClient_ListTemplates_Call {
+	return &ExoscaleClient_ListTemplates_Call{Call: _e.mock.On("ListTemplates",
+		append([]any{ctx}, opts...)...)}
+}
+
+func (_c *ExoscaleClient_ListTemplates_Call) Run(run func(ctx context.Context, opts ...v3.ListTemplatesOpt)) *ExoscaleClient_ListTemplates_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 []v3.ListTemplatesOpt
+		var variadicArgs []v3.ListTemplatesOpt
+		if len(args) > 1 {
+			variadicArgs = args[1].([]v3.ListTemplatesOpt)
+		}
+		arg1 = variadicArgs
+		run(
+			arg0,
+			arg1...,
+		)
+	})
+	return _c
+}
+
+func (_c *ExoscaleClient_ListTemplates_Call) Return(listTemplatesResponse *v3.ListTemplatesResponse, err error) *ExoscaleClient_ListTemplates_Call {
+	_c.Call.Return(listTemplatesResponse, err)
+	return _c
+}
+
+func (_c *ExoscaleClient_ListTemplates_Call) RunAndReturn(run func(ctx context.Context, opts ...v3.ListTemplatesOpt) (*v3.ListTemplatesResponse, error)) *ExoscaleClient_ListTemplates_Call {
 	_c.Call.Return(run)
 	return _c
 }

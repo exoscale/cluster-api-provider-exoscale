@@ -53,6 +53,7 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 		wantFinalizer    bool
 	}{
 		{name: "recovers instance by Machine UID", ownerReference: true, ownerMachine: true, wantService: true},
+		{name: "missing owner without instance removes finalizer", ownerReference: true},
 		{name: "status instance without owner keeps finalizer", statusInstanceID: instanceID.String(), deleteErr: assert.AnError, wantService: true, wantErr: assert.AnError, wantFinalizer: true},
 		{name: "without either identifier removes finalizer"},
 		{name: "instance not found removes finalizer", ownerReference: true, ownerMachine: true, statusInstanceID: instanceID.String(), deleteErr: domain.ErrInstanceNotFound, wantService: true},

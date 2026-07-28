@@ -126,17 +126,20 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.DeletingReason, "Deleting instance")
 		// Deletion returns before the normal owner lookup below, so fetch the Machine here for its ownership UID.
 		machine, err = util.GetOwnerMachine(ctx, r.Client, exoMachine.ObjectMeta)
-		if err != nil {
+		// The owner Machine may already be gone when garbage collection deletes its infrastructure object.
+		if err := client.IgnoreNotFound(err); err != nil {
 			return ctrl.Result{}, err
 		}
 		machineUID, instanceID, err := getDeletionInstanceIDs(machine, exoMachine)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
+		// Without either identifier, there is no cloud resource the controller can safely identify for deletion.
 		if machineUID == "" && instanceID == nil {
 			controllerutil.RemoveFinalizer(exoMachine, machineFinalizer)
 			return ctrl.Result{}, nil
 		}
+		// Ownership-safe cleanup of an identifiable instance requires its cluster context and credentials.
 		if clusterErr != nil {
 			return ctrl.Result{}, clusterErr
 		}

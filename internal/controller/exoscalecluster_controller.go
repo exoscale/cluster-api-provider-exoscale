@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	v1 "k8s.io/api/core/v1"
@@ -97,6 +98,7 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		}
 		if err := patchHelper.Patch(ctx, &exoCluster); err != nil {
 			log.Error(err, "unable to patch cluster", "cluster name", exoCluster.Name, "cluster id", exoCluster.Status.ID)
+			reterr = errors.Join(reterr, fmt.Errorf("patch error: %w", err))
 		}
 	}()
 

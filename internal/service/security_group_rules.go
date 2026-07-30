@@ -21,78 +21,76 @@ const (
 )
 
 // defaultControlPlaneRules returns the default rules required to operate a Kubernetes control plane.
-// cpSGID is needed for rules whose source is the control plane security group itself.
 // apiServerPort is taken from spec.controlPlaneEndpoint.port so the API server rule stays in sync.
-func defaultControlPlaneRules(cpSGID uuid.UUID, apiServerPort int32) []domain.SecurityGroupRule {
-	return []domain.SecurityGroupRule{
+func defaultControlPlaneRules(apiServerPort int32) []infrav1alpha1.SecurityGroupRule {
+	return []infrav1alpha1.SecurityGroupRule{
 		{
 			Description:   "kubernetes API server",
-			FlowDirection: domain.SecurityGroupRuleFlowDirectionIngress,
-			Protocol:      domain.SecurityGroupRuleProtocolTCP,
+			FlowDirection: egoscale.SecurityGroupRuleFlowDirectionIngress,
+			Protocol:      egoscale.SecurityGroupRuleProtocolTCP,
 			StartPort:     int64(apiServerPort),
 			EndPort:       int64(apiServerPort),
 			Network:       new("0.0.0.0/0"),
 		},
 		{
 			Description:   "etcd client and peer communication",
-			FlowDirection: domain.SecurityGroupRuleFlowDirectionIngress,
-			Protocol:      domain.SecurityGroupRuleProtocolTCP,
+			FlowDirection: egoscale.SecurityGroupRuleFlowDirectionIngress,
+			Protocol:      egoscale.SecurityGroupRuleProtocolTCP,
 			StartPort:     2379,
 			EndPort:       2380,
-			SecurityGroup: &cpSGID,
+			SecurityGroup: new(string(securityGroupRefControlPlane)),
 		},
 		{
 			Description:   "kubelet API",
-			FlowDirection: domain.SecurityGroupRuleFlowDirectionIngress,
-			Protocol:      domain.SecurityGroupRuleProtocolTCP,
+			FlowDirection: egoscale.SecurityGroupRuleFlowDirectionIngress,
+			Protocol:      egoscale.SecurityGroupRuleProtocolTCP,
 			StartPort:     10250,
 			EndPort:       10250,
-			SecurityGroup: &cpSGID,
+			SecurityGroup: new(string(securityGroupRefControlPlane)),
 		},
 		{
 			Description:   "kube-controller-manager",
-			FlowDirection: domain.SecurityGroupRuleFlowDirectionIngress,
-			Protocol:      domain.SecurityGroupRuleProtocolTCP,
+			FlowDirection: egoscale.SecurityGroupRuleFlowDirectionIngress,
+			Protocol:      egoscale.SecurityGroupRuleProtocolTCP,
 			StartPort:     10257,
 			EndPort:       10257,
-			SecurityGroup: &cpSGID,
+			SecurityGroup: new(string(securityGroupRefControlPlane)),
 		},
 		{
 			Description:   "kube-scheduler",
-			FlowDirection: domain.SecurityGroupRuleFlowDirectionIngress,
-			Protocol:      domain.SecurityGroupRuleProtocolTCP,
+			FlowDirection: egoscale.SecurityGroupRuleFlowDirectionIngress,
+			Protocol:      egoscale.SecurityGroupRuleProtocolTCP,
 			StartPort:     10259,
 			EndPort:       10259,
-			SecurityGroup: &cpSGID,
+			SecurityGroup: new(string(securityGroupRefControlPlane)),
 		},
 	}
 }
 
-// defaultNodeRules returns the hardcoded rules required to operate Kubernetes worker nodes.
-// cpSGID and nodeSGID are needed to express inter-SG traffic sources.
-func defaultNodeRules(cpSGID, nodeSGID uuid.UUID) []domain.SecurityGroupRule {
-	return []domain.SecurityGroupRule{
+// defaultNodeRules returns the default rules required to operate Kubernetes worker nodes.
+func defaultNodeRules() []infrav1alpha1.SecurityGroupRule {
+	return []infrav1alpha1.SecurityGroupRule{
 		{
 			Description:   "Kubelet API from control plane",
-			FlowDirection: domain.SecurityGroupRuleFlowDirectionIngress,
-			Protocol:      domain.SecurityGroupRuleProtocolTCP,
+			FlowDirection: egoscale.SecurityGroupRuleFlowDirectionIngress,
+			Protocol:      egoscale.SecurityGroupRuleProtocolTCP,
 			StartPort:     10250,
 			EndPort:       10250,
-			SecurityGroup: &cpSGID,
+			SecurityGroup: new(string(securityGroupRefControlPlane)),
 		},
 		{
 			Description:   "Kubelet API node-to-node",
-			FlowDirection: domain.SecurityGroupRuleFlowDirectionIngress,
-			Protocol:      domain.SecurityGroupRuleProtocolTCP,
+			FlowDirection: egoscale.SecurityGroupRuleFlowDirectionIngress,
+			Protocol:      egoscale.SecurityGroupRuleProtocolTCP,
 			StartPort:     10250,
 			EndPort:       10250,
-			SecurityGroup: &nodeSGID,
+			SecurityGroup: new(string(securityGroupRefWorker)),
 		},
 		// TODO: check if we want to allow these port by default
 		// {
 		// 	Description:   "NodePort services",
-		// 	FlowDirection: domain.SecurityGroupRuleFlowDirectionIngress,
-		// 	Protocol:      domain.SecurityGroupRuleProtocolTCP,
+		// 	FlowDirection: egoscale.SecurityGroupRuleFlowDirectionIngress,
+		// 	Protocol:      egoscale.SecurityGroupRuleProtocolTCP,
 		// 	StartPort:     30000,
 		// 	EndPort:       32767,
 		// 	Network:       &cidrAll,
@@ -100,31 +98,24 @@ func defaultNodeRules(cpSGID, nodeSGID uuid.UUID) []domain.SecurityGroupRule {
 	}
 }
 
-// desiredControlPlaneRules merges the default control plane rules with user-defined rules from the spec.
-// cpSGID/nodeSGID resolve the "control-plane"/"worker" security group references allowed in user rules.
-// apiServerPort is taken from spec.controlPlaneEndpoint.port.
-func desiredControlPlaneRules(cpSGID, nodeSGID uuid.UUID, apiServerPort int32, userRules []infrav1alpha1.SecurityGroupRule) ([]domain.SecurityGroupRule, error) {
-	return mergeWithUserRules(defaultControlPlaneRules(cpSGID, apiServerPort), cpSGID, nodeSGID, userRules)
-}
+// resolveRules concatenates default and user-defined spec rules and resolves them all, in one pass,
+// to their domain representation via specRuleToDomain. cpSGID/nodeSGID resolve the
+// "control-plane"/"worker" special values that either list may use.
+func resolveRules(cpSGID, nodeSGID uuid.UUID, defaults, userRules []infrav1alpha1.SecurityGroupRule) ([]domain.SecurityGroupRule, error) {
+	all := make([]infrav1alpha1.SecurityGroupRule, 0, len(defaults)+len(userRules))
+	all = append(all, defaults...)
+	all = append(all, userRules...)
 
-// desiredNodeRules merges the default node rules with user-defined rules from the spec.
-func desiredNodeRules(cpSGID, nodeSGID uuid.UUID, userRules []infrav1alpha1.SecurityGroupRule) ([]domain.SecurityGroupRule, error) {
-	return mergeWithUserRules(defaultNodeRules(cpSGID, nodeSGID), cpSGID, nodeSGID, userRules)
-}
-
-func mergeWithUserRules(defaults []domain.SecurityGroupRule, cpSGID, nodeSGID uuid.UUID, userRules []infrav1alpha1.SecurityGroupRule) ([]domain.SecurityGroupRule, error) {
-	rules := make([]domain.SecurityGroupRule, len(defaults), len(defaults)+len(userRules))
-	copy(rules, defaults)
-
-	for _, r := range userRules {
+	resolved := make([]domain.SecurityGroupRule, 0, len(all))
+	for _, r := range all {
 		domainRule, err := specRuleToDomain(r, cpSGID, nodeSGID)
 		if err != nil {
 			return nil, err
 		}
-		rules = append(rules, domainRule)
+		resolved = append(resolved, domainRule)
 	}
 
-	return rules, nil
+	return resolved, nil
 }
 
 // specRuleToDomain converts an API spec rule to the domain representation.

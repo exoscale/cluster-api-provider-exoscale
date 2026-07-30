@@ -96,7 +96,8 @@ func Test_defaultNodeRules(t *testing.T) {
 func Test_specRuleToDomain(t *testing.T) {
 	t.Parallel()
 
-	itselfID := uuid.New()
+	cpSGID := uuid.New()
+	nodeSGID := uuid.New()
 	otherSGID := uuid.New()
 	cidr := "10.0.0.0/8"
 
@@ -126,20 +127,37 @@ func Test_specRuleToDomain(t *testing.T) {
 			},
 		},
 		{
-			name: "itself security group reference",
+			name: "control-plane security group reference",
 			rule: infrav1alpha1.SecurityGroupRule{
 				FlowDirection: egoscale.SecurityGroupRuleFlowDirection("ingress"),
 				Protocol:      egoscale.SecurityGroupRuleProtocol("tcp"),
 				StartPort:     10250,
 				EndPort:       10250,
-				SecurityGroup: new("itself"),
+				SecurityGroup: new("control-plane"),
 			},
 			want: domain.SecurityGroupRule{
 				FlowDirection: domain.SecurityGroupRuleFlowDirectionIngress,
 				Protocol:      domain.SecurityGroupRuleProtocolTCP,
 				StartPort:     10250,
 				EndPort:       10250,
-				SecurityGroup: &itselfID,
+				SecurityGroup: &cpSGID,
+			},
+		},
+		{
+			name: "worker security group reference",
+			rule: infrav1alpha1.SecurityGroupRule{
+				FlowDirection: egoscale.SecurityGroupRuleFlowDirection("ingress"),
+				Protocol:      egoscale.SecurityGroupRuleProtocol("tcp"),
+				StartPort:     10250,
+				EndPort:       10250,
+				SecurityGroup: new("worker"),
+			},
+			want: domain.SecurityGroupRule{
+				FlowDirection: domain.SecurityGroupRuleFlowDirectionIngress,
+				Protocol:      domain.SecurityGroupRuleProtocolTCP,
+				StartPort:     10250,
+				EndPort:       10250,
+				SecurityGroup: &nodeSGID,
 			},
 		},
 		{
@@ -168,7 +186,7 @@ func Test_specRuleToDomain(t *testing.T) {
 
 	for _, ut := range tests {
 		t.Run(ut.name, func(t *testing.T) {
-			got, err := specRuleToDomain(ut.rule, itselfID)
+			got, err := specRuleToDomain(ut.rule, cpSGID, nodeSGID)
 
 			if ut.err != "" {
 				assert.ErrorContains(t, err, ut.err)
@@ -235,7 +253,7 @@ func Test_mergeWithUserRules(t *testing.T) {
 
 	for _, ut := range tests {
 		t.Run(ut.name, func(t *testing.T) {
-			got, err := mergeWithUserRules(ut.defaults, uuid.New(), ut.userRules)
+			got, err := mergeWithUserRules(ut.defaults, uuid.New(), uuid.New(), ut.userRules)
 
 			if ut.err != "" {
 				assert.ErrorContains(t, err, ut.err)

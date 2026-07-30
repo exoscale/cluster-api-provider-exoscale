@@ -9,6 +9,17 @@ import (
 	"github.com/google/uuid"
 )
 
+// securityGroupRef is used to reference a security group in a rule. A rule can
+// reference the uuid of a security group, a network, or this type. This type
+// exists because the user cannot know the uuid of the to-be-created security
+// group.
+type securityGroupRef string
+
+const (
+	securityGroupRefControlPlane securityGroupRef = "control-plane"
+	securityGroupRefWorker       securityGroupRef = "worker"
+)
+
 // defaultControlPlaneRules returns the default rules required to operate a Kubernetes control plane.
 // cpSGID is needed for rules whose source is the control plane security group itself.
 // apiServerPort is taken from spec.controlPlaneEndpoint.port so the API server rule stays in sync.
@@ -90,23 +101,23 @@ func defaultNodeRules(cpSGID, nodeSGID uuid.UUID) []domain.SecurityGroupRule {
 }
 
 // desiredControlPlaneRules merges the default control plane rules with user-defined rules from the spec.
-// itselfID resolves the "itself" self-reference allowed in user rules.
+// cpSGID/nodeSGID resolve the "control-plane"/"worker" security group references allowed in user rules.
 // apiServerPort is taken from spec.controlPlaneEndpoint.port.
-func desiredControlPlaneRules(cpSGID uuid.UUID, apiServerPort int32, userRules []infrav1alpha1.SecurityGroupRule) ([]domain.SecurityGroupRule, error) {
-	return mergeWithUserRules(defaultControlPlaneRules(cpSGID, apiServerPort), cpSGID, userRules)
+func desiredControlPlaneRules(cpSGID, nodeSGID uuid.UUID, apiServerPort int32, userRules []infrav1alpha1.SecurityGroupRule) ([]domain.SecurityGroupRule, error) {
+	return mergeWithUserRules(defaultControlPlaneRules(cpSGID, apiServerPort), cpSGID, nodeSGID, userRules)
 }
 
 // desiredNodeRules merges the default node rules with user-defined rules from the spec.
 func desiredNodeRules(cpSGID, nodeSGID uuid.UUID, userRules []infrav1alpha1.SecurityGroupRule) ([]domain.SecurityGroupRule, error) {
-	return mergeWithUserRules(defaultNodeRules(cpSGID, nodeSGID), nodeSGID, userRules)
+	return mergeWithUserRules(defaultNodeRules(cpSGID, nodeSGID), cpSGID, nodeSGID, userRules)
 }
 
-func mergeWithUserRules(defaults []domain.SecurityGroupRule, itselfID uuid.UUID, userRules []infrav1alpha1.SecurityGroupRule) ([]domain.SecurityGroupRule, error) {
+func mergeWithUserRules(defaults []domain.SecurityGroupRule, cpSGID, nodeSGID uuid.UUID, userRules []infrav1alpha1.SecurityGroupRule) ([]domain.SecurityGroupRule, error) {
 	rules := make([]domain.SecurityGroupRule, len(defaults), len(defaults)+len(userRules))
 	copy(rules, defaults)
 
 	for _, r := range userRules {
-		domainRule, err := specRuleToDomain(r, itselfID)
+		domainRule, err := specRuleToDomain(r, cpSGID, nodeSGID)
 		if err != nil {
 			return nil, err
 		}
@@ -117,8 +128,9 @@ func mergeWithUserRules(defaults []domain.SecurityGroupRule, itselfID uuid.UUID,
 }
 
 // specRuleToDomain converts an API spec rule to the domain representation.
-// itselfID resolves the "itself" special value, which refers to the owning security group.
-func specRuleToDomain(rule infrav1alpha1.SecurityGroupRule, itselfID uuid.UUID) (domain.SecurityGroupRule, error) {
+// cpSGID/nodeSGID resolve the "control-plane"/"worker" special values, which refer to
+// this cluster's managed control-plane/node security group.
+func specRuleToDomain(rule infrav1alpha1.SecurityGroupRule, cpSGID, nodeSGID uuid.UUID) (domain.SecurityGroupRule, error) {
 	domainRule := domain.SecurityGroupRule{
 		FlowDirection: domain.SecurityGroupRuleFlowDirection(rule.FlowDirection),
 		Protocol:      domain.SecurityGroupRuleProtocol(rule.Protocol),
@@ -129,9 +141,12 @@ func specRuleToDomain(rule infrav1alpha1.SecurityGroupRule, itselfID uuid.UUID) 
 	}
 
 	if rule.SecurityGroup != nil {
-		if *rule.SecurityGroup == "itself" {
-			domainRule.SecurityGroup = &itselfID
-		} else {
+		switch securityGroupRef(*rule.SecurityGroup) {
+		case securityGroupRefControlPlane:
+			domainRule.SecurityGroup = &cpSGID
+		case securityGroupRefWorker:
+			domainRule.SecurityGroup = &nodeSGID
+		default:
 			id, err := uuid.Parse(*rule.SecurityGroup)
 			if err != nil {
 				return domain.SecurityGroupRule{}, fmt.Errorf("invalid security group reference %q: %w", *rule.SecurityGroup, err)

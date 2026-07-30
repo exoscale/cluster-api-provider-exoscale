@@ -37,7 +37,7 @@ func Test_clusterService_ReconcileCluster(t *testing.T) {
 		Name: fmt.Sprintf("capi - %s - node", clusterID.String()),
 	}
 
-	desiredCPRules, _ := desiredControlPlaneRules(cpSG.ID, port, nil)
+	desiredCPRules, _ := desiredControlPlaneRules(cpSG.ID, nodeSG.ID, port, nil)
 	desiredNodeRulesList, _ := desiredNodeRules(cpSG.ID, nodeSG.ID, nil)
 
 	cpRules := []domain.SecurityGroupRule{

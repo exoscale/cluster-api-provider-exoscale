@@ -114,7 +114,7 @@ func (s *clusterService) ReconcileCluster(ctx context.Context, cluster infrav1al
 	/*
 	** Security Group Rules
 	 */
-	desiredCPRules, err := desiredControlPlaneRules(securityGroupControlPlane.ID, cluster.Spec.ControlPlaneEndpoint.Port, cluster.Spec.SecurityGroupControlPlane.Rules)
+	desiredCPRules, err := desiredControlPlaneRules(securityGroupControlPlane.ID, securityGroupNode.ID, cluster.Spec.ControlPlaneEndpoint.Port, cluster.Spec.SecurityGroupControlPlane.Rules)
 	if err != nil {
 		return cluster, fmt.Errorf("unable to build control plane security group rules: %w", err)
 	}

@@ -513,7 +513,9 @@ func TestExoscaleClusterReconciler_Reconcile_error(t *testing.T) {
 			clusterService: func(m *mocks.ClusterService) {
 				m.EXPECT().
 					ReconcileCluster(mock.Anything, mock.Anything).
-					Return(infrav1alpha1.ExoscaleCluster{}, assert.AnError)
+					RunAndReturn(func(_ context.Context, cluster infrav1alpha1.ExoscaleCluster) (infrav1alpha1.ExoscaleCluster, error) {
+						return cluster, assert.AnError
+					})
 			},
 			err:    assert.AnError,
 			output: reconcile.Result{},
@@ -575,6 +577,38 @@ func TestExoscaleClusterReconciler_Reconcile_error(t *testing.T) {
 			},
 			output: reconcile.Result{},
 			err:    assert.AnError,
+		},
+		{
+			name: "deferred patch returns error",
+			k8sClient: func(b *fake.ClientBuilder) {
+				// A paused cluster returns no reconciliation error, but setting its ID and Paused
+				// condition still makes the deferred patch run.
+				b.WithObjects(
+					&clusterv1.Cluster{
+						ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: ns},
+					},
+					&infrav1alpha1.ExoscaleCluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:        clusterName,
+							Namespace:   ns,
+							Annotations: map[string]string{clusterv1.PausedAnnotation: ""},
+							OwnerReferences: []metav1.OwnerReference{{
+								APIVersion: clusterv1.GroupVersion.String(),
+								Kind:       "Cluster",
+								Name:       clusterName,
+							}},
+						},
+					},
+				).WithInterceptorFuncs(interceptor.Funcs{
+					// Force the deferred status patch to fail so the test verifies that
+					// Reconcile returns it.
+					SubResourcePatch: func(context.Context, client.Client, string, client.Object, client.Patch, ...client.SubResourcePatchOption) error {
+						return assert.AnError
+					},
+				})
+			},
+			err:    assert.AnError,
+			output: reconcile.Result{},
 		},
 	}
 

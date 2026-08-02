@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -26,14 +27,18 @@ import (
 
 // ExoscaleMachineTemplateSpec defines the desired state of ExoscaleMachineTemplate
 type ExoscaleMachineTemplateSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	// The following markers will use OpenAPI v3 schema to validate the value
-	// More info: https://book.kubebuilder.io/reference/markers/crd-validation.html
+	// template contains the metadata and spec copied into generated ExoscaleMachines.
+	// +required
+	Template ExoscaleMachineTemplateResource `json:"template"`
+}
 
-	// foo is an example field of ExoscaleMachineTemplate. Edit exoscalemachinetemplate_types.go to remove/update
+// ExoscaleMachineTemplateResource contains the metadata and spec copied into an ExoscaleMachine.
+type ExoscaleMachineTemplateResource struct {
 	// +optional
-	Foo *string `json:"foo,omitempty"`
+	ObjectMeta clusterv1.ObjectMeta `json:"metadata,omitempty,omitzero"`
+
+	// +required
+	Spec ExoscaleMachineSpec `json:"spec"`
 }
 
 // ExoscaleMachineTemplateStatus defines the observed state of ExoscaleMachineTemplate.

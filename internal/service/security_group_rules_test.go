@@ -15,52 +15,51 @@ var rootSubnet string = "0.0.0.0/0"
 func Test_defaultControlPlaneRules(t *testing.T) {
 	t.Parallel()
 
-	cpSGID := uuid.New()
 	apiServerPort := int32(6443)
 
-	rules := defaultControlPlaneRules(cpSGID, apiServerPort)
+	rules := defaultControlPlaneRules(apiServerPort)
 
 	assert.Len(t, rules, 5)
-	assert.Equal(t, []domain.SecurityGroupRule{
+	assert.Equal(t, []infrav1alpha1.SecurityGroupRule{
 		{
 			Description:   "kubernetes API server",
-			FlowDirection: domain.SecurityGroupRuleFlowDirectionIngress,
-			Protocol:      domain.SecurityGroupRuleProtocolTCP,
+			FlowDirection: egoscale.SecurityGroupRuleFlowDirectionIngress,
+			Protocol:      egoscale.SecurityGroupRuleProtocolTCP,
 			StartPort:     int64(apiServerPort),
 			EndPort:       int64(apiServerPort),
 			Network:       &rootSubnet,
 		},
 		{
 			Description:   "etcd client and peer communication",
-			FlowDirection: domain.SecurityGroupRuleFlowDirectionIngress,
-			Protocol:      domain.SecurityGroupRuleProtocolTCP,
+			FlowDirection: egoscale.SecurityGroupRuleFlowDirectionIngress,
+			Protocol:      egoscale.SecurityGroupRuleProtocolTCP,
 			StartPort:     2379,
 			EndPort:       2380,
-			SecurityGroup: &cpSGID,
+			SecurityGroup: new(string(securityGroupRefControlPlane)),
 		},
 		{
 			Description:   "kubelet API",
-			FlowDirection: domain.SecurityGroupRuleFlowDirectionIngress,
-			Protocol:      domain.SecurityGroupRuleProtocolTCP,
+			FlowDirection: egoscale.SecurityGroupRuleFlowDirectionIngress,
+			Protocol:      egoscale.SecurityGroupRuleProtocolTCP,
 			StartPort:     10250,
 			EndPort:       10250,
-			SecurityGroup: &cpSGID,
+			SecurityGroup: new(string(securityGroupRefControlPlane)),
 		},
 		{
 			Description:   "kube-controller-manager",
-			FlowDirection: domain.SecurityGroupRuleFlowDirectionIngress,
-			Protocol:      domain.SecurityGroupRuleProtocolTCP,
+			FlowDirection: egoscale.SecurityGroupRuleFlowDirectionIngress,
+			Protocol:      egoscale.SecurityGroupRuleProtocolTCP,
 			StartPort:     10257,
 			EndPort:       10257,
-			SecurityGroup: &cpSGID,
+			SecurityGroup: new(string(securityGroupRefControlPlane)),
 		},
 		{
 			Description:   "kube-scheduler",
-			FlowDirection: domain.SecurityGroupRuleFlowDirectionIngress,
-			Protocol:      domain.SecurityGroupRuleProtocolTCP,
+			FlowDirection: egoscale.SecurityGroupRuleFlowDirectionIngress,
+			Protocol:      egoscale.SecurityGroupRuleProtocolTCP,
 			StartPort:     10259,
 			EndPort:       10259,
-			SecurityGroup: &cpSGID,
+			SecurityGroup: new(string(securityGroupRefControlPlane)),
 		},
 	}, rules)
 }
@@ -68,35 +67,31 @@ func Test_defaultControlPlaneRules(t *testing.T) {
 func Test_defaultNodeRules(t *testing.T) {
 	t.Parallel()
 
-	cpSGID := uuid.New()
-	nodeSGID := uuid.New()
-
-	rules := defaultNodeRules(cpSGID, nodeSGID)
-
-	assert.Equal(t, []domain.SecurityGroupRule{
+	assert.Equal(t, []infrav1alpha1.SecurityGroupRule{
 		{
 			Description:   "Kubelet API from control plane",
-			FlowDirection: domain.SecurityGroupRuleFlowDirectionIngress,
-			Protocol:      domain.SecurityGroupRuleProtocolTCP,
+			FlowDirection: egoscale.SecurityGroupRuleFlowDirectionIngress,
+			Protocol:      egoscale.SecurityGroupRuleProtocolTCP,
 			StartPort:     10250,
 			EndPort:       10250,
-			SecurityGroup: &cpSGID,
+			SecurityGroup: new(string(securityGroupRefControlPlane)),
 		},
 		{
 			Description:   "Kubelet API node-to-node",
-			FlowDirection: domain.SecurityGroupRuleFlowDirectionIngress,
-			Protocol:      domain.SecurityGroupRuleProtocolTCP,
+			FlowDirection: egoscale.SecurityGroupRuleFlowDirectionIngress,
+			Protocol:      egoscale.SecurityGroupRuleProtocolTCP,
 			StartPort:     10250,
 			EndPort:       10250,
-			SecurityGroup: &nodeSGID,
+			SecurityGroup: new(string(securityGroupRefWorker)),
 		},
-	}, rules)
+	}, defaultNodeRules())
 }
 
 func Test_specRuleToDomain(t *testing.T) {
 	t.Parallel()
 
-	itselfID := uuid.New()
+	cpSGID := uuid.New()
+	nodeSGID := uuid.New()
 	otherSGID := uuid.New()
 	cidr := "10.0.0.0/8"
 
@@ -126,20 +121,37 @@ func Test_specRuleToDomain(t *testing.T) {
 			},
 		},
 		{
-			name: "itself security group reference",
+			name: "control-plane security group reference",
 			rule: infrav1alpha1.SecurityGroupRule{
 				FlowDirection: egoscale.SecurityGroupRuleFlowDirection("ingress"),
 				Protocol:      egoscale.SecurityGroupRuleProtocol("tcp"),
 				StartPort:     10250,
 				EndPort:       10250,
-				SecurityGroup: new("itself"),
+				SecurityGroup: new("control-plane"),
 			},
 			want: domain.SecurityGroupRule{
 				FlowDirection: domain.SecurityGroupRuleFlowDirectionIngress,
 				Protocol:      domain.SecurityGroupRuleProtocolTCP,
 				StartPort:     10250,
 				EndPort:       10250,
-				SecurityGroup: &itselfID,
+				SecurityGroup: &cpSGID,
+			},
+		},
+		{
+			name: "worker security group reference",
+			rule: infrav1alpha1.SecurityGroupRule{
+				FlowDirection: egoscale.SecurityGroupRuleFlowDirection("ingress"),
+				Protocol:      egoscale.SecurityGroupRuleProtocol("tcp"),
+				StartPort:     10250,
+				EndPort:       10250,
+				SecurityGroup: new("worker"),
+			},
+			want: domain.SecurityGroupRule{
+				FlowDirection: domain.SecurityGroupRuleFlowDirectionIngress,
+				Protocol:      domain.SecurityGroupRuleProtocolTCP,
+				StartPort:     10250,
+				EndPort:       10250,
+				SecurityGroup: &nodeSGID,
 			},
 		},
 		{
@@ -168,7 +180,7 @@ func Test_specRuleToDomain(t *testing.T) {
 
 	for _, ut := range tests {
 		t.Run(ut.name, func(t *testing.T) {
-			got, err := specRuleToDomain(ut.rule, itselfID)
+			got, err := specRuleToDomain(ut.rule, cpSGID, nodeSGID)
 
 			if ut.err != "" {
 				assert.ErrorContains(t, err, ut.err)
@@ -180,10 +192,17 @@ func Test_specRuleToDomain(t *testing.T) {
 	}
 }
 
-func Test_mergeWithUserRules(t *testing.T) {
+func Test_resolveRules(t *testing.T) {
 	t.Parallel()
 
-	defaultRule := domain.SecurityGroupRule{
+	defaultRule := infrav1alpha1.SecurityGroupRule{
+		FlowDirection: egoscale.SecurityGroupRuleFlowDirectionIngress,
+		Protocol:      egoscale.SecurityGroupRuleProtocolTCP,
+		StartPort:     6443,
+		EndPort:       6443,
+		Network:       &rootSubnet,
+	}
+	expectedDefaultRule := domain.SecurityGroupRule{
 		FlowDirection: domain.SecurityGroupRuleFlowDirectionIngress,
 		Protocol:      domain.SecurityGroupRuleProtocolTCP,
 		StartPort:     6443,
@@ -191,8 +210,8 @@ func Test_mergeWithUserRules(t *testing.T) {
 		Network:       &rootSubnet,
 	}
 	userRule := infrav1alpha1.SecurityGroupRule{
-		FlowDirection: egoscale.SecurityGroupRuleFlowDirection("ingress"),
-		Protocol:      egoscale.SecurityGroupRuleProtocol("tcp"),
+		FlowDirection: egoscale.SecurityGroupRuleFlowDirectionIngress,
+		Protocol:      egoscale.SecurityGroupRuleProtocolTCP,
 		StartPort:     8080,
 		EndPort:       8080,
 		Network:       &rootSubnet,
@@ -209,25 +228,25 @@ func Test_mergeWithUserRules(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		defaults  []domain.SecurityGroupRule
+		defaults  []infrav1alpha1.SecurityGroupRule
 		userRules []infrav1alpha1.SecurityGroupRule
 		want      []domain.SecurityGroupRule
 		err       string
 	}{
 		{
 			name:     "no user rules",
-			defaults: []domain.SecurityGroupRule{defaultRule},
-			want:     []domain.SecurityGroupRule{defaultRule},
+			defaults: []infrav1alpha1.SecurityGroupRule{defaultRule},
+			want:     []domain.SecurityGroupRule{expectedDefaultRule},
 		},
 		{
 			name:      "user rule appended",
-			defaults:  []domain.SecurityGroupRule{defaultRule},
+			defaults:  []infrav1alpha1.SecurityGroupRule{defaultRule},
 			userRules: []infrav1alpha1.SecurityGroupRule{userRule},
-			want:      []domain.SecurityGroupRule{defaultRule, expectedUserRule},
+			want:      []domain.SecurityGroupRule{expectedDefaultRule, expectedUserRule},
 		},
 		{
 			name:      "invalid user rule returns error",
-			defaults:  []domain.SecurityGroupRule{defaultRule},
+			defaults:  []infrav1alpha1.SecurityGroupRule{defaultRule},
 			userRules: []infrav1alpha1.SecurityGroupRule{{SecurityGroup: new("not-a-uuid")}},
 			err:       "invalid UUID",
 		},
@@ -235,7 +254,7 @@ func Test_mergeWithUserRules(t *testing.T) {
 
 	for _, ut := range tests {
 		t.Run(ut.name, func(t *testing.T) {
-			got, err := mergeWithUserRules(ut.defaults, uuid.New(), ut.userRules)
+			got, err := resolveRules(uuid.New(), uuid.New(), ut.defaults, ut.userRules)
 
 			if ut.err != "" {
 				assert.ErrorContains(t, err, ut.err)

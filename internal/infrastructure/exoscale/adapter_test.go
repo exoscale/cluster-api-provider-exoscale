@@ -3,11 +3,15 @@ package exoscale
 import (
 	"context"
 	"encoding/base64"
+	"net"
+	"net/url"
 	"testing"
+	"time"
 
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/domain"
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/mocks"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 
 	egoscale "github.com/exoscale/egoscale/v3"
 	"github.com/google/uuid"
@@ -943,6 +947,617 @@ func Test_cloud_ListSecurityGroupRules(t *testing.T) {
 			output, err := client.ListSecurityGroupRules(ctx, sgID)
 
 			assert.ErrorIs(t, err, ut.err)
+			assert.Equal(t, ut.output, output)
+		})
+	}
+}
+
+func Test_cloud_ListInstances(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	label := "cluster-api-provider-exoscale/cluster-id=abc"
+	id1 := uuid.New()
+	sgID := uuid.New()
+	createdAt := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
+
+	tests := []struct {
+		name      string
+		exoClient func(m *mocks.ExoscaleClient)
+		output    []domain.Instance
+		err       error
+	}{
+		{
+			name: "nominal - maps fields correctly",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().ListInstances(ctx, mock.MatchedBy(func(opts []egoscale.ListInstancesOpt) bool {
+					values := url.Values{}
+					for _, opt := range opts {
+						opt(values)
+					}
+					return values.Get("labels") == label
+				})).
+					Return(&egoscale.ListInstancesResponse{
+						Instances: []egoscale.ListInstancesResponseInstances{
+							{
+								ID:             egoscale.UUID(id1.String()),
+								Name:           "machine-0",
+								State:          egoscale.InstanceStateRunning,
+								PublicIP:       net.ParseIP("1.2.3.4"),
+								CreatedAT:      createdAt,
+								Labels:         egoscale.Labels{"machine": "uid"},
+								SecurityGroups: []egoscale.SecurityGroup{{ID: egoscale.UUID(sgID.String())}},
+							},
+						},
+					}, nil)
+			},
+			output: []domain.Instance{
+				{
+					ID:               id1,
+					Name:             "machine-0",
+					State:            string(egoscale.InstanceStateRunning),
+					PublicIP:         "1.2.3.4",
+					CreatedAt:        createdAt.Format(time.RFC3339),
+					Labels:           map[string]string{"machine": "uid"},
+					SecurityGroupIDs: []uuid.UUID{sgID},
+				},
+			},
+		},
+		{
+			name: "list instances returned an error",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().ListInstances(ctx, mock.Anything).
+					Return(nil, assert.AnError)
+			},
+			err: assert.AnError,
+		},
+	}
+
+	for _, ut := range tests {
+		t.Run(ut.name, func(t *testing.T) {
+			exoClient := mocks.NewExoscaleClient(t)
+			if ut.exoClient != nil {
+				ut.exoClient(exoClient)
+			}
+
+			client := Adapter{client: exoClient}
+
+			output, err := client.ListInstances(ctx, label)
+
+			assert.ErrorIs(t, err, ut.err)
+			assert.Equal(t, ut.output, output)
+		})
+	}
+}
+
+func Test_cloud_ListInstanceTypes(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	id := egoscale.UUID(uuid.New().String())
+
+	tests := []struct {
+		name      string
+		exoClient func(m *mocks.ExoscaleClient)
+		output    []domain.InstanceType
+		err       error
+	}{
+		{
+			name: "nominal",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().ListInstanceTypes(ctx).Return(&egoscale.ListInstanceTypesResponse{
+					InstanceTypes: []egoscale.InstanceType{
+						{ID: id, Family: egoscale.InstanceTypeFamilyStandard, Size: egoscale.InstanceTypeSize("small")},
+					},
+				}, nil)
+			},
+			output: []domain.InstanceType{
+				{ID: id.String(), Family: string(egoscale.InstanceTypeFamilyStandard), Size: "small"},
+			},
+		},
+		{
+			name: "list instance types returned an error",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().ListInstanceTypes(ctx).Return(nil, assert.AnError)
+			},
+			err: assert.AnError,
+		},
+	}
+
+	for _, ut := range tests {
+		t.Run(ut.name, func(t *testing.T) {
+			exoClient := mocks.NewExoscaleClient(t)
+			if ut.exoClient != nil {
+				ut.exoClient(exoClient)
+			}
+
+			client := Adapter{client: exoClient}
+
+			output, err := client.ListInstanceTypes(ctx)
+
+			assert.ErrorIs(t, err, ut.err)
+			assert.Equal(t, ut.output, output)
+		})
+	}
+}
+
+func Test_cloud_GetTemplate(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	id := uuid.New()
+	createdAt := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
+
+	tests := []struct {
+		name      string
+		exoClient func(m *mocks.ExoscaleClient)
+		output    domain.InstanceTemplate
+		err       error
+	}{
+		{
+			name: "nominal",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().GetTemplate(ctx, egoscale.UUID(id.String())).
+					Return(&egoscale.Template{
+						ID:        egoscale.UUID(id.String()),
+						Name:      "linux-24.04",
+						Size:      1073741824,
+						CreatedAT: createdAt,
+					}, nil)
+			},
+			output: domain.InstanceTemplate{
+				ID:        id,
+				Name:      "linux-24.04",
+				SizeBytes: 1073741824,
+				CreatedAt: createdAt,
+			},
+		},
+		{
+			name: "get template returned an error",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().GetTemplate(ctx, egoscale.UUID(id.String())).
+					Return(nil, assert.AnError)
+			},
+			err: assert.AnError,
+		},
+	}
+
+	for _, ut := range tests {
+		t.Run(ut.name, func(t *testing.T) {
+			exoClient := mocks.NewExoscaleClient(t)
+			if ut.exoClient != nil {
+				ut.exoClient(exoClient)
+			}
+
+			client := Adapter{client: exoClient}
+
+			output, err := client.GetTemplate(ctx, id)
+
+			assert.ErrorIs(t, err, ut.err)
+			assert.Equal(t, ut.output, output)
+		})
+	}
+}
+
+func Test_cloud_ListTemplates(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	id := uuid.New()
+	createdAt := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
+
+	tests := []struct {
+		name      string
+		exoClient func(m *mocks.ExoscaleClient)
+		output    []domain.InstanceTemplate
+		err       error
+	}{
+		{
+			name: "nominal - empty list",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().ListTemplates(ctx).Return(&egoscale.ListTemplatesResponse{}, nil)
+			},
+			output: []domain.InstanceTemplate{},
+		},
+		{
+			name: "nominal - maps fields correctly",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().ListTemplates(ctx).Return(&egoscale.ListTemplatesResponse{
+					Templates: []egoscale.Template{
+						{ID: egoscale.UUID(id.String()), Name: "linux-24.04", Size: 1073741824, CreatedAT: createdAt},
+					},
+				}, nil)
+			},
+			output: []domain.InstanceTemplate{
+				{ID: id, Name: "linux-24.04", SizeBytes: 1073741824, CreatedAt: createdAt},
+			},
+		},
+		{
+			name: "list templates returned an error",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().ListTemplates(ctx).Return(nil, assert.AnError)
+			},
+			err: assert.AnError,
+		},
+	}
+
+	for _, ut := range tests {
+		t.Run(ut.name, func(t *testing.T) {
+			exoClient := mocks.NewExoscaleClient(t)
+			if ut.exoClient != nil {
+				ut.exoClient(exoClient)
+			}
+
+			client := Adapter{client: exoClient}
+
+			output, err := client.ListTemplates(ctx)
+
+			assert.ErrorIs(t, err, ut.err)
+			assert.Equal(t, ut.output, output)
+		})
+	}
+}
+
+func Test_cloud_GetInstance(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	id := uuid.New()
+	sgID := uuid.New()
+	createdAt := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
+
+	tests := []struct {
+		name      string
+		exoClient func(m *mocks.ExoscaleClient)
+		output    domain.Instance
+		err       error
+	}{
+		{
+			name: "nominal",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().GetInstance(ctx, egoscale.UUID(id.String())).
+					Return(&egoscale.Instance{
+						Name:           "machine-0",
+						State:          egoscale.InstanceStateRunning,
+						PublicIP:       net.ParseIP("1.2.3.4"),
+						CreatedAT:      createdAt,
+						Labels:         egoscale.Labels{"machine": "uid"},
+						SecurityGroups: []egoscale.SecurityGroup{{ID: egoscale.UUID(sgID.String())}},
+					}, nil)
+			},
+			output: domain.Instance{
+				ID:               id,
+				Name:             "machine-0",
+				State:            string(egoscale.InstanceStateRunning),
+				PublicIP:         "1.2.3.4",
+				CreatedAt:        createdAt.Format(time.RFC3339),
+				Labels:           map[string]string{"machine": "uid"},
+				SecurityGroupIDs: []uuid.UUID{sgID},
+			},
+		},
+		{
+			name: "get instance returned not found",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().GetInstance(ctx, egoscale.UUID(id.String())).
+					Return(&egoscale.Instance{}, egoscale.ErrNotFound)
+			},
+			err: domain.ErrInstanceNotFound,
+		},
+		{
+			name: "get instance returned an error",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().GetInstance(ctx, egoscale.UUID(id.String())).
+					Return(&egoscale.Instance{}, assert.AnError)
+			},
+			err: assert.AnError,
+		},
+	}
+
+	for _, ut := range tests {
+		t.Run(ut.name, func(t *testing.T) {
+			exoClient := mocks.NewExoscaleClient(t)
+			if ut.exoClient != nil {
+				ut.exoClient(exoClient)
+			}
+
+			client := Adapter{client: exoClient}
+
+			output, err := client.GetInstance(ctx, id)
+
+			assert.ErrorIs(t, err, ut.err)
+			assert.Equal(t, ut.output, output)
+		})
+	}
+}
+
+func Test_cloud_AttachInstanceToElasticIP(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	instanceID := uuid.New()
+	elasticIPID := uuid.New()
+
+	tests := []struct {
+		name      string
+		exoClient func(m *mocks.ExoscaleClient)
+		err       error
+	}{
+		{
+			name: "nominal",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().AttachInstanceToElasticIP(ctx, egoscale.UUID(elasticIPID.String()), egoscale.AttachInstanceToElasticIPRequest{
+					Instance: &egoscale.InstanceTarget{ID: egoscale.UUID(instanceID.String())},
+				}).Return(&egoscale.Operation{}, nil)
+				m.EXPECT().
+					Wait(ctx, &egoscale.Operation{}, []egoscale.OperationState{egoscale.OperationStateSuccess}).
+					Return(&egoscale.Operation{State: egoscale.OperationStateSuccess}, nil)
+			},
+		},
+		{
+			name: "attach returned an error",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().AttachInstanceToElasticIP(ctx, egoscale.UUID(elasticIPID.String()), egoscale.AttachInstanceToElasticIPRequest{
+					Instance: &egoscale.InstanceTarget{ID: egoscale.UUID(instanceID.String())},
+				}).Return(&egoscale.Operation{}, assert.AnError)
+			},
+			err: assert.AnError,
+		},
+		{
+			name: "wait returned an error",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().AttachInstanceToElasticIP(ctx, egoscale.UUID(elasticIPID.String()), egoscale.AttachInstanceToElasticIPRequest{
+					Instance: &egoscale.InstanceTarget{ID: egoscale.UUID(instanceID.String())},
+				}).Return(&egoscale.Operation{}, nil)
+				m.EXPECT().
+					Wait(ctx, &egoscale.Operation{}, []egoscale.OperationState{egoscale.OperationStateSuccess}).
+					Return(&egoscale.Operation{}, assert.AnError)
+			},
+			err: assert.AnError,
+		},
+	}
+
+	for _, ut := range tests {
+		t.Run(ut.name, func(t *testing.T) {
+			exoClient := mocks.NewExoscaleClient(t)
+			if ut.exoClient != nil {
+				ut.exoClient(exoClient)
+			}
+
+			client := Adapter{client: exoClient}
+
+			err := client.AttachInstanceToElasticIP(ctx, instanceID, elasticIPID)
+
+			assert.ErrorIs(t, err, ut.err)
+		})
+	}
+}
+
+func Test_cloud_AttachInstanceToSecurityGroup(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	instanceID := uuid.New()
+	securityGroupID := uuid.New()
+
+	tests := []struct {
+		name      string
+		exoClient func(m *mocks.ExoscaleClient)
+		err       error
+	}{
+		{
+			name: "nominal",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().AttachInstanceToSecurityGroup(ctx, egoscale.UUID(securityGroupID.String()), egoscale.AttachInstanceToSecurityGroupRequest{
+					Instance: &egoscale.Instance{ID: egoscale.UUID(instanceID.String())},
+				}).Return(&egoscale.Operation{}, nil)
+				m.EXPECT().
+					Wait(ctx, &egoscale.Operation{}, []egoscale.OperationState{egoscale.OperationStateSuccess}).
+					Return(&egoscale.Operation{State: egoscale.OperationStateSuccess}, nil)
+			},
+		},
+		{
+			name: "attach returned an error",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().AttachInstanceToSecurityGroup(ctx, egoscale.UUID(securityGroupID.String()), egoscale.AttachInstanceToSecurityGroupRequest{
+					Instance: &egoscale.Instance{ID: egoscale.UUID(instanceID.String())},
+				}).Return(&egoscale.Operation{}, assert.AnError)
+			},
+			err: assert.AnError,
+		},
+		{
+			name: "wait returned an error",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().AttachInstanceToSecurityGroup(ctx, egoscale.UUID(securityGroupID.String()), egoscale.AttachInstanceToSecurityGroupRequest{
+					Instance: &egoscale.Instance{ID: egoscale.UUID(instanceID.String())},
+				}).Return(&egoscale.Operation{}, nil)
+				m.EXPECT().
+					Wait(ctx, &egoscale.Operation{}, []egoscale.OperationState{egoscale.OperationStateSuccess}).
+					Return(&egoscale.Operation{}, assert.AnError)
+			},
+			err: assert.AnError,
+		},
+	}
+
+	for _, ut := range tests {
+		t.Run(ut.name, func(t *testing.T) {
+			exoClient := mocks.NewExoscaleClient(t)
+			if ut.exoClient != nil {
+				ut.exoClient(exoClient)
+			}
+
+			client := Adapter{client: exoClient}
+
+			err := client.AttachInstanceToSecurityGroup(ctx, instanceID, securityGroupID)
+
+			assert.ErrorIs(t, err, ut.err)
+		})
+	}
+}
+
+func Test_cloud_DetachInstanceFromSecurityGroup(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	instanceID := uuid.New()
+	securityGroupID := uuid.New()
+
+	tests := []struct {
+		name      string
+		exoClient func(m *mocks.ExoscaleClient)
+		err       error
+	}{
+		{
+			name: "nominal",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().DetachInstanceFromSecurityGroup(ctx, egoscale.UUID(securityGroupID.String()), egoscale.DetachInstanceFromSecurityGroupRequest{
+					Instance: &egoscale.Instance{ID: egoscale.UUID(instanceID.String())},
+				}).Return(&egoscale.Operation{}, nil)
+				m.EXPECT().
+					Wait(ctx, &egoscale.Operation{}, []egoscale.OperationState{egoscale.OperationStateSuccess}).
+					Return(&egoscale.Operation{State: egoscale.OperationStateSuccess}, nil)
+			},
+		},
+		{
+			name: "detach returned an error",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().DetachInstanceFromSecurityGroup(ctx, egoscale.UUID(securityGroupID.String()), egoscale.DetachInstanceFromSecurityGroupRequest{
+					Instance: &egoscale.Instance{ID: egoscale.UUID(instanceID.String())},
+				}).Return(&egoscale.Operation{}, assert.AnError)
+			},
+			err: assert.AnError,
+		},
+		{
+			name: "wait returned an error",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().DetachInstanceFromSecurityGroup(ctx, egoscale.UUID(securityGroupID.String()), egoscale.DetachInstanceFromSecurityGroupRequest{
+					Instance: &egoscale.Instance{ID: egoscale.UUID(instanceID.String())},
+				}).Return(&egoscale.Operation{}, nil)
+				m.EXPECT().
+					Wait(ctx, &egoscale.Operation{}, []egoscale.OperationState{egoscale.OperationStateSuccess}).
+					Return(&egoscale.Operation{}, assert.AnError)
+			},
+			err: assert.AnError,
+		},
+	}
+
+	for _, ut := range tests {
+		t.Run(ut.name, func(t *testing.T) {
+			exoClient := mocks.NewExoscaleClient(t)
+			if ut.exoClient != nil {
+				ut.exoClient(exoClient)
+			}
+
+			client := Adapter{client: exoClient}
+
+			err := client.DetachInstanceFromSecurityGroup(ctx, instanceID, securityGroupID)
+
+			assert.ErrorIs(t, err, ut.err)
+		})
+	}
+}
+
+func Test_cloud_DeleteInstance(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	id := uuid.New()
+
+	tests := []struct {
+		name      string
+		exoClient func(m *mocks.ExoscaleClient)
+		err       error
+	}{
+		{
+			name: "nominal",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().DeleteInstance(ctx, egoscale.UUID(id.String())).
+					Return(&egoscale.Operation{}, nil)
+				m.EXPECT().
+					Wait(ctx, &egoscale.Operation{}, []egoscale.OperationState{egoscale.OperationStateSuccess}).
+					Return(&egoscale.Operation{State: egoscale.OperationStateSuccess}, nil)
+			},
+		},
+		{
+			name: "delete instance returned not found",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().DeleteInstance(ctx, egoscale.UUID(id.String())).
+					Return(&egoscale.Operation{}, egoscale.ErrNotFound)
+			},
+			err: domain.ErrInstanceNotFound,
+		},
+		{
+			name: "delete instance returned an error",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().DeleteInstance(ctx, egoscale.UUID(id.String())).
+					Return(&egoscale.Operation{}, assert.AnError)
+			},
+			err: assert.AnError,
+		},
+		{
+			name: "wait returned an error",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().DeleteInstance(ctx, egoscale.UUID(id.String())).
+					Return(&egoscale.Operation{}, nil)
+				m.EXPECT().
+					Wait(ctx, &egoscale.Operation{}, []egoscale.OperationState{egoscale.OperationStateSuccess}).
+					Return(&egoscale.Operation{}, assert.AnError)
+			},
+			err: assert.AnError,
+		},
+	}
+
+	for _, ut := range tests {
+		t.Run(ut.name, func(t *testing.T) {
+			exoClient := mocks.NewExoscaleClient(t)
+			if ut.exoClient != nil {
+				ut.exoClient(exoClient)
+			}
+
+			client := Adapter{client: exoClient}
+
+			err := client.DeleteInstance(ctx, id)
+
+			assert.ErrorIs(t, err, ut.err)
+		})
+	}
+}
+
+func Test_ipString(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		ip     net.IP
+		output string
+	}{
+		{
+			name:   "nil IP",
+			ip:     nil,
+			output: "",
+		},
+		{
+			name:   "empty IP",
+			ip:     net.IP{},
+			output: "",
+		},
+		{
+			name:   "IPv4",
+			ip:     net.ParseIP("1.2.3.4"),
+			output: "1.2.3.4",
+		},
+		{
+			name:   "IPv6",
+			ip:     net.ParseIP("2001:db8::1"),
+			output: "2001:db8::1",
+		},
+	}
+
+	for _, ut := range tests {
+		t.Run(ut.name, func(t *testing.T) {
+			t.Parallel()
+
+			output := ipString(ut.ip)
+
 			assert.Equal(t, ut.output, output)
 		})
 	}

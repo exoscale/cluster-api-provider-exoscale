@@ -196,7 +196,7 @@ printf '\nCreating the Exoscale workload cluster...\n'
 kubectl apply -k config/samples/cluster/
 
 kubectl wait exoscalecluster/my-cluster --for=condition=Ready --timeout=5m
-kubectl wait exoscalemachine/my-control-plane --for=condition=Ready --timeout=10m
+kubectl wait kubeadmcontrolplane/my-control-plane --for=condition=Available --timeout=15m
 
 ./bin/clusterctl get kubeconfig my-cluster >"$WORKLOAD_KUBECONFIG"
 node_found=false
@@ -213,21 +213,23 @@ if [[ "$node_found" != true ]]; then
 fi
 kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" wait node --all --for=condition=Ready --timeout=10m
 
-# ponytail: standalone Machine workaround; remove when this sample uses KubeadmControlPlane.
-kubectl annotate machine/my-control-plane infrastructure.cluster.x-k8s.io/sample-node-ready=true
 kubectl wait cluster/my-cluster --for=condition=ControlPlaneInitialized --timeout=5m
 kubectl wait cluster/my-cluster --for=condition=RemoteConnectionProbe --timeout=5m
-kubectl wait machine/my-control-plane --for=condition=Ready --timeout=5m
-kubectl wait machine/my-control-plane --for=condition=Available --timeout=5m
+kubectl wait machine \
+	--selector=cluster.x-k8s.io/cluster-name=my-cluster,cluster.x-k8s.io/control-plane \
+	--for=condition=Ready --timeout=5m
+kubectl wait machine \
+	--selector=cluster.x-k8s.io/cluster-name=my-cluster,cluster.x-k8s.io/control-plane \
+	--for=condition=Available --timeout=5m
 
 printf '\nManagement-cluster resources:\n'
-kubectl get cluster,exoscalecluster,machine,exoscalemachine
+kubectl get cluster,kubeadmcontrolplane,exoscalecluster,exoscalemachinetemplate,machine,exoscalemachine
 printf '\nWorkload-cluster node:\n'
 kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" get nodes -o wide
 
 export WORKLOAD_KUBECONFIG CAPI_LOG
 printf '\nThe sample is ready.\n'
-printf 'Management cluster: kubectl get cluster,machine,exoscalecluster,exoscalemachine\n'
+printf 'Management cluster: kubectl get cluster,kubeadmcontrolplane,exoscalecluster,exoscalemachinetemplate,machine,exoscalemachine\n'
 printf 'Workload cluster:   kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" get pods -A\n'
 printf 'Controller logs:    tail -f "$CAPI_LOG"\n'
 printf '\nPress Enter to delete the workload cluster, stop CAPI, and remove Kind.\n'

@@ -6,4 +6,7 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: exoscalemachinetemplate-sample
 spec:
-  # TODO(user): Add fields here
+  template:
+    spec:
+      template: Linux Ubuntu 24.04 LTS 64-bit
+      instanceType: small

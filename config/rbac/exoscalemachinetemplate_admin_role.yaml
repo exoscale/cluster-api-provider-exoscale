@@ -19,9 +19,3 @@ rules:
   - exoscalemachinetemplates
   verbs:
   - '*'
-- apiGroups:
-  - infrastructure.cluster.x-k8s.io
-  resources:
-  - exoscalemachinetemplates/status
-  verbs:
-  - get

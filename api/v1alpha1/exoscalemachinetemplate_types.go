@@ -21,9 +21,6 @@ import (
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 // ExoscaleMachineTemplateSpec defines the desired state of ExoscaleMachineTemplate
 type ExoscaleMachineTemplateSpec struct {
 	// template contains the metadata and spec copied into generated ExoscaleMachines.
@@ -32,6 +29,7 @@ type ExoscaleMachineTemplateSpec struct {
 }
 
 // ExoscaleMachineTemplateResource contains the metadata and spec copied into an ExoscaleMachine.
+// +kubebuilder:validation:XValidation:rule="!has(self.spec.providerID)",message="providerID must not be set in templates"
 type ExoscaleMachineTemplateResource struct {
 	// +optional
 	ObjectMeta clusterv1.ObjectMeta `json:"metadata,omitempty,omitzero"`
@@ -40,9 +38,10 @@ type ExoscaleMachineTemplateResource struct {
 	Spec ExoscaleMachineSpec `json:"spec"`
 }
 
-// +kubebuilder:object:root=true
-
 // ExoscaleMachineTemplate is the Schema for the exoscalemachinetemplates API
+// +kubebuilder:object:root=true
+// +kubebuilder:resource:path=exoscalemachinetemplates,scope=Namespaced,categories=cluster-api
+// +kubebuilder:storageversion
 type ExoscaleMachineTemplate struct {
 	metav1.TypeMeta `json:",inline"`
 

@@ -1,0 +1,156 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.1
+  name: exoscalemachinetemplates.infrastructure.cluster.x-k8s.io
+spec:
+  group: infrastructure.cluster.x-k8s.io
+  names:
+    categories:
+    - cluster-api
+    kind: ExoscaleMachineTemplate
+    listKind: ExoscaleMachineTemplateList
+    plural: exoscalemachinetemplates
+    singular: exoscalemachinetemplate
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: ExoscaleMachineTemplate is the Schema for the exoscalemachinetemplates
+          API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: spec defines the desired state of ExoscaleMachineTemplate
+            properties:
+              template:
+                description: template contains the metadata and spec copied into generated
+                  ExoscaleMachines.
+                properties:
+                  metadata:
+                    description: |-
+                      ObjectMeta is metadata that all persisted resources must have, which includes all objects
+                      users must create. This is a copy of customizable fields from metav1.ObjectMeta.
+
+                      ObjectMeta is embedded in `Machine.Spec`, `MachineDeployment.Template` and `MachineSet.Template`,
+                      which are not top-level Kubernetes objects. Given that metav1.ObjectMeta has lots of special cases
+                      and read-only fields which end up in the generated CRD validation, having it as a subset simplifies
+                      the API and some issues that can impact user experience.
+
+                      During the [upgrade to controller-tools@v2](https://github.com/kubernetes-sigs/cluster-api/pull/1054)
+                      for v1alpha2, we noticed a failure would occur running Cluster API test suite against the new CRDs,
+                      specifically `spec.metadata.creationTimestamp in body must be of type string: "null"`.
+                      The investigation showed that `controller-tools@v2` behaves differently than its previous version
+                      when handling types from [metav1](k8s.io/apimachinery/pkg/apis/meta/v1) package.
+
+                      In more details, we found that embedded (non-top level) types that embedded `metav1.ObjectMeta`
+                      had validation properties, including for `creationTimestamp` (metav1.Time).
+                      The `metav1.Time` type specifies a custom json marshaller that, when IsZero() is true, returns `null`
+                      which breaks validation because the field isn't marked as nullable.
+
+                      In future versions, controller-tools@v2 might allow overriding the type and validation for embedded
+                      types. When that happens, this hack should be revisited.
+                    minProperties: 1
+                    properties:
+                      annotations:
+                        additionalProperties:
+                          type: string
+                        description: |-
+                          annotations is an unstructured key value map stored with a resource that may be
+                          set by external tools to store and retrieve arbitrary metadata. They are not
+                          queryable and should be preserved when modifying objects.
+                          More info: http://kubernetes.io/docs/user-guide/annotations
+                        type: object
+                      labels:
+                        additionalProperties:
+                          type: string
+                        description: |-
+                          labels is a map of string keys and values that can be used to organize and categorize
+                          (scope and select) objects. May match selectors of replication controllers
+                          and services.
+                          More info: http://kubernetes.io/docs/user-guide/labels
+                        type: object
+                    type: object
+                  spec:
+                    description: |-
+                      ExoscaleMachineSpec defines the desired state of an Exoscale compute instance
+                      backing a Cluster API Machine.
+                      Zone is inherited from ExoscaleCluster.spec.zone. If multi-zone support is
+                      added later, use CAPI Machine.spec.failureDomain to pick the target zone
+                      instead of duplicating zone here.
+                    properties:
+                      instanceType:
+                        description: |-
+                          instanceType is an Exoscale instance type UUID or a value in [family.]size
+                          format. For example, "small" is shorthand for "standard.small".
+                          The value is resolved against the Exoscale catalog during reconciliation.
+                          Run `exo compute instance-type list -v` to list available values.
+                        minLength: 1
+                        type: string
+                      providerID:
+                        description: |-
+                          providerID is the cloud-provider identifier for this instance in the form
+                          exoscale://<instance-uuid>. Set by the controller after the instance is created.
+                          CAPI uses this field to match the InfraMachine to the Node object.
+                        type: string
+                      rootVolumeSizeGiB:
+                        description: rootVolumeSizeGiB overrides the disk size declared
+                          by the template.
+                        format: int64
+                        maximum: 10000
+                        minimum: 10
+                        type: integer
+                      securityGroups:
+                        description: |-
+                          securityGroups lists UUIDs of Exoscale Security Groups to attach in addition
+                          to the cluster's control-plane or node security group.
+                        items:
+                          type: string
+                        type: array
+                      sshKey:
+                        description: sshKey is the name of a pre-existing SSH key
+                          registered in the Exoscale project.
+                        type: string
+                      template:
+                        description: |-
+                          template is an Exoscale instance template UUID or exact template name.
+                          UUIDs pin an exact template; names are resolved at create time.
+                        minLength: 1
+                        type: string
+                    required:
+                    - instanceType
+                    - template
+                    type: object
+                required:
+                - spec
+                type: object
+                x-kubernetes-validations:
+                - message: providerID must not be set in templates
+                  rule: '!has(self.spec.providerID)'
+            required:
+            - template
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true

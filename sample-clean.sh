@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Emergency cleanup for capi-sample-run.sh.
+# Emergency cleanup for sample-run.sh.
 #
 # Delete the CAPI Cluster first while Exoscale CAPI is running. CAPI owner references
 # and Exoscale CAPI finalizers then remove the Exoscale VM, Elastic IP, and security
@@ -80,7 +80,7 @@ signal_runner() {
 	read -r runner_pid <"$RUNNER_PID_FILE"
 	if [[ "$runner_pid" =~ ^[0-9]+$ ]] && kill -0 "$runner_pid" 2>/dev/null; then
 		args=$(ps -o args= -p "$runner_pid")
-		if [[ "$args" == *"capi-sample-run.sh"* ]]; then
+		if [[ "$args" == *"sample-run.sh"* ]]; then
 			kill -TERM "$runner_pid" 2>/dev/null || true
 		fi
 	fi
@@ -129,7 +129,7 @@ if kubectl get cluster my-cluster >/dev/null 2>&1; then
 	printf 'Deleting Cluster/my-cluster and waiting for cloud finalizers...\n'
 	if ! kubectl delete cluster my-cluster --wait --timeout=10m; then
 		printf '\nCleanup failed. Kind and CAPI were deliberately left running.\n' >&2
-		printf 'Inspect: KUBECONFIG=%s kubectl get cluster,exoscalecluster,machine,exoscalemachine\n' "$MANAGEMENT_KUBECONFIG" >&2
+		printf 'Inspect: KUBECONFIG=%s kubectl get cluster,kubeadmcontrolplane,exoscalecluster,exoscalemachinetemplate,machine,exoscalemachine\n' "$MANAGEMENT_KUBECONFIG" >&2
 		printf 'Logs:   tail -f %s\n' "$CAPI_LOG" >&2
 		exit 1
 	fi

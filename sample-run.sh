@@ -6,6 +6,7 @@
 # groups are billable until cleanup finishes.
 
 set -Eeuo pipefail
+umask 077
 
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 KIND_CLUSTER=${KIND_CLUSTER:-capi-sample}
@@ -53,7 +54,13 @@ cleanup() {
 		export KUBECONFIG=$MANAGEMENT_KUBECONFIG
 
 		# Keep CAPI alive until CAPI finalizers remove the real cloud resources.
-		if kubectl get cluster my-cluster >/dev/null 2>&1; then
+		if ! cluster_resource=$(kubectl get cluster my-cluster --ignore-not-found -o name); then
+			printf '\nCould not verify workload-cluster state. Kind and CAPI were left running.\n' >&2
+			printf 'Inspect CAPI with: tail -f %s\n' "$CAPI_LOG" >&2
+			printf 'Use management kubeconfig: export KUBECONFIG=%s\n' "$MANAGEMENT_KUBECONFIG" >&2
+			exit 1
+		fi
+		if [[ -n "$cluster_resource" ]]; then
 			printf '\nDeleting workload cluster and Exoscale resources...\n'
 			if ! kubectl delete cluster my-cluster --wait --timeout=10m; then
 				printf '\nCleanup did not finish. Kind and CAPI were left running.\n' >&2
@@ -65,7 +72,10 @@ cleanup() {
 
 		kubectl delete secret exoscale --ignore-not-found >/dev/null 2>&1 || true
 		stop_capi
-		kind delete cluster --name "$KIND_CLUSTER" || true
+		if ! kind delete cluster --name "$KIND_CLUSTER"; then
+			printf 'Cloud cleanup finished, but Kind cleanup failed. Local state was retained.\n' >&2
+			exit 1
+		fi
 		rm -f -- "$MANAGEMENT_KUBECONFIG" "$WORKLOAD_KUBECONFIG" "$RUNNER_PID_FILE"
 		printf 'Cleanup complete. Controller log retained at %s\n' "$CAPI_LOG"
 	else
@@ -227,10 +237,9 @@ kubectl get cluster,kubeadmcontrolplane,exoscalecluster,exoscalemachinetemplate,
 printf '\nWorkload-cluster node:\n'
 kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" get nodes -o wide
 
-export WORKLOAD_KUBECONFIG CAPI_LOG
 printf '\nThe sample is ready.\n'
-printf 'Management cluster: kubectl get cluster,kubeadmcontrolplane,exoscalecluster,exoscalemachinetemplate,machine,exoscalemachine\n'
-printf 'Workload cluster:   kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" get pods -A\n'
-printf 'Controller logs:    tail -f "$CAPI_LOG"\n'
+printf 'Management cluster: kubectl --kubeconfig=%q get cluster,kubeadmcontrolplane,exoscalecluster,exoscalemachinetemplate,machine,exoscalemachine\n' "$MANAGEMENT_KUBECONFIG"
+printf 'Workload cluster:   kubectl --kubeconfig=%q get pods -A\n' "$WORKLOAD_KUBECONFIG"
+printf 'Controller logs:    tail -f %q\n' "$CAPI_LOG"
 printf '\nPress Enter to delete the workload cluster, stop CAPI, and remove Kind.\n'
 read -r

@@ -35,7 +35,6 @@ type ExoscaleClusterTemplateResource struct {
 }
 
 // +kubebuilder:object:root=true
-// +kubebuilder:subresource:status
 // +kubebuilder:resource:path=exoscaleclustertemplates,scope=Namespaced,categories=cluster-api
 
 // ExoscaleClusterTemplate is the Schema for the exoscaleclustertemplates API

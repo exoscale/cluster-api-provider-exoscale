@@ -98,7 +98,7 @@ func Test_adapter_CreateElasticIP(t *testing.T) {
 				ut.exoClient(exoClient)
 			}
 
-			client := Adapter{client: exoClient}
+			client := adapter{client: exoClient}
 
 			output, err := client.CreateElasticIP(ctx, int32(healthCheckPort), description)
 
@@ -165,7 +165,7 @@ func Test_adapter_GetElasticIP(t *testing.T) {
 				ut.exoClient(exoClient)
 			}
 
-			client := Adapter{client: exoClient}
+			client := adapter{client: exoClient}
 
 			output, err := client.GetElasticIP(ctx, id)
 
@@ -238,7 +238,7 @@ func Test_adapter_ListElasticIPs(t *testing.T) {
 				ut.exoClient(exoClient)
 			}
 
-			client := Adapter{client: exoClient}
+			client := adapter{client: exoClient}
 
 			output, err := client.ListElasticIPs(ctx)
 
@@ -297,7 +297,7 @@ func Test_adapter_CreateInstance(t *testing.T) {
 
 	exoClient.EXPECT().Wait(ctx, createOp, []egoscale.OperationState{egoscale.OperationStateSuccess}).Return(createOpSuccess, nil)
 
-	client := Adapter{client: exoClient}
+	client := adapter{client: exoClient}
 
 	output, err := client.CreateInstance(ctx, spec)
 
@@ -375,7 +375,7 @@ func Test_adapter_UpdateElasticIP(t *testing.T) {
 				ut.exoClient(exoClient)
 			}
 
-			client := Adapter{client: exoClient}
+			client := adapter{client: exoClient}
 
 			err := client.UpdateElasticIP(ctx, eip)
 
@@ -433,7 +433,7 @@ func Test_adapter_DeleteElasticIP(t *testing.T) {
 				ut.exoClient(exoClient)
 			}
 
-			client := Adapter{client: exoClient}
+			client := adapter{client: exoClient}
 
 			err := client.DeleteElasticIP(ctx, id)
 
@@ -509,7 +509,7 @@ func Test_adapter_CreateSecurityGroup(t *testing.T) {
 				ut.exoClient(exoClient)
 			}
 
-			client := Adapter{client: exoClient}
+			client := adapter{client: exoClient}
 
 			output, err := client.CreateSecurityGroup(ctx, name)
 
@@ -567,7 +567,7 @@ func Test_adapter_GetSecurityGroup(t *testing.T) {
 				ut.exoClient(exoClient)
 			}
 
-			client := Adapter{client: exoClient}
+			client := adapter{client: exoClient}
 
 			output, err := client.GetSecurityGroup(ctx, id)
 
@@ -629,7 +629,7 @@ func Test_adapter_DeleteSecurityGroup(t *testing.T) {
 				ut.exoClient(exoClient)
 			}
 
-			client := Adapter{client: exoClient}
+			client := adapter{client: exoClient}
 
 			err := client.DeleteSecurityGroup(ctx, id)
 
@@ -772,7 +772,7 @@ func Test_adapter_CreateSecurityGroupRule(t *testing.T) {
 				ut.exoClient(exoClient)
 			}
 
-			client := Adapter{client: exoClient}
+			client := adapter{client: exoClient}
 
 			output, err := client.CreateSecurityGroupRule(ctx, sgID, ut.rule)
 
@@ -834,7 +834,7 @@ func Test_adapter_DeleteSecurityGroupRule(t *testing.T) {
 				ut.exoClient(exoClient)
 			}
 
-			client := Adapter{client: exoClient}
+			client := adapter{client: exoClient}
 
 			err := client.DeleteSecurityGroupRule(ctx, sgID, ruleID)
 
@@ -942,7 +942,7 @@ func Test_adapter_ListSecurityGroupRules(t *testing.T) {
 				ut.exoClient(exoClient)
 			}
 
-			client := Adapter{client: exoClient}
+			client := adapter{client: exoClient}
 
 			output, err := client.ListSecurityGroupRules(ctx, sgID)
 
@@ -1020,7 +1020,7 @@ func Test_adapter_ListInstances(t *testing.T) {
 				ut.exoClient(exoClient)
 			}
 
-			client := Adapter{client: exoClient}
+			client := adapter{client: exoClient}
 
 			output, err := client.ListInstances(ctx, label)
 
@@ -1071,7 +1071,7 @@ func Test_adapter_ListInstanceTypes(t *testing.T) {
 				ut.exoClient(exoClient)
 			}
 
-			client := Adapter{client: exoClient}
+			client := adapter{client: exoClient}
 
 			output, err := client.ListInstanceTypes(ctx)
 
@@ -1129,7 +1129,7 @@ func Test_adapter_GetTemplate(t *testing.T) {
 				ut.exoClient(exoClient)
 			}
 
-			client := Adapter{client: exoClient}
+			client := adapter{client: exoClient}
 
 			output, err := client.GetTemplate(ctx, id)
 
@@ -1188,7 +1188,7 @@ func Test_adapter_ListTemplates(t *testing.T) {
 				ut.exoClient(exoClient)
 			}
 
-			client := Adapter{client: exoClient}
+			client := adapter{client: exoClient}
 
 			output, err := client.ListTemplates(ctx)
 
@@ -1260,7 +1260,7 @@ func Test_adapter_GetInstance(t *testing.T) {
 				ut.exoClient(exoClient)
 			}
 
-			client := Adapter{client: exoClient}
+			client := adapter{client: exoClient}
 
 			output, err := client.GetInstance(ctx, id)
 
@@ -1323,7 +1323,7 @@ func Test_adapter_AttachInstanceToElasticIP(t *testing.T) {
 				ut.exoClient(exoClient)
 			}
 
-			client := Adapter{client: exoClient}
+			client := adapter{client: exoClient}
 
 			err := client.AttachInstanceToElasticIP(ctx, instanceID, elasticIPID)
 
@@ -1385,7 +1385,7 @@ func Test_adapter_AttachInstanceToSecurityGroup(t *testing.T) {
 				ut.exoClient(exoClient)
 			}
 
-			client := Adapter{client: exoClient}
+			client := adapter{client: exoClient}
 
 			err := client.AttachInstanceToSecurityGroup(ctx, instanceID, securityGroupID)
 
@@ -1447,7 +1447,7 @@ func Test_adapter_DetachInstanceFromSecurityGroup(t *testing.T) {
 				ut.exoClient(exoClient)
 			}
 
-			client := Adapter{client: exoClient}
+			client := adapter{client: exoClient}
 
 			err := client.DetachInstanceFromSecurityGroup(ctx, instanceID, securityGroupID)
 
@@ -1513,7 +1513,7 @@ func Test_adapter_DeleteInstance(t *testing.T) {
 				ut.exoClient(exoClient)
 			}
 
-			client := Adapter{client: exoClient}
+			client := adapter{client: exoClient}
 
 			err := client.DeleteInstance(ctx, id)
 

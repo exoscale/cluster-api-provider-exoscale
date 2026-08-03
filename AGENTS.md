@@ -144,11 +144,11 @@ kubebuilder create webhook \
 ## Testing & Development
 
 ```bash
-make test              # Run unit tests (uses envtest: real K8s API + etcd)
+make test              # Run unit tests
 make run               # Run locally (uses current kubeconfig context)
 ```
 
-Tests use **Ginkgo + Gomega** (BDD style). Check `suite_test.go` for setup.
+Tests use plain `go test` with **testify** (table-driven style). Dependencies are mocked with mockery-generated mocks; see `internal/mocks` and `.mockery.yml`.
 
 ## Deployment Workflow
 

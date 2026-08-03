@@ -129,12 +129,12 @@ spec:
                   - type: ExternalIP
                     (address != ''): true
 
-    - name: delete control plane
+    - name: delete cluster
       try:
         - delete:
             timeout: 10m
             ref:
-              apiVersion: controlplane.cluster.x-k8s.io/v1beta2
-              kind: KubeadmControlPlane
+              apiVersion: cluster.x-k8s.io/v1beta2
+              kind: Cluster
               name: ($clusterName)
               namespace: ($namespace)

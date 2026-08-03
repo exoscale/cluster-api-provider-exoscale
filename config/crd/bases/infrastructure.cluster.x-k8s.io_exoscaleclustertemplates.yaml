@@ -153,7 +153,7 @@ spec:
                       securityGroupControlPlane:
                         description: |-
                           SecurityGroupControlPlane defines additional firewall rules applied to the cluster control plane.
-                          The controller automatically creates the base rules required for Kubernetes node
+                          The controller automatically creates the base rules required for Kubernetes worker
                           and the control plane to communicate. Use this field to add extra rules on top,
                           for example to allow ssh traffic on the control plane resource.
                         properties:
@@ -213,7 +213,7 @@ spec:
                                     securityGroup identifies a security group as the source (ingress) or destination (egress) for this rule,
                                     as an alternative to a CIDR network. Accepts either the UUID of an existing Exoscale security group,
                                     or one of the special values "control-plane" / "worker" to refer to this cluster's managed
-                                    control-plane or node security group.
+                                    control-plane or worker security group.
                                   type: string
                                 startPort:
                                   description: startPort is the first port of the
@@ -231,9 +231,9 @@ spec:
                               type: object
                             type: array
                         type: object
-                      securityGroupNode:
+                      securityGroupWorker:
                         description: |-
-                          SecurityGroupNode defines additional firewall rules applied to the cluster nodes.
+                          SecurityGroupWorker defines additional firewall rules applied to the cluster workers.
                           The controller automatically creates the basic rules required to operate a Kubernetes cluster.
                           Use this field to add extra rules on top, for example to allow traffic for your CNI plugin.
                         properties:
@@ -293,7 +293,7 @@ spec:
                                     securityGroup identifies a security group as the source (ingress) or destination (egress) for this rule,
                                     as an alternative to a CIDR network. Accepts either the UUID of an existing Exoscale security group,
                                     or one of the special values "control-plane" / "worker" to refer to this cluster's managed
-                                    control-plane or node security group.
+                                    control-plane or worker security group.
                                   type: string
                                 startPort:
                                   description: startPort is the first port of the

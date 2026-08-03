@@ -92,29 +92,29 @@ func (s *clusterService) ReconcileCluster(ctx context.Context, cluster infrav1al
 		Name: securityGroupControlPlane.Name,
 	}
 
-	var securityGroupNodeID *uuid.UUID
-	var securityGroupNodeName = fmt.Sprintf("capi - %s - node", clusterID.String())
+	var securityGroupWorkerID *uuid.UUID
+	var securityGroupWorkerName = fmt.Sprintf("capi - %s - worker", clusterID.String())
 
-	if cluster.Status.SecurityGroupNode != nil {
-		id, err := uuid.Parse(cluster.Status.SecurityGroupNode.ID)
+	if cluster.Status.SecurityGroupWorker != nil {
+		id, err := uuid.Parse(cluster.Status.SecurityGroupWorker.ID)
 		if err != nil {
-			return cluster, fmt.Errorf("unable to parse %q: %w: %w", ".status.SecurityGroupNode.id", errInvalidID, err)
+			return cluster, fmt.Errorf("unable to parse %q: %w: %w", ".status.SecurityGroupWorker.id", errInvalidID, err)
 		}
-		securityGroupNodeID = &id
+		securityGroupWorkerID = &id
 	}
-	securityGroupNode, err := s.securityGroupSvc.UpsertSecurityGroup(ctx, clusterID, securityGroupNodeID, securityGroupNodeName)
+	securityGroupWorker, err := s.securityGroupSvc.UpsertSecurityGroup(ctx, clusterID, securityGroupWorkerID, securityGroupWorkerName)
 	if err != nil {
-		return cluster, fmt.Errorf("unable to upsert security group for node: %w", err)
+		return cluster, fmt.Errorf("unable to upsert security group worker: %w", err)
 	}
-	cluster.Status.SecurityGroupNode = &infrav1alpha1.SecurityGroupStatus{
-		ID:   securityGroupNode.ID.String(),
-		Name: securityGroupNode.Name,
+	cluster.Status.SecurityGroupWorker = &infrav1alpha1.SecurityGroupStatus{
+		ID:   securityGroupWorker.ID.String(),
+		Name: securityGroupWorker.Name,
 	}
 
 	/*
 	** Security Group Rules
 	 */
-	desiredCPRules, err := resolveRules(securityGroupControlPlane.ID, securityGroupNode.ID, defaultControlPlaneRules(cluster.Spec.ControlPlaneEndpoint.Port), cluster.Spec.SecurityGroupControlPlane.Rules)
+	desiredCPRules, err := resolveRules(securityGroupControlPlane.ID, securityGroupWorker.ID, defaultControlPlaneRules(cluster.Spec.ControlPlaneEndpoint.Port), cluster.Spec.SecurityGroupControlPlane.Rules)
 	if err != nil {
 		return cluster, fmt.Errorf("unable to build control plane security group rules: %w", err)
 	}
@@ -124,17 +124,16 @@ func (s *clusterService) ReconcileCluster(ctx context.Context, cluster infrav1al
 	}
 	cluster.Status.SecurityGroupControlPlan.Rules = domainRulesToStatus(cpRules)
 
-	desiredNodeRulesList, err := resolveRules(securityGroupControlPlane.ID, securityGroupNode.ID, defaultNodeRules(), cluster.Spec.SecurityGroupNode.Rules)
+	desiredWorkerRulesList, err := resolveRules(securityGroupControlPlane.ID, securityGroupWorker.ID, defaultWorkerRules(), cluster.Spec.SecurityGroupWorker.Rules)
 	if err != nil {
-		return cluster, fmt.Errorf("unable to build node security group rules: %w", err)
+		return cluster, fmt.Errorf("unable to build worker security group rules: %w", err)
 	}
-	nodeRules, err := s.securityGroupSvc.UpsertSecurityGroupRules(ctx, securityGroupNode.ID, desiredNodeRulesList)
+	WorkerRules, err := s.securityGroupSvc.UpsertSecurityGroupRules(ctx, securityGroupWorker.ID, desiredWorkerRulesList)
 	if err != nil {
-		return cluster, fmt.Errorf("unable to upsert node security group rules: %w", err)
+		return cluster, fmt.Errorf("unable to upsert worker security group rules: %w", err)
 	}
-	cluster.Status.SecurityGroupNode.Rules = domainRulesToStatus(nodeRules)
+	cluster.Status.SecurityGroupWorker.Rules = domainRulesToStatus(WorkerRules)
 
-	// TODO: cgeck if I need to set this value to false in case of error in update, 1. provisioned = true, 2. reconcile again with error, 3 do I need to update the provisioned = false ?
 	cluster.Status.Initialization.Provisioned = new(true)
 
 	return cluster, nil
@@ -166,13 +165,13 @@ func (s *clusterService) DeleteCluster(ctx context.Context, cluster infrav1alpha
 			return cluster, err
 		}
 	}
-	var securityGroupNodeID *uuid.UUID
-	if cluster.Status.SecurityGroupNode != nil {
-		id, err := uuid.Parse(cluster.Status.SecurityGroupNode.ID)
+	var securityGroupWorkerID *uuid.UUID
+	if cluster.Status.SecurityGroupWorker != nil {
+		id, err := uuid.Parse(cluster.Status.SecurityGroupWorker.ID)
 		if err != nil {
-			return cluster, fmt.Errorf("unable to parse %q: %w: %w", ".status.securityGroupNode.id", errInvalidID, err)
+			return cluster, fmt.Errorf("unable to parse %q: %w: %w", ".status.securityGroupWorker.id", errInvalidID, err)
 		}
-		securityGroupNodeID = &id
+		securityGroupWorkerID = &id
 		if err := s.securityGroupSvc.PurgeSecurityGroup(ctx, id); err != nil {
 			return cluster, err
 		}
@@ -183,9 +182,9 @@ func (s *clusterService) DeleteCluster(ctx context.Context, cluster infrav1alpha
 			return cluster, fmt.Errorf("unable to delete security group for control plane: %w", err)
 		}
 	}
-	if securityGroupNodeID != nil {
-		if err := s.securityGroupSvc.DeleteSecurityGroup(ctx, *securityGroupNodeID); err != nil {
-			return cluster, fmt.Errorf("unable to delete security group for node: %w", err)
+	if securityGroupWorkerID != nil {
+		if err := s.securityGroupSvc.DeleteSecurityGroup(ctx, *securityGroupWorkerID); err != nil {
+			return cluster, fmt.Errorf("unable to delete security group for worker: %w", err)
 		}
 	}
 

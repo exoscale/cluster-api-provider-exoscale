@@ -67,8 +67,8 @@ func defaultControlPlaneRules(apiServerPort int32) []infrav1alpha1.SecurityGroup
 	}
 }
 
-// defaultNodeRules returns the default rules required to operate Kubernetes worker nodes.
-func defaultNodeRules() []infrav1alpha1.SecurityGroupRule {
+// defaultWorkerRules returns the default rules required to operate Kubernetes worker.
+func defaultWorkerRules() []infrav1alpha1.SecurityGroupRule {
 	return []infrav1alpha1.SecurityGroupRule{
 		{
 			Description:   "Kubelet API from control plane",
@@ -79,7 +79,7 @@ func defaultNodeRules() []infrav1alpha1.SecurityGroupRule {
 			SecurityGroup: new(string(securityGroupRefControlPlane)),
 		},
 		{
-			Description:   "Kubelet API node-to-node",
+			Description:   "Kubelet API worker-to-worker",
 			FlowDirection: egoscale.SecurityGroupRuleFlowDirectionIngress,
 			Protocol:      egoscale.SecurityGroupRuleProtocolTCP,
 			StartPort:     10250,
@@ -99,16 +99,16 @@ func defaultNodeRules() []infrav1alpha1.SecurityGroupRule {
 }
 
 // resolveRules concatenates default and user-defined spec rules and resolves them all, in one pass,
-// to their domain representation via specRuleToDomain. cpSGID/nodeSGID resolve the
+// to their domain representation via specRuleToDomain. cpSGID/workerSGID resolve the
 // "control-plane"/"worker" special values that either list may use.
-func resolveRules(cpSGID, nodeSGID uuid.UUID, defaults, userRules []infrav1alpha1.SecurityGroupRule) ([]domain.SecurityGroupRule, error) {
+func resolveRules(cpSGID, workerSGID uuid.UUID, defaults, userRules []infrav1alpha1.SecurityGroupRule) ([]domain.SecurityGroupRule, error) {
 	all := make([]infrav1alpha1.SecurityGroupRule, 0, len(defaults)+len(userRules))
 	all = append(all, defaults...)
 	all = append(all, userRules...)
 
 	resolved := make([]domain.SecurityGroupRule, 0, len(all))
 	for _, r := range all {
-		domainRule, err := specRuleToDomain(r, cpSGID, nodeSGID)
+		domainRule, err := specRuleToDomain(r, cpSGID, workerSGID)
 		if err != nil {
 			return nil, err
 		}
@@ -119,9 +119,9 @@ func resolveRules(cpSGID, nodeSGID uuid.UUID, defaults, userRules []infrav1alpha
 }
 
 // specRuleToDomain converts an API spec rule to the domain representation.
-// cpSGID/nodeSGID resolve the "control-plane"/"worker" special values, which refer to
-// this cluster's managed control-plane/node security group.
-func specRuleToDomain(rule infrav1alpha1.SecurityGroupRule, cpSGID, nodeSGID uuid.UUID) (domain.SecurityGroupRule, error) {
+// cpSGID/workerSGID resolve the "control-plane"/"worker" special values, which refer to
+// this cluster's managed control-plane/worker security group.
+func specRuleToDomain(rule infrav1alpha1.SecurityGroupRule, cpSGID, workerSGID uuid.UUID) (domain.SecurityGroupRule, error) {
 	domainRule := domain.SecurityGroupRule{
 		FlowDirection: domain.SecurityGroupRuleFlowDirection(rule.FlowDirection),
 		Protocol:      domain.SecurityGroupRuleProtocol(rule.Protocol),
@@ -136,7 +136,7 @@ func specRuleToDomain(rule infrav1alpha1.SecurityGroupRule, cpSGID, nodeSGID uui
 		case securityGroupRefControlPlane:
 			domainRule.SecurityGroup = &cpSGID
 		case securityGroupRefWorker:
-			domainRule.SecurityGroup = &nodeSGID
+			domainRule.SecurityGroup = &workerSGID
 		default:
 			id, err := uuid.Parse(*rule.SecurityGroup)
 			if err != nil {

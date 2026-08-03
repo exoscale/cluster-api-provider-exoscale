@@ -95,7 +95,7 @@ func newMachinePrerequisiteReconciler(t *testing.T, clusterInfrastructureReady, 
 	return context.Background(), &ExoscaleMachineReconciler{Client: client, Scheme: scheme}, client, exoscaleMachineName, ns
 }
 
-func newReadyMachineReconciler(t *testing.T, instance domain.Instance, upsertErr error, nodeSecurityGroupID *uuid.UUID) (context.Context, *ExoscaleMachineReconciler, crclient.Client, string, string) {
+func newReadyMachineReconciler(t *testing.T, instance domain.Instance, upsertErr error, workerSecurityGroupID *uuid.UUID) (context.Context, *ExoscaleMachineReconciler, crclient.Client, string, string) {
 	t.Helper()
 
 	const (
@@ -117,15 +117,15 @@ func newReadyMachineReconciler(t *testing.T, instance domain.Instance, upsertErr
 	scheme := newExoscaleMachineTestScheme(t)
 	instanceSvc := mocks.NewInstanceService(t)
 
-	var securityGroupNode *infrav1alpha1.SecurityGroupStatus
-	if nodeSecurityGroupID != nil {
-		securityGroupNode = &infrav1alpha1.SecurityGroupStatus{ID: nodeSecurityGroupID.String()}
+	var securityGroupWorker *infrav1alpha1.SecurityGroupStatus
+	if workerSecurityGroupID != nil {
+		securityGroupWorker = &infrav1alpha1.SecurityGroupStatus{ID: workerSecurityGroupID.String()}
 		instanceSvc.EXPECT().UpsertInstance(ctx, domain.MachineUID(machineUID.String()), (*uuid.UUID)(nil), domain.InstanceSpec{
 			Name:             machineUID.String(),
 			Template:         templateID.String(),
 			InstanceType:     "standard.small",
 			SSHKey:           "ssh-key",
-			SecurityGroupIDs: []uuid.UUID{*nodeSecurityGroupID},
+			SecurityGroupIDs: []uuid.UUID{*workerSecurityGroupID},
 			UserData:         "#cloud-config",
 			Labels: map[string]string{
 				instanceClusterIDLabel: clusterID,
@@ -162,9 +162,9 @@ func newReadyMachineReconciler(t *testing.T, instance domain.Instance, upsertErr
 					},
 				},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
-					ID:                &clusterID,
-					Initialization:    infrav1alpha1.ExoscaleClusterInitializationStatus{Provisioned: &clusterProvisioned},
-					SecurityGroupNode: securityGroupNode,
+					ID:                  &clusterID,
+					Initialization:      infrav1alpha1.ExoscaleClusterInitializationStatus{Provisioned: &clusterProvisioned},
+					SecurityGroupWorker: securityGroupWorker,
 				},
 			},
 			&corev1.Secret{

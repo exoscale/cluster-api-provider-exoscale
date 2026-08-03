@@ -92,7 +92,7 @@ type SecurityGroupRule struct {
 	// securityGroup identifies a security group as the source (ingress) or destination (egress) for this rule,
 	// as an alternative to a CIDR network. Accepts either the UUID of an existing Exoscale security group,
 	// or one of the special values "control-plane" / "worker" to refer to this cluster's managed
-	// control-plane or node security group.
+	// control-plane or worker security group.
 	// +optional
 	SecurityGroup *string `json:"securityGroup,omitempty"`
 

@@ -1,0 +1,10 @@
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: ExoscaleMachineTemplate
+metadata:
+  name: ($templateName)
+  namespace: ($namespace)
+spec:
+  template:
+    spec:
+      template: Linux Ubuntu 24.04 LTS 64-bit
+      instanceType: small

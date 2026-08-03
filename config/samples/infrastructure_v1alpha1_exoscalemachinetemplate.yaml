@@ -1,0 +1,12 @@
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: ExoscaleMachineTemplate
+metadata:
+  labels:
+    app.kubernetes.io/name: cluster-api-provider-exoscale
+    app.kubernetes.io/managed-by: kustomize
+  name: exoscalemachinetemplate-sample
+spec:
+  template:
+    spec:
+      template: Linux Ubuntu 24.04 LTS 64-bit
+      instanceType: small

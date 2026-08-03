@@ -41,31 +41,7 @@ type ExoscaleMachineTemplateResource struct {
 	Spec ExoscaleMachineSpec `json:"spec"`
 }
 
-// ExoscaleMachineTemplateStatus defines the observed state of ExoscaleMachineTemplate.
-type ExoscaleMachineTemplateStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// For Kubernetes API conventions, see:
-	// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
-
-	// conditions represent the current state of the ExoscaleMachineTemplate resource.
-	// Each condition has a unique type and reflects the status of a specific aspect of the resource.
-	//
-	// Standard condition types include:
-	// - "Available": the resource is fully functional
-	// - "Progressing": the resource is being created or updated
-	// - "Degraded": the resource failed to reach or maintain its desired state
-	//
-	// The status of each condition is one of True, False, or Unknown.
-	// +listType=map
-	// +listMapKey=type
-	// +optional
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
-}
-
 // +kubebuilder:object:root=true
-// +kubebuilder:subresource:status
 
 // ExoscaleMachineTemplate is the Schema for the exoscalemachinetemplates API
 type ExoscaleMachineTemplate struct {
@@ -78,10 +54,6 @@ type ExoscaleMachineTemplate struct {
 	// spec defines the desired state of ExoscaleMachineTemplate
 	// +required
 	Spec ExoscaleMachineTemplateSpec `json:"spec"`
-
-	// status defines the observed state of ExoscaleMachineTemplate
-	// +optional
-	Status ExoscaleMachineTemplateStatus `json:"status,omitzero"`
 }
 
 // +kubebuilder:object:root=true

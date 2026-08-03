@@ -1,0 +1,65 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: machine-template
+spec:
+  bindings:
+    - name: templateName
+      value: (join('-', ['machine-template', ($values.suffix || 'local')]))
+    - name: namespace
+      value: default
+
+  steps:
+    - name: apply valid machine template
+      try:
+        - apply:
+            file: exoscalemachinetemplate.yaml
+
+    - name: allow updating machine creation fields
+      try:
+        - update:
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleMachineTemplate
+              metadata:
+                name: ($templateName)
+                namespace: ($namespace)
+              spec:
+                template:
+                  spec:
+                    template: Linux Ubuntu 24.04 LTS 64-bit
+                    instanceType: medium
+        - assert:
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleMachineTemplate
+              metadata:
+                name: ($templateName)
+                namespace: ($namespace)
+              spec:
+                template:
+                  spec:
+                    instanceType: medium
+
+    - name: reject provider ID
+      try:
+        - update:
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleMachineTemplate
+              metadata:
+                name: ($templateName)
+                namespace: ($namespace)
+              spec:
+                template:
+                  spec:
+                    template: Linux Ubuntu 24.04 LTS 64-bit
+                    instanceType: medium
+                    providerID: exoscale://11111111-2222-3333-4444-555555555555
+            expect:
+              - match:
+                  apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+                  kind: ExoscaleMachineTemplate
+                check:
+                  ($error != null): true
+                  (contains($error, 'providerID must not be set in templates')): true

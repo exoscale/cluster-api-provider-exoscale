@@ -41,7 +41,6 @@ type ExoscaleMachineTemplateResource struct {
 // ExoscaleMachineTemplate is the Schema for the exoscalemachinetemplates API
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:path=exoscalemachinetemplates,scope=Namespaced,categories=cluster-api
-// +kubebuilder:storageversion
 type ExoscaleMachineTemplate struct {
 	metav1.TypeMeta `json:",inline"`
 

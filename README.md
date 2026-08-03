@@ -44,10 +44,12 @@ $> kubectl wait cluster/my-cluster --for=condition=ControlPlaneInitialized --tim
 $> ./bin/clusterctl get kubeconfig my-cluster > /tmp/my-cluster.kubeconfig
 $> kubectl --kubeconfig=/tmp/my-cluster.kubeconfig wait node --all --for=condition=Ready --timeout=10m
 $> kubectl wait cluster/my-cluster --for=condition=RemoteConnectionProbe --timeout=5m
-$> kubectl wait machine/my-control-plane --for=condition=Ready --for=condition=Available --timeout=5m
+$> kubectl wait kubeadmcontrolplane/my-control-plane --for=condition=Available --timeout=5m
+$> kubectl wait machine --selector='cluster.x-k8s.io/cluster-name=my-cluster,cluster.x-k8s.io/control-plane' --for=condition=Ready --timeout=5m
+$> kubectl wait machine --selector='cluster.x-k8s.io/cluster-name=my-cluster,cluster.x-k8s.io/control-plane' --for=condition=Available --timeout=5m
 $> kubectl --kubeconfig=/tmp/my-cluster.kubeconfig get nodes
 
-$> kubectl get exoscalecluster,machine,exoscalemachine,kubeadmconfig
+$> kubectl get cluster,kubeadmcontrolplane,exoscalecluster,exoscalemachinetemplate,machine,exoscalemachine,kubeadmconfig
 ```
 
 #### Run a workload smoke test
@@ -70,7 +72,8 @@ after Cluster deletion.
 $> export EXOSCALE_API_KEY=<api-key>       # Optional if exocli is not configured
 $> export EXOSCALE_API_SECRET=<api-secret> # Optional if exocli is not configured
 
-$> make chainsaw-test-e2e
+$> make chainsaw-test-e2e \
+     CHAINSAW_MACHINE_TEMPLATE='Linux Ubuntu 24.04 LTS 64-bit'
 ```
 
 ## License

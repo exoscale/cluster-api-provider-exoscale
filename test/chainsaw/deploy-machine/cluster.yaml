@@ -32,3 +32,7 @@ spec:
     apiGroup: infrastructure.cluster.x-k8s.io
     kind: ExoscaleCluster
     name: ($clusterName)
+  controlPlaneRef:
+    apiGroup: controlplane.cluster.x-k8s.io
+    kind: KubeadmControlPlane
+    name: ($clusterName)

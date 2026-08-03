@@ -17,7 +17,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func Test_cloud_CreateElasticIP(t *testing.T) {
+func Test_adapter_CreateElasticIP(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -108,7 +108,7 @@ func Test_cloud_CreateElasticIP(t *testing.T) {
 	}
 }
 
-func Test_cloud_GetElasticIP(t *testing.T) {
+func Test_adapter_GetElasticIP(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -175,7 +175,7 @@ func Test_cloud_GetElasticIP(t *testing.T) {
 	}
 }
 
-func Test_cloud_ListElasticIPs(t *testing.T) {
+func Test_adapter_ListElasticIPs(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -248,7 +248,7 @@ func Test_cloud_ListElasticIPs(t *testing.T) {
 	}
 }
 
-func Test_cloud_CreateInstance(t *testing.T) {
+func Test_adapter_CreateInstance(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -305,7 +305,7 @@ func Test_cloud_CreateInstance(t *testing.T) {
 	assert.Equal(t, instanceID, output)
 }
 
-func Test_cloud_UpdateElasticIP(t *testing.T) {
+func Test_adapter_UpdateElasticIP(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -384,7 +384,7 @@ func Test_cloud_UpdateElasticIP(t *testing.T) {
 	}
 }
 
-func Test_cloud_DeleteElasticIP(t *testing.T) {
+func Test_adapter_DeleteElasticIP(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -442,7 +442,7 @@ func Test_cloud_DeleteElasticIP(t *testing.T) {
 	}
 }
 
-func Test_cloud_CreateSecurityGroup(t *testing.T) {
+func Test_adapter_CreateSecurityGroup(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -519,7 +519,7 @@ func Test_cloud_CreateSecurityGroup(t *testing.T) {
 	}
 }
 
-func Test_cloud_GetSecurityGroup(t *testing.T) {
+func Test_adapter_GetSecurityGroup(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -577,7 +577,7 @@ func Test_cloud_GetSecurityGroup(t *testing.T) {
 	}
 }
 
-func Test_cloud_DeleteSecurityGroup(t *testing.T) {
+func Test_adapter_DeleteSecurityGroup(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -638,7 +638,7 @@ func Test_cloud_DeleteSecurityGroup(t *testing.T) {
 	}
 }
 
-func Test_cloud_CreateSecurityGroupRule(t *testing.T) {
+func Test_adapter_CreateSecurityGroupRule(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -782,7 +782,7 @@ func Test_cloud_CreateSecurityGroupRule(t *testing.T) {
 	}
 }
 
-func Test_cloud_DeleteSecurityGroupRule(t *testing.T) {
+func Test_adapter_DeleteSecurityGroupRule(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -843,7 +843,7 @@ func Test_cloud_DeleteSecurityGroupRule(t *testing.T) {
 	}
 }
 
-func Test_cloud_ListSecurityGroupRules(t *testing.T) {
+func Test_adapter_ListSecurityGroupRules(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -952,7 +952,7 @@ func Test_cloud_ListSecurityGroupRules(t *testing.T) {
 	}
 }
 
-func Test_cloud_ListInstances(t *testing.T) {
+func Test_adapter_ListInstances(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -1030,7 +1030,7 @@ func Test_cloud_ListInstances(t *testing.T) {
 	}
 }
 
-func Test_cloud_ListInstanceTypes(t *testing.T) {
+func Test_adapter_ListInstanceTypes(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -1081,7 +1081,7 @@ func Test_cloud_ListInstanceTypes(t *testing.T) {
 	}
 }
 
-func Test_cloud_GetTemplate(t *testing.T) {
+func Test_adapter_GetTemplate(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -1139,7 +1139,7 @@ func Test_cloud_GetTemplate(t *testing.T) {
 	}
 }
 
-func Test_cloud_ListTemplates(t *testing.T) {
+func Test_adapter_ListTemplates(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -1198,7 +1198,7 @@ func Test_cloud_ListTemplates(t *testing.T) {
 	}
 }
 
-func Test_cloud_GetInstance(t *testing.T) {
+func Test_adapter_GetInstance(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -1270,7 +1270,7 @@ func Test_cloud_GetInstance(t *testing.T) {
 	}
 }
 
-func Test_cloud_AttachInstanceToElasticIP(t *testing.T) {
+func Test_adapter_AttachInstanceToElasticIP(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -1332,7 +1332,7 @@ func Test_cloud_AttachInstanceToElasticIP(t *testing.T) {
 	}
 }
 
-func Test_cloud_AttachInstanceToSecurityGroup(t *testing.T) {
+func Test_adapter_AttachInstanceToSecurityGroup(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -1394,7 +1394,7 @@ func Test_cloud_AttachInstanceToSecurityGroup(t *testing.T) {
 	}
 }
 
-func Test_cloud_DetachInstanceFromSecurityGroup(t *testing.T) {
+func Test_adapter_DetachInstanceFromSecurityGroup(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
@@ -1456,7 +1456,7 @@ func Test_cloud_DetachInstanceFromSecurityGroup(t *testing.T) {
 	}
 }
 
-func Test_cloud_DeleteInstance(t *testing.T) {
+func Test_adapter_DeleteInstance(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()

@@ -23,7 +23,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -70,6 +69,7 @@ func Test_ExoscaleMachineTemplateCustomValidator_ValidateCreate(t *testing.T) {
 
 func Test_ExoscaleMachineTemplateCustomValidator_ValidateUpdate(t *testing.T) {
 	t.Parallel()
+	const updatedInstanceType = "medium"
 
 	tests := []struct {
 		name    string
@@ -90,7 +90,7 @@ func Test_ExoscaleMachineTemplateCustomValidator_ValidateUpdate(t *testing.T) {
 		{
 			name: "machine spec",
 			mutate: func(template *infrastructurev1alpha1.ExoscaleMachineTemplate) {
-				template.Spec.Template.Spec.InstanceType = "medium"
+				template.Spec.Template.Spec.InstanceType = updatedInstanceType
 			},
 			wantErr: "spec.template.spec is immutable",
 		},
@@ -99,14 +99,14 @@ func Test_ExoscaleMachineTemplateCustomValidator_ValidateUpdate(t *testing.T) {
 			dryRun: true,
 			mutate: func(template *infrastructurev1alpha1.ExoscaleMachineTemplate) {
 				template.Annotations = map[string]string{clusterv1.TopologyDryRunAnnotation: ""}
-				template.Spec.Template.Spec.InstanceType = "medium"
+				template.Spec.Template.Spec.InstanceType = updatedInstanceType
 			},
 		},
 		{
 			name:   "unannotated dry-run",
 			dryRun: true,
 			mutate: func(template *infrastructurev1alpha1.ExoscaleMachineTemplate) {
-				template.Spec.Template.Spec.InstanceType = "medium"
+				template.Spec.Template.Spec.InstanceType = updatedInstanceType
 			},
 			wantErr: "spec.template.spec is immutable",
 		},
@@ -125,7 +125,7 @@ func Test_ExoscaleMachineTemplateCustomValidator_ValidateUpdate(t *testing.T) {
 			newObj := oldObj.DeepCopy()
 			tt.mutate(newObj)
 			ctx := admission.NewContextWithRequest(context.Background(), admission.Request{
-				AdmissionRequest: admissionv1.AdmissionRequest{DryRun: ptr.To(tt.dryRun)},
+				AdmissionRequest: admissionv1.AdmissionRequest{DryRun: new(tt.dryRun)},
 			})
 
 			warnings, err := (&ExoscaleMachineTemplateCustomValidator{}).ValidateUpdate(ctx, oldObj, newObj)

@@ -232,16 +232,6 @@ spec:
         required:
         - spec
         type: object
-        x-kubernetes-validations:
-        - message: instance creation fields are immutable
-          rule: self.spec.template == oldSelf.spec.template && self.spec.instanceType
-            == oldSelf.spec.instanceType && has(self.spec.sshKey) == has(oldSelf.spec.sshKey)
-            && (!has(self.spec.sshKey) || self.spec.sshKey == oldSelf.spec.sshKey)
-            && has(self.spec.securityGroups) == has(oldSelf.spec.securityGroups) &&
-            (!has(self.spec.securityGroups) || self.spec.securityGroups == oldSelf.spec.securityGroups)
-            && has(self.spec.rootVolumeSizeGiB) == has(oldSelf.spec.rootVolumeSizeGiB)
-            && (!has(self.spec.rootVolumeSizeGiB) || self.spec.rootVolumeSizeGiB ==
-            oldSelf.spec.rootVolumeSizeGiB)
     served: true
     storage: true
     subresources:

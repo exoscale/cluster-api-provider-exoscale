@@ -234,6 +234,10 @@ func main() {
 			setupLog.Error(err, "Failed to create webhook", "webhook", "ExoscaleMachine")
 			os.Exit(1)
 		}
+		if err := webhookv1alpha1.SetupExoscaleMachineTemplateWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "Failed to create webhook", "webhook", "ExoscaleMachineTemplate")
+			os.Exit(1)
+		}
 		if err := webhookv1alpha1.SetupExoscaleClusterTemplateWebhookWithManager(mgr); err != nil {
 			setupLog.Error(err, "Failed to create webhook", "webhook", "ExoscaleClusterTemplate")
 			os.Exit(1)

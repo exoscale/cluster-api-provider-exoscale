@@ -17,54 +17,116 @@ limitations under the License.
 package v1alpha1
 
 import (
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	"context"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 
 	infrastructurev1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
-	// TODO (user): Add any additional imports if needed
+	"github.com/exoscale/cluster-api-provider-exoscale/internal/mocks"
 )
 
-var _ = Describe("ExoscaleCluster Webhook", func() {
-	var (
-		obj       *infrastructurev1alpha1.ExoscaleCluster
-		oldObj    *infrastructurev1alpha1.ExoscaleCluster
-		validator ExoscaleClusterCustomValidator
-	)
+func Test_ExoscaleClusterCustomValidator_ValidateCreate(t *testing.T) {
+	t.Parallel()
 
-	BeforeEach(func() {
-		obj = &infrastructurev1alpha1.ExoscaleCluster{}
-		oldObj = &infrastructurev1alpha1.ExoscaleCluster{}
-		validator = ExoscaleClusterCustomValidator{}
-		Expect(validator).NotTo(BeNil(), "Expected validator to be initialized")
-		Expect(oldObj).NotTo(BeNil(), "Expected oldObj to be initialized")
-		Expect(obj).NotTo(BeNil(), "Expected obj to be initialized")
-	})
+	obj := &infrastructurev1alpha1.ExoscaleCluster{ObjectMeta: v1.ObjectMeta{Name: "my-cluster"}}
 
-	AfterEach(func() {
-		// TODO (user): Add any teardown logic common to all tests
-	})
+	tests := []struct {
+		name      string
+		validator func(m *mocks.ClusterValidator)
+		err       error
+	}{
+		{
+			name: "valid spec admits creation",
+			validator: func(m *mocks.ClusterValidator) {
+				m.EXPECT().
+					ValidateCreate(obj.Spec, field.NewPath("spec")).
+					Return(nil)
+			},
+		},
+		{
+			name: "invalid spec is rejected",
+			validator: func(m *mocks.ClusterValidator) {
+				m.EXPECT().
+					ValidateCreate(obj.Spec, field.NewPath("spec")).
+					Return(field.ErrorList{field.Forbidden(field.NewPath("spec", "zone"), assert.AnError.Error())})
+			},
+			err: assert.AnError,
+		},
+	}
 
-	Context("When creating or updating ExoscaleCluster under Validating Webhook", func() {
-		// TODO (user): Add logic for validating webhooks
-		// Example:
-		// It("Should deny creation if a required field is missing", func() {
-		//     By("simulating an invalid creation scenario")
-		//     obj.SomeRequiredField = ""
-		//     Expect(validator.ValidateCreate(ctx, obj)).Error().To(HaveOccurred())
-		// })
-		//
-		// It("Should admit creation if all required fields are present", func() {
-		//     By("simulating an invalid creation scenario")
-		//     obj.SomeRequiredField = "valid_value"
-		//     Expect(validator.ValidateCreate(ctx, obj)).To(BeNil())
-		// })
-		//
-		// It("Should validate updates correctly", func() {
-		//     By("simulating a valid update scenario")
-		//     oldObj.SomeRequiredField = "updated_value"
-		//     obj.SomeRequiredField = "updated_value"
-		//     Expect(validator.ValidateUpdate(ctx, oldObj, obj)).To(BeNil())
-		// })
-	})
+	for _, ut := range tests {
+		t.Run(ut.name, func(t *testing.T) {
+			t.Parallel()
 
-})
+			validatorMock := mocks.NewClusterValidator(t)
+			if ut.validator != nil {
+				ut.validator(validatorMock)
+			}
+
+			validator := ExoscaleClusterCustomValidator{validator: validatorMock}
+			warning, err := validator.ValidateCreate(context.Background(), obj)
+
+			assert.Nil(t, warning)
+			if ut.err != nil {
+				assert.ErrorContains(t, err, ut.err.Error())
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func Test_ExoscaleClusterCustomValidator_ValidateUpdate(t *testing.T) {
+	t.Parallel()
+
+	oldObj := &infrastructurev1alpha1.ExoscaleCluster{}
+	newObj := &infrastructurev1alpha1.ExoscaleCluster{ObjectMeta: v1.ObjectMeta{Name: "my-cluster"}}
+
+	tests := []struct {
+		name      string
+		validator func(m *mocks.ClusterValidator)
+		err       error
+	}{
+		{
+			name: "valid spec admits the update",
+			validator: func(m *mocks.ClusterValidator) {
+				m.EXPECT().
+					ValidateUpdate(oldObj.Spec, newObj.Spec, field.NewPath("spec")).
+					Return(nil)
+			},
+		},
+		{
+			name: "invalid spec is rejected",
+			validator: func(m *mocks.ClusterValidator) {
+				m.EXPECT().
+					ValidateUpdate(oldObj.Spec, newObj.Spec, field.NewPath("spec")).
+					Return(field.ErrorList{field.Forbidden(field.NewPath("spec", "zone"), assert.AnError.Error())})
+			},
+			err: assert.AnError,
+		},
+	}
+
+	for _, ut := range tests {
+		t.Run(ut.name, func(t *testing.T) {
+			t.Parallel()
+
+			validatorMock := mocks.NewClusterValidator(t)
+			if ut.validator != nil {
+				ut.validator(validatorMock)
+			}
+
+			validator := ExoscaleClusterCustomValidator{validator: validatorMock}
+			warning, err := validator.ValidateUpdate(context.Background(), oldObj, newObj)
+
+			assert.Nil(t, warning)
+			if ut.err != nil {
+				assert.ErrorContains(t, err, ut.err.Error())
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}

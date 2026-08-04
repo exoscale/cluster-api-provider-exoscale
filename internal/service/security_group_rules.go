@@ -67,7 +67,7 @@ func defaultControlPlaneRules(apiServerPort int32) []infrav1alpha1.SecurityGroup
 	}
 }
 
-// defaultWorkerRules returns the default rules required to operate Kubernetes worker.
+// defaultWorkerRules returns the default rules required to operate Kubernetes workers.
 func defaultWorkerRules() []infrav1alpha1.SecurityGroupRule {
 	return []infrav1alpha1.SecurityGroupRule{
 		{

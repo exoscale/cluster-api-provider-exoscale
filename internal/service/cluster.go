@@ -98,13 +98,13 @@ func (s *clusterService) ReconcileCluster(ctx context.Context, cluster infrav1al
 	if cluster.Status.SecurityGroupWorker != nil {
 		id, err := uuid.Parse(cluster.Status.SecurityGroupWorker.ID)
 		if err != nil {
-			return cluster, fmt.Errorf("unable to parse %q: %w: %w", ".status.SecurityGroupWorker.id", errInvalidID, err)
+			return cluster, fmt.Errorf("unable to parse %q: %w: %w", ".status.securityGroupWorker.id", errInvalidID, err)
 		}
 		securityGroupWorkerID = &id
 	}
 	securityGroupWorker, err := s.securityGroupSvc.UpsertSecurityGroup(ctx, clusterID, securityGroupWorkerID, securityGroupWorkerName)
 	if err != nil {
-		return cluster, fmt.Errorf("unable to upsert security group worker: %w", err)
+		return cluster, fmt.Errorf("unable to upsert security group for worker: %w", err)
 	}
 	cluster.Status.SecurityGroupWorker = &infrav1alpha1.SecurityGroupStatus{
 		ID:   securityGroupWorker.ID.String(),
@@ -128,11 +128,11 @@ func (s *clusterService) ReconcileCluster(ctx context.Context, cluster infrav1al
 	if err != nil {
 		return cluster, fmt.Errorf("unable to build worker security group rules: %w", err)
 	}
-	WorkerRules, err := s.securityGroupSvc.UpsertSecurityGroupRules(ctx, securityGroupWorker.ID, desiredWorkerRulesList)
+	workerRules, err := s.securityGroupSvc.UpsertSecurityGroupRules(ctx, securityGroupWorker.ID, desiredWorkerRulesList)
 	if err != nil {
 		return cluster, fmt.Errorf("unable to upsert worker security group rules: %w", err)
 	}
-	cluster.Status.SecurityGroupWorker.Rules = domainRulesToStatus(WorkerRules)
+	cluster.Status.SecurityGroupWorker.Rules = domainRulesToStatus(workerRules)
 
 	cluster.Status.Initialization.Provisioned = new(true)
 

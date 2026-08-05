@@ -59,17 +59,17 @@ type ExoscaleClusterSpec struct {
 	Zone egoscale.ZoneName `json:"zone"`
 
 	// SecurityGroupControlPlane defines additional firewall rules applied to the cluster control plane.
-	// The controller automatically creates the base rules required for Kubernetes node
+	// The controller automatically creates the base rules required for Kubernetes worker
 	// and the control plane to communicate. Use this field to add extra rules on top,
 	// for example to allow ssh traffic on the control plane resource.
 	// +optional
 	SecurityGroupControlPlane SecurityGroup `json:"securityGroupControlPlane,omitempty"`
 
-	// SecurityGroupNode defines additional firewall rules applied to the cluster nodes.
+	// SecurityGroupWorker defines additional firewall rules applied to the cluster workers.
 	// The controller automatically creates the basic rules required to operate a Kubernetes cluster.
 	// Use this field to add extra rules on top, for example to allow traffic for your CNI plugin.
 	// +optional
-	SecurityGroupNode SecurityGroup `json:"securityGroupNode,omitempty"`
+	SecurityGroupWorker SecurityGroup `json:"securityGroupWorker,omitempty"`
 }
 
 // ExoscaleClusterStatus defines the observed state of ExoscaleCluster.
@@ -94,7 +94,7 @@ type ExoscaleClusterStatus struct {
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
-	// initialization provides observations of the HetznerCluster initialization process.
+	// initialization provides observations of the ExoscaleCluster initialization process.
 	// NOTE: Fields in this struct are part of the Cluster API contract and are used to orchestrate initial Cluster provisioning.
 	// see: https://cluster-api.sigs.k8s.io/developer/providers/contracts/infra-cluster#infracluster-initialization-completed
 	// +optional
@@ -107,7 +107,7 @@ type ExoscaleClusterStatus struct {
 	// +optional
 	SecurityGroupControlPlan *SecurityGroupStatus `json:"securityGroupControlPlane,omitempty,omitzero"`
 	// +optional
-	SecurityGroupNode *SecurityGroupStatus `json:"securityGroupNode,omitempty,omitzero"`
+	SecurityGroupWorker *SecurityGroupStatus `json:"securityGroupWorker,omitempty,omitzero"`
 
 	// +optional
 	ControlPlaneEndpoint *APIEndpointStatus `json:"controlPlaneEndpoint,omitempty,omitzero"`
@@ -118,7 +118,7 @@ type ExoscaleClusterStatus struct {
 // +kubebuilder:printcolumn:name="Port",type="string",JSONPath=".status.controlPlaneEndpoint.port",description="API Endpoint"
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status",description="Cluster infrastructure is ready for Nodes"
 // +kubebuilder:printcolumn:name="Reason",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].reason",priority=1
-// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Time duration since creation of HetznerCluster"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Time duration since creation of ExoscaleCluster"
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=exoscaleclusters,scope=Namespaced,categories=cluster-api

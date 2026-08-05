@@ -64,7 +64,7 @@ func Test_defaultControlPlaneRules(t *testing.T) {
 	}, rules)
 }
 
-func Test_defaultNodeRules(t *testing.T) {
+func Test_defaultWorkerRules(t *testing.T) {
 	t.Parallel()
 
 	assert.Equal(t, []infrav1alpha1.SecurityGroupRule{
@@ -77,21 +77,21 @@ func Test_defaultNodeRules(t *testing.T) {
 			SecurityGroup: new(string(securityGroupRefControlPlane)),
 		},
 		{
-			Description:   "Kubelet API node-to-node",
+			Description:   "Kubelet API worker-to-worker",
 			FlowDirection: egoscale.SecurityGroupRuleFlowDirectionIngress,
 			Protocol:      egoscale.SecurityGroupRuleProtocolTCP,
 			StartPort:     10250,
 			EndPort:       10250,
 			SecurityGroup: new(string(securityGroupRefWorker)),
 		},
-	}, defaultNodeRules())
+	}, defaultWorkerRules())
 }
 
 func Test_specRuleToDomain(t *testing.T) {
 	t.Parallel()
 
 	cpSGID := uuid.New()
-	nodeSGID := uuid.New()
+	workerSGID := uuid.New()
 	otherSGID := uuid.New()
 	cidr := "10.0.0.0/8"
 
@@ -151,7 +151,7 @@ func Test_specRuleToDomain(t *testing.T) {
 				Protocol:      domain.SecurityGroupRuleProtocolTCP,
 				StartPort:     10250,
 				EndPort:       10250,
-				SecurityGroup: &nodeSGID,
+				SecurityGroup: &workerSGID,
 			},
 		},
 		{
@@ -180,7 +180,7 @@ func Test_specRuleToDomain(t *testing.T) {
 
 	for _, ut := range tests {
 		t.Run(ut.name, func(t *testing.T) {
-			got, err := specRuleToDomain(ut.rule, cpSGID, nodeSGID)
+			got, err := specRuleToDomain(ut.rule, cpSGID, workerSGID)
 
 			if ut.err != "" {
 				assert.ErrorContains(t, err, ut.err)

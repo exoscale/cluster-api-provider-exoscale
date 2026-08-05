@@ -197,25 +197,27 @@ func Test_securityGroupIDs_rejectsInvalidIDs(t *testing.T) {
 		machineRole MachineRole
 		wantErr     string
 	}{
-		"invalid node security group": {
+		"invalid worker security group": {
 			cluster: infrav1alpha1.ExoscaleCluster{
-				Status: infrav1alpha1.ExoscaleClusterStatus{SecurityGroupNode: &infrav1alpha1.SecurityGroupStatus{ID: "bad-id"}},
+				Status: infrav1alpha1.ExoscaleClusterStatus{SecurityGroupWorker: &infrav1alpha1.SecurityGroupStatus{ID: "bad-id"}},
 			},
-			wantErr: "invalid node security group ID",
+			machineRole: MachineRoleWorker,
+			wantErr:     "invalid worker security group ID",
 		},
 		"invalid control plane security group": {
 			cluster: infrav1alpha1.ExoscaleCluster{
 				Status: infrav1alpha1.ExoscaleClusterStatus{SecurityGroupControlPlan: &infrav1alpha1.SecurityGroupStatus{ID: "bad-id"}},
 			},
 			machineRole: MachineRoleControlPlane,
-			wantErr:     "invalid control plane security group ID",
+			wantErr:     "invalid control-plane security group ID",
 		},
 		"invalid machine security group": {
 			cluster: infrav1alpha1.ExoscaleCluster{
-				Status: infrav1alpha1.ExoscaleClusterStatus{SecurityGroupNode: &infrav1alpha1.SecurityGroupStatus{ID: validID}},
+				Status: infrav1alpha1.ExoscaleClusterStatus{SecurityGroupWorker: &infrav1alpha1.SecurityGroupStatus{ID: validID}},
 			},
-			machine: infrav1alpha1.ExoscaleMachine{Spec: infrav1alpha1.ExoscaleMachineSpec{SecurityGroups: []string{"bad-id"}}},
-			wantErr: "invalid ExoscaleMachine security group ID",
+			machine:     infrav1alpha1.ExoscaleMachine{Spec: infrav1alpha1.ExoscaleMachineSpec{SecurityGroups: []string{"bad-id"}}},
+			machineRole: MachineRoleWorker,
+			wantErr:     "invalid ExoscaleMachine security group ID",
 		},
 	}
 
@@ -232,11 +234,11 @@ func Test_securityGroupIDs_selectsMachineRole(t *testing.T) {
 	t.Parallel()
 
 	controlPlaneID := uuid.New()
-	nodeID := uuid.New()
+	workerID := uuid.New()
 	customID := uuid.New()
 	cluster := infrav1alpha1.ExoscaleCluster{Status: infrav1alpha1.ExoscaleClusterStatus{
 		SecurityGroupControlPlan: &infrav1alpha1.SecurityGroupStatus{ID: controlPlaneID.String()},
-		SecurityGroupNode:        &infrav1alpha1.SecurityGroupStatus{ID: nodeID.String()},
+		SecurityGroupWorker:      &infrav1alpha1.SecurityGroupStatus{ID: workerID.String()},
 	}}
 	machine := infrav1alpha1.ExoscaleMachine{Spec: infrav1alpha1.ExoscaleMachineSpec{SecurityGroups: []string{customID.String()}}}
 
@@ -244,7 +246,7 @@ func Test_securityGroupIDs_selectsMachineRole(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, []uuid.UUID{controlPlaneID, customID}, controlPlaneIDs)
 
-	nodeIDs, err := securityGroupIDs(&cluster, &machine, MachineRoleWorker)
+	workerIDs, err := securityGroupIDs(&cluster, &machine, MachineRoleWorker)
 	assert.NoError(t, err)
-	assert.Equal(t, []uuid.UUID{nodeID, customID}, nodeIDs)
+	assert.Equal(t, []uuid.UUID{workerID, customID}, workerIDs)
 }

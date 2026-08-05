@@ -13,20 +13,20 @@ import (
 
 const operationWaitTimeout = 10 * time.Minute
 
-func NewCloudWithLogging(apiKey, apiSecret string, zone egoscale.ZoneName, logger logr.Logger) (*Adapter, error) {
+func NewCloudWithLogging(apiKey, apiSecret string, zone egoscale.ZoneName, logger logr.Logger) (*adapter, error) {
 	client, err := newClient(apiKey, apiSecret, zone, metadataHTTPClient(logger))
 	if err != nil {
 		return nil, err
 	}
-	return &Adapter{client: client}, nil
+	return &adapter{client: client}, nil
 }
 
-func NewCloud(apiKey, apiSecret string, zone egoscale.ZoneName) (*Adapter, error) {
+func NewCloud(apiKey, apiSecret string, zone egoscale.ZoneName) (*adapter, error) {
 	client, err := newClient(apiKey, apiSecret, zone, nil)
 	if err != nil {
 		return nil, err
 	}
-	return &Adapter{client: client}, nil
+	return &adapter{client: client}, nil
 }
 
 func newClient(apiKey, apiSecret string, zone egoscale.ZoneName, httpClient *http.Client) (*egoscale.Client, error) {

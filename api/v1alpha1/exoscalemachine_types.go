@@ -46,7 +46,7 @@ type ExoscaleMachineSpec struct {
 	SSHKey string `json:"sshKey,omitempty"`
 
 	// securityGroups lists UUIDs of Exoscale Security Groups to attach in addition
-	// to the cluster's control-plane or node security group.
+	// to the cluster's control-plane or worker security group.
 	// +optional
 	SecurityGroups []string `json:"securityGroups,omitempty"`
 

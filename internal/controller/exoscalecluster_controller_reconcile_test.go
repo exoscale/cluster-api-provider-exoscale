@@ -26,7 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-func TestExoscaleClusterReconciler_Reconcile_nominal(t *testing.T) {
+func Test_ExoscaleClusterReconciler_Reconcile_nominal(t *testing.T) {
 	t.Parallel()
 
 	const (
@@ -363,7 +363,7 @@ func TestExoscaleClusterReconciler_Reconcile_nominal(t *testing.T) {
 	}
 }
 
-func TestExoscaleClusterReconciler_Reconcile_error(t *testing.T) {
+func Test_ExoscaleClusterReconciler_Reconcile_error(t *testing.T) {
 	t.Parallel()
 
 	const (

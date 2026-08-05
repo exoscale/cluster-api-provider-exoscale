@@ -45,7 +45,7 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 	instanceID := uuid.New()
 	elasticIPID := uuid.New()
 	controlPlaneSecurityGroupID := uuid.New()
-	nodeSecurityGroupID := uuid.New()
+	workerSecurityGroupID := uuid.New()
 	clusterID := uuid.NewString()
 	rootVolumeSize := int64(20)
 	dataSecretName := bootstrapSecretName
@@ -104,7 +104,7 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 					Initialization:           infrav1alpha1.ExoscaleClusterInitializationStatus{Provisioned: &clusterProvisioned},
 					ControlPlaneEndpoint:     &infrav1alpha1.APIEndpointStatus{ID: elasticIPID.String()},
 					SecurityGroupControlPlan: &infrav1alpha1.SecurityGroupStatus{ID: controlPlaneSecurityGroupID.String()},
-					SecurityGroupNode:        &infrav1alpha1.SecurityGroupStatus{ID: nodeSecurityGroupID.String()},
+					SecurityGroupWorker:      &infrav1alpha1.SecurityGroupStatus{ID: workerSecurityGroupID.String()},
 				},
 			},
 			&corev1.Secret{
@@ -282,7 +282,7 @@ func TestExoscaleMachineReconciler_Reconcile_prerequisites(t *testing.T) {
 	}
 }
 
-func TestExoscaleMachineReconciler_Reconcile_waitsForNodeSecurityGroup(t *testing.T) {
+func TestExoscaleMachineReconciler_Reconcile_waitsForWorkerSecurityGroup(t *testing.T) {
 	t.Parallel()
 
 	ctx, r, client, exoscaleMachineName, ns := newReadyMachineReconciler(t, domain.Instance{}, nil, nil)
@@ -403,8 +403,8 @@ func TestExoscaleMachineReconciler_Reconcile_returnsInvalidStatusInstanceID(t *t
 func TestExoscaleMachineReconciler_Reconcile_returnsInstanceServiceError(t *testing.T) {
 	t.Parallel()
 
-	nodeSecurityGroupID := uuid.New()
-	ctx, r, client, exoscaleMachineName, ns := newReadyMachineReconciler(t, domain.Instance{}, assert.AnError, &nodeSecurityGroupID)
+	workerSecurityGroupID := uuid.New()
+	ctx, r, client, exoscaleMachineName, ns := newReadyMachineReconciler(t, domain.Instance{}, assert.AnError, &workerSecurityGroupID)
 
 	result, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}})
 

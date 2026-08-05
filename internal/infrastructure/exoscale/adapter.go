@@ -14,14 +14,14 @@ import (
 	"github.com/google/uuid"
 )
 
-var _ domain.Cloud = (*Adapter)(nil)
+var _ domain.Cloud = (*adapter)(nil)
 
-// Adapter translates infrastructure operations between domain types and the egoscale SDK.
-type Adapter struct {
+// adapter translates infrastructure operations between domain types and the egoscale SDK.
+type adapter struct {
 	client domain.ExoscaleClient
 }
 
-func (a *Adapter) waitForSuccess(ctx context.Context, op *egoscale.Operation) (*egoscale.Operation, error) {
+func (a *adapter) waitForSuccess(ctx context.Context, op *egoscale.Operation) (*egoscale.Operation, error) {
 	completed, err := a.client.Wait(ctx, op, egoscale.OperationStateSuccess)
 	if err != nil {
 		return nil, err
@@ -48,7 +48,7 @@ func operationReferenceID(op *egoscale.Operation) (uuid.UUID, error) {
 }
 
 // CreateElasticIP creates a managed elastic IP and waits for the operation to complete.
-func (a *Adapter) CreateElasticIP(ctx context.Context, healthCheckPort int32, description string) (uuid.UUID, error) {
+func (a *adapter) CreateElasticIP(ctx context.Context, healthCheckPort int32, description string) (uuid.UUID, error) {
 	op, err := a.client.CreateElasticIP(ctx, egoscale.CreateElasticIPRequest{
 		Description: description,
 		Healthcheck: &egoscale.ElasticIPHealthcheck{
@@ -74,7 +74,7 @@ func (a *Adapter) CreateElasticIP(ctx context.Context, healthCheckPort int32, de
 }
 
 // GetElasticIP returns an Elastic IP as a domain value.
-func (a *Adapter) GetElasticIP(ctx context.Context, id uuid.UUID) (domain.ElasticIP, error) {
+func (a *adapter) GetElasticIP(ctx context.Context, id uuid.UUID) (domain.ElasticIP, error) {
 	elasticIP, err := a.client.GetElasticIP(ctx, egoscale.UUID(id.String()))
 	if err != nil {
 		if errors.Is(err, egoscale.ErrNotFound) {
@@ -97,7 +97,7 @@ func (a *Adapter) GetElasticIP(ctx context.Context, id uuid.UUID) (domain.Elasti
 }
 
 // ListElasticIPs returns all Elastic IPs as domain values.
-func (a *Adapter) ListElasticIPs(ctx context.Context) ([]domain.ElasticIP, error) {
+func (a *adapter) ListElasticIPs(ctx context.Context) ([]domain.ElasticIP, error) {
 	resp, err := a.client.ListElasticIPS(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list elastic IPs: %w", err)
@@ -127,7 +127,7 @@ func (a *Adapter) ListElasticIPs(ctx context.Context) ([]domain.ElasticIP, error
 }
 
 // UpdateElasticIP updates an Elastic IP and waits for completion.
-func (a *Adapter) UpdateElasticIP(ctx context.Context, eip domain.ElasticIP) error {
+func (a *adapter) UpdateElasticIP(ctx context.Context, eip domain.ElasticIP) error {
 	op, err := a.client.UpdateElasticIP(ctx, egoscale.UUID(eip.ID.String()), egoscale.UpdateElasticIPRequest{
 		Description: eip.Description,
 		Healthcheck: &egoscale.ElasticIPHealthcheck{
@@ -148,7 +148,7 @@ func (a *Adapter) UpdateElasticIP(ctx context.Context, eip domain.ElasticIP) err
 }
 
 // DeleteElasticIP deletes an Elastic IP and waits for completion.
-func (a *Adapter) DeleteElasticIP(ctx context.Context, id uuid.UUID) error {
+func (a *adapter) DeleteElasticIP(ctx context.Context, id uuid.UUID) error {
 	op, err := a.client.DeleteElasticIP(ctx, egoscale.UUID(id.String()))
 	if err != nil {
 		return fmt.Errorf("unable to delete elastic ip: %w", err)
@@ -163,7 +163,7 @@ func (a *Adapter) DeleteElasticIP(ctx context.Context, id uuid.UUID) error {
 }
 
 // CreateSecurityGroup creates a Security Group and returns its ID.
-func (a *Adapter) CreateSecurityGroup(ctx context.Context, name string) (uuid.UUID, error) {
+func (a *adapter) CreateSecurityGroup(ctx context.Context, name string) (uuid.UUID, error) {
 	op, err := a.client.CreateSecurityGroup(ctx, egoscale.CreateSecurityGroupRequest{
 		Name: name,
 	})
@@ -185,7 +185,7 @@ func (a *Adapter) CreateSecurityGroup(ctx context.Context, name string) (uuid.UU
 }
 
 // GetSecurityGroup returns a Security Group as a domain value.
-func (a *Adapter) GetSecurityGroup(ctx context.Context, id uuid.UUID) (domain.SecurityGroup, error) {
+func (a *adapter) GetSecurityGroup(ctx context.Context, id uuid.UUID) (domain.SecurityGroup, error) {
 	sg, err := a.client.GetSecurityGroup(ctx, egoscale.UUID(id.String()))
 	if err != nil {
 		if errors.Is(err, egoscale.ErrNotFound) {
@@ -201,7 +201,7 @@ func (a *Adapter) GetSecurityGroup(ctx context.Context, id uuid.UUID) (domain.Se
 }
 
 // DeleteSecurityGroup deletes a Security Group and waits for completion.
-func (a *Adapter) DeleteSecurityGroup(ctx context.Context, id uuid.UUID) error {
+func (a *adapter) DeleteSecurityGroup(ctx context.Context, id uuid.UUID) error {
 	op, err := a.client.DeleteSecurityGroup(ctx, egoscale.UUID(id.String()))
 	if err != nil {
 		return fmt.Errorf("unable to delete security group: %w", err)
@@ -215,7 +215,7 @@ func (a *Adapter) DeleteSecurityGroup(ctx context.Context, id uuid.UUID) error {
 }
 
 // CreateSecurityGroupRule creates a rule and returns its ID.
-func (a *Adapter) CreateSecurityGroupRule(ctx context.Context, sgID uuid.UUID, rule domain.SecurityGroupRule) (uuid.UUID, error) {
+func (a *adapter) CreateSecurityGroupRule(ctx context.Context, sgID uuid.UUID, rule domain.SecurityGroupRule) (uuid.UUID, error) {
 	req := egoscale.AddRuleToSecurityGroupRequest{
 		Description:   rule.Description,
 		FlowDirection: egoscale.AddRuleToSecurityGroupRequestFlowDirection(rule.FlowDirection),
@@ -251,7 +251,7 @@ func (a *Adapter) CreateSecurityGroupRule(ctx context.Context, sgID uuid.UUID, r
 }
 
 // DeleteSecurityGroupRule deletes a rule and waits for completion.
-func (a *Adapter) DeleteSecurityGroupRule(ctx context.Context, sgID uuid.UUID, ruleID uuid.UUID) error {
+func (a *adapter) DeleteSecurityGroupRule(ctx context.Context, sgID uuid.UUID, ruleID uuid.UUID) error {
 	op, err := a.client.DeleteRuleFromSecurityGroup(ctx, egoscale.UUID(sgID.String()), egoscale.UUID(ruleID.String()))
 	if err != nil {
 		return fmt.Errorf("unable to delete security group rule: %w", err)
@@ -265,7 +265,7 @@ func (a *Adapter) DeleteSecurityGroupRule(ctx context.Context, sgID uuid.UUID, r
 }
 
 // ListSecurityGroupRules returns the rules attached to a Security Group.
-func (a *Adapter) ListSecurityGroupRules(ctx context.Context, sgID uuid.UUID) ([]domain.SecurityGroupRule, error) {
+func (a *adapter) ListSecurityGroupRules(ctx context.Context, sgID uuid.UUID) ([]domain.SecurityGroupRule, error) {
 	sg, err := a.client.GetSecurityGroup(ctx, egoscale.UUID(sgID.String()))
 	if err != nil {
 		if errors.Is(err, egoscale.ErrNotFound) {
@@ -310,7 +310,7 @@ func (a *Adapter) ListSecurityGroupRules(ctx context.Context, sgID uuid.UUID) ([
 
 // ListInstances returns instances matching the given label using the format: key=value.
 // Do not support passing a list as part of the label.
-func (a *Adapter) ListInstances(ctx context.Context, label string) ([]domain.Instance, error) {
+func (a *adapter) ListInstances(ctx context.Context, label string) ([]domain.Instance, error) {
 	resp, err := a.client.ListInstances(ctx, egoscale.ListInstancesWithLabels(label))
 	if err != nil {
 		return nil, fmt.Errorf("unable to list instances: %w", err)
@@ -342,7 +342,7 @@ func (a *Adapter) ListInstances(ctx context.Context, label string) ([]domain.Ins
 }
 
 // ListInstanceTypes returns the available compute offerings.
-func (a *Adapter) ListInstanceTypes(ctx context.Context) ([]domain.InstanceType, error) {
+func (a *adapter) ListInstanceTypes(ctx context.Context) ([]domain.InstanceType, error) {
 	instanceTypes, err := a.client.ListInstanceTypes(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list instance types: %w", err)
@@ -361,7 +361,7 @@ func (a *Adapter) ListInstanceTypes(ctx context.Context) ([]domain.InstanceType,
 }
 
 // GetTemplate returns one instance template as a domain value.
-func (a *Adapter) GetTemplate(ctx context.Context, id uuid.UUID) (domain.InstanceTemplate, error) {
+func (a *adapter) GetTemplate(ctx context.Context, id uuid.UUID) (domain.InstanceTemplate, error) {
 	template, err := a.client.GetTemplate(ctx, egoscale.UUID(id.String()))
 	if err != nil {
 		return domain.InstanceTemplate{}, err
@@ -371,7 +371,7 @@ func (a *Adapter) GetTemplate(ctx context.Context, id uuid.UUID) (domain.Instanc
 }
 
 // ListTemplates returns all instance templates as domain values.
-func (a *Adapter) ListTemplates(ctx context.Context) ([]domain.InstanceTemplate, error) {
+func (a *adapter) ListTemplates(ctx context.Context) ([]domain.InstanceTemplate, error) {
 	templates, err := a.client.ListTemplates(ctx)
 	if err != nil {
 		return nil, err
@@ -390,7 +390,7 @@ func (a *Adapter) ListTemplates(ctx context.Context) ([]domain.InstanceTemplate,
 }
 
 // CreateInstance creates an instance from a resolved specification and returns its ID.
-func (a *Adapter) CreateInstance(ctx context.Context, spec domain.ResolvedInstanceSpec) (uuid.UUID, error) {
+func (a *adapter) CreateInstance(ctx context.Context, spec domain.ResolvedInstanceSpec) (uuid.UUID, error) {
 	req := egoscale.CreateInstanceRequest{
 		DiskSize: spec.DiskSizeGiB,
 		InstanceType: &egoscale.InstanceType{
@@ -430,7 +430,7 @@ func (a *Adapter) CreateInstance(ctx context.Context, spec domain.ResolvedInstan
 }
 
 // GetInstance returns an instance as a domain value.
-func (a *Adapter) GetInstance(ctx context.Context, id uuid.UUID) (domain.Instance, error) {
+func (a *adapter) GetInstance(ctx context.Context, id uuid.UUID) (domain.Instance, error) {
 	instance, err := a.client.GetInstance(ctx, egoscale.UUID(id.String()))
 	if err != nil {
 		if errors.Is(err, egoscale.ErrNotFound) {
@@ -456,7 +456,7 @@ func (a *Adapter) GetInstance(ctx context.Context, id uuid.UUID) (domain.Instanc
 }
 
 // AttachInstanceToElasticIP attaches an instance to an Elastic IP.
-func (a *Adapter) AttachInstanceToElasticIP(ctx context.Context, instanceID, elasticIPID uuid.UUID) error {
+func (a *adapter) AttachInstanceToElasticIP(ctx context.Context, instanceID, elasticIPID uuid.UUID) error {
 	op, err := a.client.AttachInstanceToElasticIP(ctx, egoscale.UUID(elasticIPID.String()), egoscale.AttachInstanceToElasticIPRequest{
 		Instance: &egoscale.InstanceTarget{ID: egoscale.UUID(instanceID.String())},
 	})
@@ -472,7 +472,7 @@ func (a *Adapter) AttachInstanceToElasticIP(ctx context.Context, instanceID, ela
 }
 
 // AttachInstanceToSecurityGroup attaches an instance to a Security Group.
-func (a *Adapter) AttachInstanceToSecurityGroup(ctx context.Context, instanceID, securityGroupID uuid.UUID) error {
+func (a *adapter) AttachInstanceToSecurityGroup(ctx context.Context, instanceID, securityGroupID uuid.UUID) error {
 	op, err := a.client.AttachInstanceToSecurityGroup(ctx, egoscale.UUID(securityGroupID.String()), egoscale.AttachInstanceToSecurityGroupRequest{
 		Instance: &egoscale.Instance{ID: egoscale.UUID(instanceID.String())},
 	})
@@ -488,7 +488,7 @@ func (a *Adapter) AttachInstanceToSecurityGroup(ctx context.Context, instanceID,
 }
 
 // DetachInstanceFromSecurityGroup detaches an instance from a Security Group.
-func (a *Adapter) DetachInstanceFromSecurityGroup(ctx context.Context, instanceID, securityGroupID uuid.UUID) error {
+func (a *adapter) DetachInstanceFromSecurityGroup(ctx context.Context, instanceID, securityGroupID uuid.UUID) error {
 	op, err := a.client.DetachInstanceFromSecurityGroup(ctx, egoscale.UUID(securityGroupID.String()), egoscale.DetachInstanceFromSecurityGroupRequest{
 		Instance: &egoscale.Instance{ID: egoscale.UUID(instanceID.String())},
 	})
@@ -504,7 +504,7 @@ func (a *Adapter) DetachInstanceFromSecurityGroup(ctx context.Context, instanceI
 }
 
 // DeleteInstance deletes an instance and waits for completion.
-func (a *Adapter) DeleteInstance(ctx context.Context, id uuid.UUID) error {
+func (a *adapter) DeleteInstance(ctx context.Context, id uuid.UUID) error {
 	op, err := a.client.DeleteInstance(ctx, egoscale.UUID(id.String()))
 	if err != nil {
 		if errors.Is(err, egoscale.ErrNotFound) {

@@ -437,11 +437,9 @@ func securityGroupIDs(
 	exoMachine *infrastructurev1alpha1.ExoscaleMachine,
 	machineRole MachineRole,
 ) ([]uuid.UUID, error) {
-	managedSecurityGroup := exoCluster.Status.SecurityGroupNode
-	role := "node"
+	managedSecurityGroup := exoCluster.Status.SecurityGroupWorker
 	if machineRole == MachineRoleControlPlane {
 		managedSecurityGroup = exoCluster.Status.SecurityGroupControlPlan
-		role = "control plane"
 	}
 	if managedSecurityGroup == nil {
 		return nil, nil
@@ -450,7 +448,7 @@ func securityGroupIDs(
 	ids := make([]uuid.UUID, 0, len(exoMachine.Spec.SecurityGroups)+1)
 	id, err := uuid.Parse(managedSecurityGroup.ID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid %s security group ID %q: %w", role, managedSecurityGroup.ID, err)
+		return nil, fmt.Errorf("invalid %s security group ID %q: %w", string(machineRole), managedSecurityGroup.ID, err)
 	}
 	ids = append(ids, id)
 

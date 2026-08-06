@@ -10,13 +10,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 )
 
-func validClusterSpec() infrav1alpha1.ExoscaleClusterSpec {
-	return infrav1alpha1.ExoscaleClusterSpec{
-		Zone:                 egoscale.ZoneNameCHGva2,
-		ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Port: 6443},
-	}
-}
-
 func Test_exoscaleClusterValidator_ValidateCreate(t *testing.T) {
 	t.Parallel()
 
@@ -70,10 +63,69 @@ func Test_exoscaleClusterValidator_ValidateCreate(t *testing.T) {
 	}
 }
 
+func Test_exoscaleClusterValidator_ValidateUpdate(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		oldSpec infrav1alpha1.ExoscaleClusterSpec
+		newSpec infrav1alpha1.ExoscaleClusterSpec
+		err     string
+	}{
+		{
+			name: "zone unchanged is valid",
+			oldSpec: infrav1alpha1.ExoscaleClusterSpec{
+				Zone:                 egoscale.ZoneNameCHGva2,
+				ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Port: 6443},
+			},
+			newSpec: infrav1alpha1.ExoscaleClusterSpec{
+				Zone:                 egoscale.ZoneNameCHGva2,
+				ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Port: 6443},
+			},
+		},
+		{
+			name: "zone changed is forbidden",
+			oldSpec: infrav1alpha1.ExoscaleClusterSpec{
+				Zone:                 egoscale.ZoneNameCHGva2,
+				ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Port: 6443},
+			},
+			newSpec: infrav1alpha1.ExoscaleClusterSpec{
+				Zone:                 egoscale.ZoneNameDEFra1,
+				ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Port: 6443},
+			},
+			err: "zone cannot be changed once set",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			errs := NewExoscaleClusterValidator().ValidateUpdate(tc.oldSpec, tc.newSpec, field.NewPath("spec"))
+
+			if tc.err == "" {
+				assert.Empty(t, errs)
+				return
+			}
+
+			assert.NotEmpty(t, errs)
+			assert.ErrorContains(t, errs.ToAggregate(), tc.err)
+		})
+	}
+}
+
 func Test_exoscaleClusterValidator_validateSecurityGroup(t *testing.T) {
 	t.Parallel()
 
 	validSGID := uuid.New().String()
+
+	// fakeDefaultRules := []infrav1alpha1.SecurityGroupRule{
+	// 	{
+	// 		FlowDirection: egoscale.SecurityGroupRuleFlowDirectionIngress,
+	// 		Protocol:      egoscale.SecurityGroupRuleProtocolTCP,
+	// 		StartPort:     6443, EndPort: 6443,
+	// 		Description: "kubernetes API server",
+	// 		Network:     new("0.0.0.0/0"),
+	// 	},
+	// }
 
 	tests := []struct {
 		name     string
@@ -92,6 +144,19 @@ func Test_exoscaleClusterValidator_validateSecurityGroup(t *testing.T) {
 					Network:     new("0.0.0.0/0"),
 				},
 			},
+		},
+		{
+			name: "rule with invalid network",
+			rules: []infrav1alpha1.SecurityGroupRule{
+				{
+					FlowDirection: egoscale.SecurityGroupRuleFlowDirectionIngress,
+					Protocol:      egoscale.SecurityGroupRuleProtocolTCP,
+					StartPort:     22, EndPort: 22,
+					Description: "ssh",
+					Network:     new("999.999.999.999/32"),
+				},
+			},
+			wantErr: "must be a valid CIDR address",
 		},
 		{
 			name: "rule missing network and securityGroup",
@@ -222,8 +287,16 @@ func Test_exoscaleClusterValidator_validateSecurityGroup(t *testing.T) {
 					Network:       new("0.0.0.0/0"),
 				},
 			},
-			defaults: defaultControlPlaneRules(6443),
-			wantErr:  "conflicts with the name of a default rule",
+			defaults: []infrav1alpha1.SecurityGroupRule{
+				{
+					FlowDirection: egoscale.SecurityGroupRuleFlowDirectionIngress,
+					Protocol:      egoscale.SecurityGroupRuleProtocolTCP,
+					StartPort:     6443, EndPort: 6443,
+					Description: "kubernetes API server",
+					Network:     new("0.0.0.0/0"),
+				},
+			},
+			wantErr: "conflicts with the name of a default rule",
 		},
 		{
 			name: "rule name does not conflict with a default rule from another security group",
@@ -236,7 +309,57 @@ func Test_exoscaleClusterValidator_validateSecurityGroup(t *testing.T) {
 					Network:     new("0.0.0.0/0"),
 				},
 			},
-			defaults: defaultControlPlaneRules(6443),
+			defaults: []infrav1alpha1.SecurityGroupRule{
+				{
+					FlowDirection: egoscale.SecurityGroupRuleFlowDirectionIngress,
+					Protocol:      egoscale.SecurityGroupRuleProtocolTCP,
+					StartPort:     6443, EndPort: 6443,
+					Description: "kubernetes API server",
+					Network:     new("0.0.0.0/0"),
+				},
+			},
+		},
+		{
+			name: "rule policy duplicates another rule's policy despite a different description",
+			rules: []infrav1alpha1.SecurityGroupRule{
+				{
+					FlowDirection: egoscale.SecurityGroupRuleFlowDirectionIngress,
+					Protocol:      egoscale.SecurityGroupRuleProtocolTCP,
+					StartPort:     80, EndPort: 80,
+					Description: "first",
+					Network:     new("0.0.0.0/0"),
+				},
+				{
+					FlowDirection: egoscale.SecurityGroupRuleFlowDirectionIngress,
+					Protocol:      egoscale.SecurityGroupRuleProtocolTCP,
+					StartPort:     80, EndPort: 80,
+					Description: "second",
+					Network:     new("0.0.0.0/0"),
+				},
+			},
+			wantErr: `duplicates the policy of rule`,
+		},
+		{
+			name: "rule policy duplicates a default rule's policy despite a different description",
+			rules: []infrav1alpha1.SecurityGroupRule{
+				{
+					FlowDirection: egoscale.SecurityGroupRuleFlowDirectionIngress,
+					Protocol:      egoscale.SecurityGroupRuleProtocolTCP,
+					StartPort:     6443, EndPort: 6443,
+					Description: "custom API server rule",
+					Network:     new("0.0.0.0/0"),
+				},
+			},
+			defaults: []infrav1alpha1.SecurityGroupRule{
+				{
+					FlowDirection: egoscale.SecurityGroupRuleFlowDirectionIngress,
+					Protocol:      egoscale.SecurityGroupRuleProtocolTCP,
+					StartPort:     6443, EndPort: 6443,
+					Description: "kubernetes API server",
+					Network:     new("0.0.0.0/0"),
+				},
+			},
+			wantErr: `duplicates the policy of rule "kubernetes API server"`,
 		},
 	}
 

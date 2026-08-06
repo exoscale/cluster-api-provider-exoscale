@@ -102,6 +102,28 @@ type SecurityGroupRule struct {
 	Description string `json:"description,omitempty"`
 }
 
+// IsEqualPolicy reports whether r and other enforce the same firewall policy,
+// ignoring Description.
+func (r SecurityGroupRule) IsPolicyEqual(other SecurityGroupRule) bool {
+	if r.FlowDirection != other.FlowDirection || r.Protocol != other.Protocol {
+		return false
+	}
+	if r.StartPort != other.StartPort || r.EndPort != other.EndPort {
+		return false
+	}
+
+	networkEqual := (r.Network == nil && other.Network == nil) ||
+		(r.Network != nil && other.Network != nil && *r.Network == *other.Network)
+	if !networkEqual {
+		return false
+	}
+
+	securityGroupEqual := (r.SecurityGroup == nil && other.SecurityGroup == nil) ||
+		(r.SecurityGroup != nil && other.SecurityGroup != nil && *r.SecurityGroup == *other.SecurityGroup)
+
+	return securityGroupEqual
+}
+
 // Security Group
 type SecurityGroupResource struct {
 	// Security Group ID

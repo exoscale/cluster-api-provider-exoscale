@@ -1,0 +1,69 @@
+# Verifies that the ExoscaleCluster validation webhook rejects invalid
+# spec changes on both creation and update.
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: cluster-webhook-validation
+spec:
+  timeouts:
+    delete: 5m
+    cleanup: 5m
+  bindings:
+    - name: clusterName
+      value: (join('-', ['capi-cluster-webhook', ($values.suffix || 'local')]))
+    - name: invalidClusterName
+      value: (join('-', ['capi-cluster-webhook-invalid', ($values.suffix || 'local')]))
+    - name: namespace
+      value: default
+  steps:
+    - name: create valid cluster
+      try:
+        - apply:
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleCluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+              spec:
+                zone: bg-sof-1
+
+    - name: reject controlPlaneEndpoint host on create
+      try:
+        - apply:
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleCluster
+              metadata:
+                name: ($invalidClusterName)
+                namespace: ($namespace)
+              spec:
+                zone: bg-sof-1
+                controlPlaneEndpoint:
+                  host: 10.0.0.1
+            expect:
+              - match:
+                  apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+                  kind: ExoscaleCluster
+                check:
+                  ($error != null): true
+                  (contains($error, 'must be empty')): true
+
+    - name: reject zone change on update
+      try:
+        - update:
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleCluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+              spec:
+                zone: ch-gva-2   # trying to change the zone
+            expect:
+              - match:
+                  apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+                  kind: ExoscaleCluster
+                check:
+                  ($error != null): true
+                  (contains($error, 'zone cannot be changed once set')): true

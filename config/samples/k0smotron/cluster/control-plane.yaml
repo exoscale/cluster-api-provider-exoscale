@@ -1,0 +1,58 @@
+# Instance template used for the control-plane node(s). Any plain Ubuntu image
+# works: k0smotron's bootstrap provider installs and starts k0s itself via
+# cloud-init, no pre-baked kubeadm/kubelet packages required.
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: ExoscaleMachineTemplate
+metadata:
+  name: my-k0s-cluster-cp
+  namespace: default
+spec:
+  template:
+    spec:
+      template: "Linux Ubuntu 24.04 LTS 64-bit"
+      instanceType: standard.medium
+      rootVolumeSizeGiB: 50
+---
+# K0sControlPlane is k0smotron's Cluster API control-plane provider for
+# *unmanaged* clusters: it turns real Machines (backed by the infrastructure
+# provider referenced below) into k0s controllers, as opposed to
+# K0smotronControlPlane which runs the control plane as pods inside this
+# management cluster.
+#
+# replicas: 1 starts with a single-node control plane; the README's "Scale
+# the control plane" section grows this to 3 for high availability once the
+# cluster is up. ExoscaleCluster's control-plane Elastic IP fronts all
+# control-plane instances behind one endpoint (health-checked failover), and
+# the control-plane security group rule for the k0s controller join API (see
+# cluster.yaml's securityGroupControlPlane) is what lets the 2nd/3rd
+# controllers join the 1st one's etcd once scaled up.
+apiVersion: controlplane.cluster.x-k8s.io/v1beta2
+kind: K0sControlPlane
+metadata:
+  name: my-k0s-cluster-cp
+  namespace: default
+spec:
+  replicas: 1
+  version: v1.36.3+k0s.0 # check https://github.com/k0sproject/k0s/releases for the latest version
+  k0sConfigSpec:
+    # --enable-worker makes the control-plane instance also run kubelet and
+    # register a Node object, which CAPI's Machine controller needs to ever
+    # resolve NodeHealthy/Ready (a controller-only k0s node never gets a Node
+    # object, so Machine.status.conditions[Ready] would stay Unknown forever).
+    # k0s automatically applies a control-plane:NoSchedule taint in this mode,
+    # so regular workloads still won't schedule on this node.
+    args:
+      - --enable-worker
+    k0s:
+      apiVersion: k0s.k0sproject.io/v1beta1
+      kind: ClusterConfig
+      metadata:
+        name: k0s
+      spec:
+        telemetry:
+          enabled: false
+  machineTemplate:
+    infrastructureRef:
+      apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+      kind: ExoscaleMachineTemplate
+      name: my-k0s-cluster-cp

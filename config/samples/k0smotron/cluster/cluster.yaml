@@ -1,0 +1,127 @@
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: ExoscaleCluster
+metadata:
+  name: my-k0s-cluster
+  namespace: default
+spec:
+  zone: ch-gva-2
+  # Rules below use `securityGroup: control-plane`/`worker` instead of a
+  # `network` CIDR. These are symbolic values that resolve to this cluster's
+  # own managed security groups, usable from either securityGroupControlPlane
+  # or securityGroupWorker without knowing either group's UUID ahead of time
+  # (a raw Exoscale security group UUID also works here).
+  securityGroupControlPlane:
+    rules:
+      # Required for a multi-control-plane cluster (K0sControlPlane replicas
+      # > 1, see control-plane.yaml): k0s controllers join the cluster by
+      # talking to an existing controller's join API directly, at
+      # https://<that controller's address>:9443 (separate from the
+      # Elastic IP-fronted kube-apiserver on port 6443, and from etcd's
+      # 2379-2380). Each control-plane node must accept this from its peers,
+      # or the joining controller's request times out and it never becomes
+      # Ready. Included here even though control-plane.yaml starts at
+      # replicas: 1, so it's already in place by the time you scale up.
+      - description: k0s controller join API
+        securityGroup: control-plane
+        endPort: 9443
+        startPort: 9443
+        protocol: tcp
+        flowDirection: ingress
+      # k0s deploys Konnectivity (apiserver-network-proxy) by default: an
+      # agent DaemonSet on every node dials out to this port on the
+      # control-plane endpoint to open a tunnel the kube-apiserver uses for
+      # exec/logs/port-forward/metrics calls to nodes. Two rules are needed
+      # since the agent runs on both roles: control-plane nodes run it too,
+      # since they run kubelet via --enable-worker (see control-plane.yaml).
+      # Without both rules, konnectivity-agent pods sit at 0/1 Ready
+      # cluster-wide and anything routed through the tunnel (`kubectl
+      # logs`/`exec`, `kubectl top`) fails with "No agent available", even
+      # though the cluster otherwise looks healthy.
+      - description: k0s konnectivity tunnel (from control-plane nodes)
+        securityGroup: control-plane
+        endPort: 8132
+        startPort: 8132
+        protocol: tcp
+        flowDirection: ingress
+      - description: k0s konnectivity tunnel (from worker nodes)
+        securityGroup: worker
+        endPort: 8132
+        startPort: 8132
+        protocol: tcp
+        flowDirection: ingress
+      # kube-router (k0s's default CNI) needs both of the below, for two
+      # different jobs:
+      #  - BGP (port 179): the control plane. Each node tells every other
+      #    node which pod CIDR it owns, so they learn the routes.
+      #  - ipip: the data plane. These instances have no shared private
+      #    network, only public IPs, so a plain route via a peer's public IP
+      #    can't carry pod traffic on its own. kube-router instead wraps each
+      #    pod-to-pod packet inside an outer node-to-node packet (ipip
+      #    encapsulation) to actually deliver it.
+      # Without both, kube-router pods still report Running (their health
+      # checks only look at themselves), but pod-to-pod traffic between
+      # nodes silently drops end-to-end.
+      - description: kube-router BGP peering (control-plane peers)
+        securityGroup: control-plane
+        endPort: 179
+        startPort: 179
+        protocol: tcp
+        flowDirection: ingress
+      - description: kube-router BGP peering (worker peers)
+        securityGroup: worker
+        endPort: 179
+        startPort: 179
+        protocol: tcp
+        flowDirection: ingress
+      - description: kube-router pod overlay traffic (from control-plane nodes)
+        securityGroup: control-plane
+        protocol: ipip
+        flowDirection: ingress
+      - description: kube-router pod overlay traffic (from worker nodes)
+        securityGroup: worker
+        protocol: ipip
+        flowDirection: ingress
+  # Mirror of securityGroupControlPlane's kube-router rules above: the same
+  # BGP peering and pod overlay traffic needs to reach worker nodes too, from
+  # both control-plane and worker peers.
+  securityGroupWorker:
+    rules:
+      - description: kube-router BGP peering (control-plane peers)
+        securityGroup: control-plane
+        endPort: 179
+        startPort: 179
+        protocol: tcp
+        flowDirection: ingress
+      - description: kube-router BGP peering (worker peers)
+        securityGroup: worker
+        endPort: 179
+        startPort: 179
+        protocol: tcp
+        flowDirection: ingress
+      - description: kube-router pod overlay traffic (from control-plane nodes)
+        securityGroup: control-plane
+        protocol: ipip
+        flowDirection: ingress
+      - description: kube-router pod overlay traffic (from worker nodes)
+        securityGroup: worker
+        protocol: ipip
+        flowDirection: ingress
+---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: my-k0s-cluster
+  namespace: default
+spec:
+  clusterNetwork:
+    pods:
+      cidrBlocks:
+        - 10.244.0.0/16
+  controlPlaneRef:
+    apiGroup: controlplane.cluster.x-k8s.io
+    kind: K0sControlPlane
+    name: my-k0s-cluster-cp
+  infrastructureRef:
+    apiGroup: infrastructure.cluster.x-k8s.io
+    kind: ExoscaleCluster
+    name: my-k0s-cluster

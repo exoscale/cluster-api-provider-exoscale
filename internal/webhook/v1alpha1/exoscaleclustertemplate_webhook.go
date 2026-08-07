@@ -28,16 +28,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	infrastructurev1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
+	"github.com/exoscale/cluster-api-provider-exoscale/internal/domain"
+	"github.com/exoscale/cluster-api-provider-exoscale/internal/service"
 )
 
 // nolint:unused
-// log is for logging in this package.
 var exoscaleclustertemplatelog = logf.Log.WithName("exoscaleclustertemplate-resource")
 
 // SetupExoscaleClusterTemplateWebhookWithManager registers the webhook for ExoscaleClusterTemplate in the manager.
 func SetupExoscaleClusterTemplateWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr, &infrastructurev1alpha1.ExoscaleClusterTemplate{}).
-		WithValidator(&ExoscaleClusterTemplateCustomValidator{}).
+		WithValidator(&ExoscaleClusterTemplateCustomValidator{validator: service.NewExoscaleClusterValidator()}).
 		Complete()
 }
 
@@ -45,10 +46,25 @@ func SetupExoscaleClusterTemplateWebhookWithManager(mgr ctrl.Manager) error {
 
 // ExoscaleClusterTemplateCustomValidator struct is responsible for validating the ExoscaleClusterTemplate resource
 // when it is created, updated, or deleted.
-type ExoscaleClusterTemplateCustomValidator struct{}
+type ExoscaleClusterTemplateCustomValidator struct {
+	validator domain.ClusterValidator
+}
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type ExoscaleClusterTemplate.
 func (v *ExoscaleClusterTemplateCustomValidator) ValidateCreate(_ context.Context, obj *infrastructurev1alpha1.ExoscaleClusterTemplate) (admission.Warnings, error) {
+	exoscaleclustertemplatelog.Info("Validation for ExoscaleClusterTemplate upon creation", "name", obj.GetName())
+
+	var allErrs field.ErrorList
+	allErrs = append(allErrs, obj.Spec.Template.ObjectMeta.Validate(field.NewPath("spec", "template", "metadata"))...)
+	allErrs = append(allErrs, v.validator.ValidateCreate(obj.Spec.Template.Spec, field.NewPath("spec", "template", "spec"))...)
+
+	if len(allErrs) > 0 {
+		return nil, apierrors.NewInvalid(
+			schema.GroupKind{Group: infrastructurev1alpha1.SchemeGroupVersion.Group, Kind: "ExoscaleClusterTemplate"},
+			obj.Name, allErrs,
+		)
+	}
+
 	return nil, nil
 }
 

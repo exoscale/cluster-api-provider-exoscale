@@ -38,7 +38,7 @@ spec:
                   - type: Paused
                     reason: Paused
                     status: "True"
-                (securityGroupNode == null): true
+                (securityGroupWorker == null): true
 
     - name: mark cluster infrastructure ready
       try:

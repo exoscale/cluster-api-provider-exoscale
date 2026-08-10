@@ -149,12 +149,6 @@ type ClusterService interface {
 	DeleteCluster(ctx context.Context, cluster infrav1alpha1.ExoscaleCluster) (infrav1alpha1.ExoscaleCluster, error)
 }
 
-// Cluster describes the provider resources owned by a CAPI Cluster.
-type Cluster struct {
-	ID       *uuid.UUID
-	Endpoint ElasticIPService
-}
-
 // InstanceService reconciles the Exoscale instance owned by a CAPI Machine.
 type InstanceService interface {
 	UpsertInstance(ctx context.Context, machineUID MachineUID, instanceID *uuid.UUID, spec InstanceSpec) (Instance, error)

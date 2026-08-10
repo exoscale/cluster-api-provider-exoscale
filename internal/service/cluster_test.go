@@ -32,13 +32,13 @@ func Test_clusterService_ReconcileCluster(t *testing.T) {
 		ID:   uuid.New(),
 		Name: fmt.Sprintf("capi - %s - control plane", clusterID.String()),
 	}
-	nodeSG := domain.SecurityGroup{
+	workerSG := domain.SecurityGroup{
 		ID:   uuid.New(),
-		Name: fmt.Sprintf("capi - %s - node", clusterID.String()),
+		Name: fmt.Sprintf("capi - %s - worker", clusterID.String()),
 	}
 
-	desiredCPRules, _ := resolveRules(cpSG.ID, nodeSG.ID, defaultControlPlaneRules(port), nil)
-	desiredNodeRulesList, _ := resolveRules(cpSG.ID, nodeSG.ID, defaultNodeRules(), nil)
+	desiredCPRules, _ := resolveRules(cpSG.ID, workerSG.ID, defaultControlPlaneRules(port), nil)
+	desiredWorkerRulesList, _ := resolveRules(cpSG.ID, workerSG.ID, defaultWorkerRules(), nil)
 
 	cpRules := []domain.SecurityGroupRule{
 		{
@@ -50,7 +50,7 @@ func Test_clusterService_ReconcileCluster(t *testing.T) {
 			Network:       new("0.0.0.0/0"),
 		},
 	}
-	nodeRules := []domain.SecurityGroupRule{
+	workerRules := []domain.SecurityGroupRule{
 		{
 			ID:            uuid.New(),
 			FlowDirection: domain.SecurityGroupRuleFlowDirectionIngress,
@@ -86,9 +86,9 @@ func Test_clusterService_ReconcileCluster(t *testing.T) {
 						ID:   cpSG.ID.String(),
 						Name: cpSG.Name,
 					},
-					SecurityGroupNode: &infrav1alpha1.SecurityGroupStatus{
-						ID:   nodeSG.ID.String(),
-						Name: nodeSG.Name,
+					SecurityGroupWorker: &infrav1alpha1.SecurityGroupStatus{
+						ID:   workerSG.ID.String(),
+						Name: workerSG.Name,
 					},
 				},
 			},
@@ -102,14 +102,14 @@ func Test_clusterService_ReconcileCluster(t *testing.T) {
 					UpsertSecurityGroup(ctx, clusterID, &cpSG.ID, cpSG.Name).
 					Return(cpSG, nil)
 				m.EXPECT().
-					UpsertSecurityGroup(ctx, clusterID, &nodeSG.ID, nodeSG.Name).
-					Return(nodeSG, nil)
+					UpsertSecurityGroup(ctx, clusterID, &workerSG.ID, workerSG.Name).
+					Return(workerSG, nil)
 				m.EXPECT().
 					UpsertSecurityGroupRules(ctx, cpSG.ID, desiredCPRules).
 					Return(cpRules, nil)
 				m.EXPECT().
-					UpsertSecurityGroupRules(ctx, nodeSG.ID, desiredNodeRulesList).
-					Return(nodeRules, nil)
+					UpsertSecurityGroupRules(ctx, workerSG.ID, desiredWorkerRulesList).
+					Return(workerRules, nil)
 			},
 			output: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
@@ -128,10 +128,10 @@ func Test_clusterService_ReconcileCluster(t *testing.T) {
 						Name:  cpSG.Name,
 						Rules: domainRulesToStatus(cpRules),
 					},
-					SecurityGroupNode: &infrav1alpha1.SecurityGroupStatus{
-						ID:    nodeSG.ID.String(),
-						Name:  nodeSG.Name,
-						Rules: domainRulesToStatus(nodeRules),
+					SecurityGroupWorker: &infrav1alpha1.SecurityGroupStatus{
+						ID:    workerSG.ID.String(),
+						Name:  workerSG.Name,
+						Rules: domainRulesToStatus(workerRules),
 					},
 					Initialization: infrav1alpha1.ExoscaleClusterInitializationStatus{
 						Provisioned: new(true),
@@ -204,7 +204,7 @@ func Test_clusterService_ReconcileCluster(t *testing.T) {
 			err: assert.AnError,
 		},
 		{
-			name: "UpsertSecurityGroup node error",
+			name: "UpsertSecurityGroup worker error",
 			cluster: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 				Spec: infrav1alpha1.ExoscaleClusterSpec{
@@ -224,7 +224,7 @@ func Test_clusterService_ReconcileCluster(t *testing.T) {
 					UpsertSecurityGroup(ctx, clusterID, (*uuid.UUID)(nil), cpSG.Name).
 					Return(cpSG, nil)
 				m.EXPECT().
-					UpsertSecurityGroup(ctx, clusterID, (*uuid.UUID)(nil), nodeSG.Name).
+					UpsertSecurityGroup(ctx, clusterID, (*uuid.UUID)(nil), workerSG.Name).
 					Return(domain.SecurityGroup{}, assert.AnError)
 			},
 			output: infrav1alpha1.ExoscaleCluster{
@@ -268,8 +268,8 @@ func Test_clusterService_ReconcileCluster(t *testing.T) {
 					UpsertSecurityGroup(ctx, clusterID, (*uuid.UUID)(nil), cpSG.Name).
 					Return(cpSG, nil)
 				m.EXPECT().
-					UpsertSecurityGroup(ctx, clusterID, (*uuid.UUID)(nil), nodeSG.Name).
-					Return(nodeSG, nil)
+					UpsertSecurityGroup(ctx, clusterID, (*uuid.UUID)(nil), workerSG.Name).
+					Return(workerSG, nil)
 				m.EXPECT().
 					UpsertSecurityGroupRules(ctx, cpSG.ID, desiredCPRules).
 					Return(nil, assert.AnError)
@@ -290,16 +290,16 @@ func Test_clusterService_ReconcileCluster(t *testing.T) {
 						ID:   cpSG.ID.String(),
 						Name: cpSG.Name,
 					},
-					SecurityGroupNode: &infrav1alpha1.SecurityGroupStatus{
-						ID:   nodeSG.ID.String(),
-						Name: nodeSG.Name,
+					SecurityGroupWorker: &infrav1alpha1.SecurityGroupStatus{
+						ID:   workerSG.ID.String(),
+						Name: workerSG.Name,
 					},
 				},
 			},
 			err: assert.AnError,
 		},
 		{
-			name: "UpsertSecurityGroupRules node error",
+			name: "UpsertSecurityGroupRules worker error",
 			cluster: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 				Spec: infrav1alpha1.ExoscaleClusterSpec{
@@ -319,13 +319,13 @@ func Test_clusterService_ReconcileCluster(t *testing.T) {
 					UpsertSecurityGroup(ctx, clusterID, (*uuid.UUID)(nil), cpSG.Name).
 					Return(cpSG, nil)
 				m.EXPECT().
-					UpsertSecurityGroup(ctx, clusterID, (*uuid.UUID)(nil), nodeSG.Name).
-					Return(nodeSG, nil)
+					UpsertSecurityGroup(ctx, clusterID, (*uuid.UUID)(nil), workerSG.Name).
+					Return(workerSG, nil)
 				m.EXPECT().
 					UpsertSecurityGroupRules(ctx, cpSG.ID, desiredCPRules).
 					Return(cpRules, nil)
 				m.EXPECT().
-					UpsertSecurityGroupRules(ctx, nodeSG.ID, desiredNodeRulesList).
+					UpsertSecurityGroupRules(ctx, workerSG.ID, desiredWorkerRulesList).
 					Return(nil, assert.AnError)
 			},
 			output: infrav1alpha1.ExoscaleCluster{
@@ -345,9 +345,9 @@ func Test_clusterService_ReconcileCluster(t *testing.T) {
 						Name:  cpSG.Name,
 						Rules: domainRulesToStatus(cpRules),
 					},
-					SecurityGroupNode: &infrav1alpha1.SecurityGroupStatus{
-						ID:   nodeSG.ID.String(),
-						Name: nodeSG.Name,
+					SecurityGroupWorker: &infrav1alpha1.SecurityGroupStatus{
+						ID:   workerSG.ID.String(),
+						Name: workerSG.Name,
 					},
 				},
 			},
@@ -399,8 +399,8 @@ func Test_clusterService_ReconcileCluster_invalid_id(t *testing.T) {
 		ID:   uuid.New(),
 		Name: fmt.Sprintf("capi - %s - control plane", clusterID.String()),
 	}
-	nodeSG := domain.SecurityGroup{
-		Name: fmt.Sprintf("capi - %s - node", clusterID.String()),
+	workerSG := domain.SecurityGroup{
+		Name: fmt.Sprintf("capi - %s - worker", clusterID.String()),
 	}
 
 	tests := []struct {
@@ -498,7 +498,7 @@ func Test_clusterService_ReconcileCluster_invalid_id(t *testing.T) {
 			err: errInvalidID,
 		},
 		{
-			name: "invalid node SG ID",
+			name: "invalid worker SG ID",
 			cluster: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 				Spec: infrav1alpha1.ExoscaleClusterSpec{
@@ -506,9 +506,9 @@ func Test_clusterService_ReconcileCluster_invalid_id(t *testing.T) {
 				},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
 					ID: new(clusterID.String()),
-					SecurityGroupNode: &infrav1alpha1.SecurityGroupStatus{
+					SecurityGroupWorker: &infrav1alpha1.SecurityGroupStatus{
 						ID:   "not-a-uuid",
-						Name: nodeSG.Name,
+						Name: workerSG.Name,
 					},
 				},
 			},
@@ -538,9 +538,9 @@ func Test_clusterService_ReconcileCluster_invalid_id(t *testing.T) {
 						ID:   cpSG.ID.String(),
 						Name: cpSG.Name,
 					},
-					SecurityGroupNode: &infrav1alpha1.SecurityGroupStatus{
+					SecurityGroupWorker: &infrav1alpha1.SecurityGroupStatus{
 						ID:   "not-a-uuid",
-						Name: nodeSG.Name,
+						Name: workerSG.Name,
 					},
 				},
 			},
@@ -581,7 +581,7 @@ func Test_clusterService_DeleteCluster(t *testing.T) {
 
 	eipID := uuid.New()
 	cpSGID := uuid.New()
-	nodeSGID := uuid.New()
+	workerSGID := uuid.New()
 
 	tests := []struct {
 		name    string
@@ -602,8 +602,8 @@ func Test_clusterService_DeleteCluster(t *testing.T) {
 					SecurityGroupControlPlan: &infrav1alpha1.SecurityGroupStatus{
 						ID: cpSGID.String(),
 					},
-					SecurityGroupNode: &infrav1alpha1.SecurityGroupStatus{
-						ID: nodeSGID.String(),
+					SecurityGroupWorker: &infrav1alpha1.SecurityGroupStatus{
+						ID: workerSGID.String(),
 					},
 				},
 			},
@@ -617,13 +617,13 @@ func Test_clusterService_DeleteCluster(t *testing.T) {
 					PurgeSecurityGroup(ctx, cpSGID).
 					Return(nil)
 				m.EXPECT().
-					PurgeSecurityGroup(ctx, nodeSGID).
+					PurgeSecurityGroup(ctx, workerSGID).
 					Return(nil)
 				m.EXPECT().
 					DeleteSecurityGroup(ctx, cpSGID).
 					Return(nil)
 				m.EXPECT().
-					DeleteSecurityGroup(ctx, nodeSGID).
+					DeleteSecurityGroup(ctx, workerSGID).
 					Return(nil)
 			},
 			output: infrav1alpha1.ExoscaleCluster{
@@ -635,8 +635,8 @@ func Test_clusterService_DeleteCluster(t *testing.T) {
 					SecurityGroupControlPlan: &infrav1alpha1.SecurityGroupStatus{
 						ID: cpSGID.String(),
 					},
-					SecurityGroupNode: &infrav1alpha1.SecurityGroupStatus{
-						ID: nodeSGID.String(),
+					SecurityGroupWorker: &infrav1alpha1.SecurityGroupStatus{
+						ID: workerSGID.String(),
 					},
 				},
 			},
@@ -741,11 +741,11 @@ func Test_clusterService_DeleteCluster(t *testing.T) {
 			err: assert.AnError,
 		},
 		{
-			name: "invalid node SG ID",
+			name: "invalid worker SG ID",
 			cluster: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
-					SecurityGroupNode: &infrav1alpha1.SecurityGroupStatus{
+					SecurityGroupWorker: &infrav1alpha1.SecurityGroupStatus{
 						ID: "not-a-uuid",
 					},
 				},
@@ -753,7 +753,7 @@ func Test_clusterService_DeleteCluster(t *testing.T) {
 			output: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
-					SecurityGroupNode: &infrav1alpha1.SecurityGroupStatus{
+					SecurityGroupWorker: &infrav1alpha1.SecurityGroupStatus{
 						ID: "not-a-uuid",
 					},
 				},
@@ -761,25 +761,25 @@ func Test_clusterService_DeleteCluster(t *testing.T) {
 			err: errInvalidID,
 		},
 		{
-			name: "PurgeSecurityGroup node error",
+			name: "PurgeSecurityGroup worker error",
 			cluster: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
-					SecurityGroupNode: &infrav1alpha1.SecurityGroupStatus{
-						ID: nodeSGID.String(),
+					SecurityGroupWorker: &infrav1alpha1.SecurityGroupStatus{
+						ID: workerSGID.String(),
 					},
 				},
 			},
 			sgSvc: func(m *mocks.SecurityGroupService) {
 				m.EXPECT().
-					PurgeSecurityGroup(ctx, nodeSGID).
+					PurgeSecurityGroup(ctx, workerSGID).
 					Return(assert.AnError)
 			},
 			output: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
-					SecurityGroupNode: &infrav1alpha1.SecurityGroupStatus{
-						ID: nodeSGID.String(),
+					SecurityGroupWorker: &infrav1alpha1.SecurityGroupStatus{
+						ID: workerSGID.String(),
 					},
 				},
 			},
@@ -814,28 +814,28 @@ func Test_clusterService_DeleteCluster(t *testing.T) {
 			err: assert.AnError,
 		},
 		{
-			name: "DeleteSecurityGroup node error",
+			name: "DeleteSecurityGroup worker error",
 			cluster: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
-					SecurityGroupNode: &infrav1alpha1.SecurityGroupStatus{
-						ID: nodeSGID.String(),
+					SecurityGroupWorker: &infrav1alpha1.SecurityGroupStatus{
+						ID: workerSGID.String(),
 					},
 				},
 			},
 			sgSvc: func(m *mocks.SecurityGroupService) {
 				m.EXPECT().
-					PurgeSecurityGroup(ctx, nodeSGID).
+					PurgeSecurityGroup(ctx, workerSGID).
 					Return(nil)
 				m.EXPECT().
-					DeleteSecurityGroup(ctx, nodeSGID).
+					DeleteSecurityGroup(ctx, workerSGID).
 					Return(assert.AnError)
 			},
 			output: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
-					SecurityGroupNode: &infrav1alpha1.SecurityGroupStatus{
-						ID: nodeSGID.String(),
+					SecurityGroupWorker: &infrav1alpha1.SecurityGroupStatus{
+						ID: workerSGID.String(),
 					},
 				},
 			},

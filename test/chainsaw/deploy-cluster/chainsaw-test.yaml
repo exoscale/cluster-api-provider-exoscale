@@ -54,7 +54,7 @@ spec:
               (spec.controlPlaneEndpoint.host == status.controlPlaneEndpoint.host): true
               (spec.controlPlaneEndpoint.port == status.controlPlaneEndpoint.port): true
 
-    - name: assert security group rule node
+    - name: assert security group rule worker
       try:
         - assert:
             timeout: 10s
@@ -65,7 +65,7 @@ spec:
                 name: ($clusterName)
                 namespace: ($namespace)
               status:
-                securityGroupNode:
+                securityGroupWorker:
                   (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
                   rules:
                     - description: Kubelet API from control plane
@@ -75,7 +75,7 @@ spec:
                       securityGroupRef:
                         (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
                       startPort: 10250
-                    - description: Kubelet API node-to-node
+                    - description: Kubelet API worker-to-worker
                       endPort: 10250
                       flowDirection: ingress
                       protocol: tcp
@@ -88,7 +88,7 @@ spec:
                       network: 0.0.0.0/0
                       protocol: tcp
                       startPort: 22
-              (length(status.securityGroupNode.rules)): 3
+              (length(status.securityGroupWorker.rules)): 3
 
     - name: assert security group rule control plane
       try:
@@ -145,8 +145,8 @@ spec:
                       protocol: tcp
                       startPort: 22
               (length(status.securityGroupControlPlane.rules)): 6
-              (contains(status.securityGroupNode.rules[?description == 'Kubelet API from control plane'].securityGroupRef.id, status.securityGroupControlPlane.id)): true
-              (contains(status.securityGroupNode.rules[?description == 'Kubelet API node-to-node'].securityGroupRef.id, status.securityGroupNode.id)): true
+              (contains(status.securityGroupWorker.rules[?description == 'Kubelet API from control plane'].securityGroupRef.id, status.securityGroupControlPlane.id)): true
+              (contains(status.securityGroupWorker.rules[?description == 'Kubelet API worker-to-worker'].securityGroupRef.id, status.securityGroupWorker.id)): true
 
     - name: assert cluster endpoint consistency
       try:

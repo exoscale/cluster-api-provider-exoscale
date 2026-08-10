@@ -13,7 +13,7 @@ spec:
         startPort: 22
         protocol: tcp
         flowDirection: ingress
-  securityGroupNode:
+  securityGroupWorker:
     rules:
       - description: allow ssh
         network: "0.0.0.0/0"

@@ -1,3 +1,6 @@
+# Verifies that the ExoscaleClusterTemplate validation webhook accepts a valid
+# template on creation, rejects an invalid one on creation, and rejects any
+# update (templates are immutable).
 apiVersion: chainsaw.kyverno.io/v1alpha1
 kind: Test
 metadata:
@@ -9,13 +12,50 @@ spec:
   bindings:
   - name: templateName
     value: (join('-', ['capi-cluster-template', ($values.suffix || 'local')]))
+  - name: invalidTemplateName
+    value: (join('-', ['capi-cluster-template-invalid', ($values.suffix || 'local')]))
   - name: namespace
     value: default
   steps:
-    - name: apply resources
+    - name: create valid template
       try:
         - apply:
-            file: exoscaleclustertemplate.yaml
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleClusterTemplate
+              metadata:
+                name: ($templateName)
+                namespace: ($namespace)
+              spec:
+                template:
+                  spec:
+                    zone: bg-sof-1
+
+    - name: reject controlPlaneEndpoint host on create
+      try:
+        - apply:
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleClusterTemplate
+              metadata:
+                name: ($invalidTemplateName)
+                namespace: ($namespace)
+              spec:
+                template:
+                  spec:
+                    zone: bg-sof-1
+                    controlPlaneEndpoint:
+                      host: 10.0.0.1
+            expect:
+              - match:
+                  apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+                  kind: ExoscaleClusterTemplate
+                check:
+                  ($error != null): true
+                  (contains($error, 'must be empty')): true
+
+    - name: reject any update
+      try:
         - update:
             resource:
               apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1

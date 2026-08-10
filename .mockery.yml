@@ -31,3 +31,4 @@ packages:
       SecurityGroupService:
       ClusterService:
       InstanceService:
+      ClusterValidator:

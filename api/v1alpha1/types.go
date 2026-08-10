@@ -92,7 +92,7 @@ type SecurityGroupRule struct {
 	// securityGroup identifies a security group as the source (ingress) or destination (egress) for this rule,
 	// as an alternative to a CIDR network. Accepts either the UUID of an existing Exoscale security group,
 	// or one of the special values "control-plane" / "worker" to refer to this cluster's managed
-	// control-plane or node security group.
+	// control-plane or worker security group.
 	// +optional
 	SecurityGroup *string `json:"securityGroup,omitempty"`
 
@@ -100,6 +100,28 @@ type SecurityGroupRule struct {
 	// +required
 	// +kubebuilder:validation:MaxLength=255
 	Description string `json:"description,omitempty"`
+}
+
+// IsEqualPolicy reports whether r and other enforce the same firewall policy,
+// ignoring Description.
+func (r SecurityGroupRule) IsPolicyEqual(other SecurityGroupRule) bool {
+	if r.FlowDirection != other.FlowDirection || r.Protocol != other.Protocol {
+		return false
+	}
+	if r.StartPort != other.StartPort || r.EndPort != other.EndPort {
+		return false
+	}
+
+	networkEqual := (r.Network == nil && other.Network == nil) ||
+		(r.Network != nil && other.Network != nil && *r.Network == *other.Network)
+	if !networkEqual {
+		return false
+	}
+
+	securityGroupEqual := (r.SecurityGroup == nil && other.SecurityGroup == nil) ||
+		(r.SecurityGroup != nil && other.SecurityGroup != nil && *r.SecurityGroup == *other.SecurityGroup)
+
+	return securityGroupEqual
 }
 
 // Security Group

@@ -13,12 +13,10 @@ ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 KIND_CLUSTER=${KIND_CLUSTER:-capi-sample}
 MANAGEMENT_KUBECONFIG=${MANAGEMENT_KUBECONFIG:-/tmp/${KIND_CLUSTER}-management.kubeconfig}
 WORKLOAD_KUBECONFIG=${WORKLOAD_KUBECONFIG:-/tmp/${KIND_CLUSTER}-workload.kubeconfig}
-CAPI_LOG=${CAPI_LOG:-/tmp/${KIND_CLUSTER}-controller.log}
-CAPI_PID_FILE=${CAPI_PID_FILE:-/tmp/${KIND_CLUSTER}-controller.pid}
 RUNNER_PID_FILE=${RUNNER_PID_FILE:-/tmp/${KIND_CLUSTER}-runner.pid}
-
-CAPI_PID=
-STARTED_CAPI=false
+LOCAL_IMG=${LOCAL_IMG:-localhost/cluster-api-provider-exoscale:sample}
+CAPX_NAMESPACE=cluster-api-provider-exoscale-system
+CAPX_DEPLOYMENT=cluster-api-provider-exoscale-controller-manager
 
 timestamp_output() {
 	while IFS= read -r line || [[ -n "$line" ]]; do
@@ -36,43 +34,20 @@ require() {
 	}
 }
 
-# Only trust a recorded PID when it is still a process-group leader running
-# this sample's `make run`. This avoids killing an unrelated reused PID.
-load_capi_pid() {
-	[[ -f "$CAPI_PID_FILE" ]] || return 1
-	read -r candidate <"$CAPI_PID_FILE"
-	[[ "$candidate" =~ ^[0-9]+$ ]] || return 1
-	kill -0 "$candidate" 2>/dev/null || return 1
-
-	pgid=$(ps -o pgid= -p "$candidate")
-	pgid=${pgid//[[:space:]]/}
-	args=$(ps -o args= -p "$candidate")
-	[[ "$pgid" == "$candidate" && "$args" == *"make run"* ]] || return 1
-
-	CAPI_PID=$candidate
+print_capx_logs() {
+	printf 'Logs: KUBECONFIG=%q kubectl logs --namespace %q deployment/%q --container manager\n' \
+		"$MANAGEMENT_KUBECONFIG" "$CAPX_NAMESPACE" "$CAPX_DEPLOYMENT" >&2
 }
 
-stop_capi() {
-	if [[ -n "$CAPI_PID" ]] && kill -0 "$CAPI_PID" 2>/dev/null; then
-		kill -- "-$CAPI_PID" 2>/dev/null || true
-		wait "$CAPI_PID" 2>/dev/null || true
+ensure_capx() {
+	if kubectl wait deployment/"$CAPX_DEPLOYMENT" --namespace "$CAPX_NAMESPACE" \
+		--for=condition=Available --timeout=10s >/dev/null 2>&1; then
+		printf 'Using the running in-cluster CAPX deployment.\n'
+		return
 	fi
-	rm -f -- "$CAPI_PID_FILE"
-}
 
-wait_for_capi() {
-	for ((attempt = 1; attempt <= 300; attempt++)); do
-		if [[ -n "$CAPI_PID" ]] && ! kill -0 "$CAPI_PID" 2>/dev/null; then
-			printf 'CAPI exited before becoming ready. Inspect %s\n' "$CAPI_LOG" >&2
-			return 1
-		fi
-		if curl --fail --silent http://127.0.0.1:8081/readyz >/dev/null; then
-			return 0
-		fi
-		sleep 1
-	done
-	printf 'CAPI did not become ready within 5 minutes. Inspect %s\n' "$CAPI_LOG" >&2
-	return 1
+	printf 'Rebuilding and deploying CAPX for finalizer cleanup.\n'
+	make run LOCAL_KIND_CLUSTER="$KIND_CLUSTER" LOCAL_IMG="$LOCAL_IMG"
 }
 
 signal_runner() {
@@ -95,11 +70,12 @@ signal_runner() {
 	rm -f -- "$RUNNER_PID_FILE"
 }
 
-for tool in kind kubectl make go curl setsid ps; do
+for tool in kind kubectl make go ps; do
 	require "$tool"
 done
 
 cd -- "$ROOT"
+signal_runner
 
 if ! kind_clusters=$(kind get clusters); then
 	printf 'Could not determine whether Kind cluster %s exists; no cleanup was attempted.\n' "$KIND_CLUSTER" >&2
@@ -115,9 +91,6 @@ done <<<"$kind_clusters"
 
 if [[ "$kind_cluster_exists" != true ]]; then
 	printf 'Kind cluster %s is already absent.\n' "$KIND_CLUSTER"
-	load_capi_pid || true
-	stop_capi
-	signal_runner
 	rm -f -- "$MANAGEMENT_KUBECONFIG" "$WORKLOAD_KUBECONFIG"
 	printf 'Removed stale local sample state. Cloud cleanup cannot be verified without the management cluster.\n'
 	exit 1
@@ -129,48 +102,32 @@ if [[ ! -f "$MANAGEMENT_KUBECONFIG" ]]; then
 fi
 export KUBECONFIG=$MANAGEMENT_KUBECONFIG
 
-if ! cluster_resource=$(kubectl get cluster my-cluster --ignore-not-found -o name); then
+cluster_resource=
+if ! cluster_crd=$(kubectl get customresourcedefinition clusters.cluster.x-k8s.io --ignore-not-found -o name); then
+	printf 'Could not verify workload-cluster state. Kind and CAPI were left running.\n' >&2
+	exit 1
+fi
+if [[ -n "$cluster_crd" ]] && ! cluster_resource=$(kubectl get cluster my-cluster --namespace default --ignore-not-found -o name); then
 	printf 'Could not verify workload-cluster state. Kind and CAPI were left running.\n' >&2
 	exit 1
 fi
 if [[ -n "$cluster_resource" ]]; then
-	if load_capi_pid; then
-		printf 'Using recorded CAPI process %s.\n' "$CAPI_PID"
-	elif curl --fail --silent http://127.0.0.1:8081/readyz >/dev/null 2>&1; then
-		printf 'Using an already-running CAPI controller; it was not started by this helper.\n'
-	else
-		# Recovery path for a crashed/lost run script: restart CAPI long enough to
-		# execute its deletion finalizers.
-		printf 'Starting CAPI temporarily for finalizer cleanup; log: %s\n' "$CAPI_LOG"
-		: >"$CAPI_LOG"
-		setsid make run >"$CAPI_LOG" 2>&1 &
-		CAPI_PID=$!
-		STARTED_CAPI=true
-		printf '%s\n' "$CAPI_PID" >"$CAPI_PID_FILE"
-		wait_for_capi
-	fi
+	ensure_capx
 
 	printf 'Deleting Cluster/my-cluster and waiting for cloud finalizers...\n'
-	if ! kubectl delete cluster my-cluster --wait --timeout=10m; then
+	if ! kubectl delete cluster my-cluster --namespace default --wait --timeout=10m; then
 		printf '\nCleanup failed. Kind and CAPI were deliberately left running.\n' >&2
 		printf 'Inspect: KUBECONFIG=%s kubectl get cluster,kubeadmcontrolplane,exoscalecluster,exoscalemachinetemplate,machine,exoscalemachine\n' "$MANAGEMENT_KUBECONFIG" >&2
-		printf 'Logs:   tail -f %s\n' "$CAPI_LOG" >&2
+		print_capx_logs
 		exit 1
 	fi
 else
 	printf 'Cluster/my-cluster is already absent; no CAPI workload remains.\n'
-	load_capi_pid || true
 fi
 
-kubectl delete secret exoscale --ignore-not-found >/dev/null 2>&1 || true
-
-# Stop only a controller recorded by the sample or started by this helper.
-if [[ -n "$CAPI_PID" || "$STARTED_CAPI" == true ]]; then
-	stop_capi
-fi
+kubectl delete secret exoscale --namespace default --ignore-not-found >/dev/null 2>&1 || true
 
 kind delete cluster --name "$KIND_CLUSTER"
-signal_runner
-rm -f -- "$MANAGEMENT_KUBECONFIG" "$WORKLOAD_KUBECONFIG" "$CAPI_PID_FILE"
+rm -f -- "$MANAGEMENT_KUBECONFIG" "$WORKLOAD_KUBECONFIG"
 
-printf 'Emergency cleanup complete. Controller log retained at %s\n' "$CAPI_LOG"
+printf 'Emergency cleanup complete.\n'

@@ -72,14 +72,18 @@ type SecurityGroupRule struct {
 	Protocol egoscale.SecurityGroupRuleProtocol `json:"protocol"`
 
 	// startPort is the first port of the port range this rule applies to (inclusive).
-	// +required
+	// Required when protocol is tcp or udp; must be left unset otherwise, since
+	// other protocols aren't port-based and the Exoscale API ignores this field for them.
+	// +optional
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=65535
 	StartPort int64 `json:"startPort,omitempty"`
 
 	// endPort is the last port of the port range this rule applies to (inclusive).
-	// Must be greater than or equal to startPort.
-	// +required
+	// Must be greater than or equal to startPort. Required when protocol is tcp or udp;
+	// must be left unset otherwise, since other protocols aren't port-based and the
+	// Exoscale API ignores this field for them.
+	// +optional
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=65535
 	EndPort int64 `json:"endPort,omitempty"`

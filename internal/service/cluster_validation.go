@@ -40,6 +40,13 @@ var validProtocols = []egoscale.SecurityGroupRuleProtocol{
 	egoscale.SecurityGroupRuleProtocolIpip,
 }
 
+// Lists the protocols for which startPort/endPort are meaningful.
+// Other protocols (e.g. ipip, icmp, gre) aren't port-based.
+var portBasedProtocols = []egoscale.SecurityGroupRuleProtocol{
+	egoscale.SecurityGroupRuleProtocolTCP,
+	egoscale.SecurityGroupRuleProtocolUDP,
+}
+
 // exoscaleClusterValidator implements domain.ClusterValidator.
 type exoscaleClusterValidator struct{}
 
@@ -126,6 +133,17 @@ func (v *exoscaleClusterValidator) validateSecurityGroup(sg infrav1alpha1.Securi
 
 		if !slices.Contains(validProtocols, rule.Protocol) {
 			allErrs = append(allErrs, field.NotSupported(rulePath.Child("protocol"), rule.Protocol, validProtocols))
+		}
+
+		portsRequired := slices.Contains(portBasedProtocols, rule.Protocol)
+		if portsRequired && rule.StartPort == 0 {
+			allErrs = append(allErrs, field.Required(rulePath.Child("startPort"), "required when protocol is tcp or udp"))
+		}
+		if portsRequired && rule.EndPort == 0 {
+			allErrs = append(allErrs, field.Required(rulePath.Child("endPort"), "required when protocol is tcp or udp"))
+		}
+		if !portsRequired && (rule.StartPort != 0 || rule.EndPort != 0) {
+			allErrs = append(allErrs, field.Invalid(rulePath, rule, "startPort/endPort must be unset when protocol is not tcp or udp"))
 		}
 
 		if rule.StartPort > rule.EndPort {

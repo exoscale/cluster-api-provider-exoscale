@@ -48,6 +48,7 @@ type ExoscaleMachineSpec struct {
 	// securityGroups lists UUIDs of Exoscale Security Groups to attach in addition
 	// to the cluster's control-plane or worker security group.
 	// +optional
+	// +kubebuilder:validation:items:Format=uuid
 	SecurityGroups []string `json:"securityGroups,omitempty"`
 
 	// rootVolumeSizeGiB overrides the disk size declared by the template.

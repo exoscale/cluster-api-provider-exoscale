@@ -87,6 +87,7 @@ spec:
                   securityGroups lists UUIDs of Exoscale Security Groups to attach in addition
                   to the cluster's control-plane or worker security group.
                 items:
+                  format: uuid
                   type: string
                 type: array
               sshKey:

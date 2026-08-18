@@ -129,7 +129,12 @@ if [[ ! -f "$MANAGEMENT_KUBECONFIG" ]]; then
 fi
 export KUBECONFIG=$MANAGEMENT_KUBECONFIG
 
-if ! cluster_resource=$(kubectl get cluster my-cluster --ignore-not-found -o name); then
+cluster_resource=
+if ! cluster_crd=$(kubectl get customresourcedefinition clusters.cluster.x-k8s.io --ignore-not-found -o name); then
+	printf 'Could not verify workload-cluster state. Kind and CAPI were left running.\n' >&2
+	exit 1
+fi
+if [[ -n "$cluster_crd" ]] && ! cluster_resource=$(kubectl get cluster my-cluster --ignore-not-found -o name); then
 	printf 'Could not verify workload-cluster state. Kind and CAPI were left running.\n' >&2
 	exit 1
 fi

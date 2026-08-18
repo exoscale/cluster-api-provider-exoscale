@@ -54,7 +54,15 @@ cleanup() {
 		export KUBECONFIG=$MANAGEMENT_KUBECONFIG
 
 		# Keep CAPI alive until CAPI finalizers remove the real cloud resources.
-		if ! cluster_resource=$(kubectl get cluster my-cluster --ignore-not-found -o name); then
+		cluster_resource=
+		# A missing Cluster CRD proves the script failed before workload creation.
+		if ! cluster_crd=$(kubectl get customresourcedefinition clusters.cluster.x-k8s.io --ignore-not-found -o name); then
+			printf '\nCould not verify workload-cluster state. Kind and CAPI were left running.\n' >&2
+			printf 'Inspect CAPI with: tail -f %s\n' "$CAPI_LOG" >&2
+			printf 'Use management kubeconfig: export KUBECONFIG=%s\n' "$MANAGEMENT_KUBECONFIG" >&2
+			exit 1
+		fi
+		if [[ -n "$cluster_crd" ]] && ! cluster_resource=$(kubectl get cluster my-cluster --ignore-not-found -o name); then
 			printf '\nCould not verify workload-cluster state. Kind and CAPI were left running.\n' >&2
 			printf 'Inspect CAPI with: tail -f %s\n' "$CAPI_LOG" >&2
 			printf 'Use management kubeconfig: export KUBECONFIG=%s\n' "$MANAGEMENT_KUBECONFIG" >&2

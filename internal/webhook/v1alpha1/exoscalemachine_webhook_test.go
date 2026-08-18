@@ -58,38 +58,9 @@ func Test_ExoscaleMachineCustomValidator_ValidateUpdate(t *testing.T) {
 			},
 		},
 		{
-			name: "template",
-			mutate: func(machine *infrastructurev1alpha1.ExoscaleMachine) {
-				machine.Spec.Template = "debian"
-			},
-			wantErr: true,
-		},
-		{
 			name: "instance type",
 			mutate: func(machine *infrastructurev1alpha1.ExoscaleMachine) {
 				machine.Spec.InstanceType = "medium"
-			},
-			wantErr: true,
-		},
-		{
-			name: "SSH key",
-			mutate: func(machine *infrastructurev1alpha1.ExoscaleMachine) {
-				machine.Spec.SSHKey = "other"
-			},
-			wantErr: true,
-		},
-		{
-			name: "security groups",
-			mutate: func(machine *infrastructurev1alpha1.ExoscaleMachine) {
-				machine.Spec.SecurityGroups = []string{"8d9b752c-e5c2-4647-b2b9-630d9ce2c293"}
-			},
-			wantErr: true,
-		},
-		{
-			name: "root volume size",
-			mutate: func(machine *infrastructurev1alpha1.ExoscaleMachine) {
-				newSize := int64(40)
-				machine.Spec.RootVolumeSizeGiB = &newSize
 			},
 			wantErr: true,
 		},

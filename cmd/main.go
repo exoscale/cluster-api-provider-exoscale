@@ -228,17 +228,20 @@ func main() {
 		setupLog.Error(err, "Failed to create controller", "controller", "ExoscaleMachine")
 		os.Exit(1)
 	}
-	if err := webhookv1alpha1.SetupExoscaleMachineWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "Failed to create webhook", "webhook", "ExoscaleMachine")
-		os.Exit(1)
-	}
-	if err := webhookv1alpha1.SetupExoscaleClusterTemplateWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "Failed to create webhook", "webhook", "ExoscaleClusterTemplate")
-		os.Exit(1)
-	}
-	if err := webhookv1alpha1.SetupExoscaleClusterWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "Failed to create webhook", "webhook", "ExoscaleCluster")
-		os.Exit(1)
+	enableWebhooks := os.Getenv("ENABLE_WEBHOOKS") != "false"
+	if enableWebhooks {
+		if err := webhookv1alpha1.SetupExoscaleMachineWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "Failed to create webhook", "webhook", "ExoscaleMachine")
+			os.Exit(1)
+		}
+		if err := webhookv1alpha1.SetupExoscaleClusterTemplateWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "Failed to create webhook", "webhook", "ExoscaleClusterTemplate")
+			os.Exit(1)
+		}
+		if err := webhookv1alpha1.SetupExoscaleClusterWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "Failed to create webhook", "webhook", "ExoscaleCluster")
+			os.Exit(1)
+		}
 	}
 	// +kubebuilder:scaffold:builder
 
@@ -250,9 +253,11 @@ func main() {
 		setupLog.Error(err, "Failed to set up ready check")
 		os.Exit(1)
 	}
-	if err := mgr.AddReadyzCheck("webhook", mgr.GetWebhookServer().StartedChecker()); err != nil {
-		setupLog.Error(err, "Failed to set up webhook ready check")
-		os.Exit(1)
+	if enableWebhooks {
+		if err := mgr.AddReadyzCheck("webhook", mgr.GetWebhookServer().StartedChecker()); err != nil {
+			setupLog.Error(err, "Failed to set up webhook ready check")
+			os.Exit(1)
+		}
 	}
 
 	setupLog.Info("Starting manager")

@@ -1,7 +1,5 @@
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
-LOCAL_IMG ?= localhost/cluster-api-provider-exoscale:dev
-LOCAL_KIND_CLUSTER ?= capi-test
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -154,21 +152,11 @@ lint-config: golangci-lint ## Verify golangci-lint linter configuration
 build: manifests generate fmt vet ## Build manager binary.
 	go build -o bin/manager cmd/main.go
 
+ENABLE_WEBHOOKS ?= false
+
 .PHONY: run
-run: generate fmt vet kustomize ## Build and deploy the controller with webhooks into a local Kind cluster.
-	$(MAKE) docker-build IMG="$(LOCAL_IMG)"
-	@archive="$$(mktemp)"; kubeconfig="$$(mktemp)"; \
-		trap 'rm -f "$$archive" "$$kubeconfig"' EXIT; \
-		$(CONTAINER_TOOL) save --output "$$archive" "$(LOCAL_IMG)"; \
-		$(KIND) load image-archive --name "$(LOCAL_KIND_CLUSTER)" "$$archive"; \
-		$(KIND) get kubeconfig --name "$(LOCAL_KIND_CLUSTER)" >"$$kubeconfig"; \
-		KUBECONFIG="$$kubeconfig" $(MAKE) deploy IMG="$(LOCAL_IMG)"; \
-		KUBECONFIG="$$kubeconfig" "$(KUBECTL)" rollout restart \
-			deployment/cluster-api-provider-exoscale-controller-manager \
-			--namespace cluster-api-provider-exoscale-system; \
-		KUBECONFIG="$$kubeconfig" "$(KUBECTL)" rollout status \
-			deployment/cluster-api-provider-exoscale-controller-manager \
-			--namespace cluster-api-provider-exoscale-system --timeout=2m
+run: manifests generate fmt vet ## Run a controller from your host.
+	ENABLE_WEBHOOKS=$(ENABLE_WEBHOOKS) go run ./cmd/main.go
 
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.

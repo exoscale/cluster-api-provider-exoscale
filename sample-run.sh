@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# The script creates a local Kind management cluster, deploys Exoscale CAPI with
-# its webhooks, creates a real Exoscale workload cluster, and waits for
+# The script creates a local Kind management cluster, runs Exoscale CAPI in the
+# background, creates a real Exoscale workload cluster, and waits for
 # confirmation before cleanup. The Exoscale VM, Elastic IP, and security
 # groups are billable until cleanup finishes.
 
@@ -12,12 +12,12 @@ ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 KIND_CLUSTER=${KIND_CLUSTER:-capi-sample}
 MANAGEMENT_KUBECONFIG=${MANAGEMENT_KUBECONFIG:-/tmp/${KIND_CLUSTER}-management.kubeconfig}
 WORKLOAD_KUBECONFIG=${WORKLOAD_KUBECONFIG:-/tmp/${KIND_CLUSTER}-workload.kubeconfig}
+CAPI_LOG=${CAPI_LOG:-/tmp/${KIND_CLUSTER}-controller.log}
+CAPI_PID_FILE=${CAPI_PID_FILE:-/tmp/${KIND_CLUSTER}-controller.pid}
 RUNNER_PID_FILE=${RUNNER_PID_FILE:-/tmp/${KIND_CLUSTER}-runner.pid}
 EXOSCALE_CONFIG=${EXOSCALE_CONFIG:-${HOME}/.config/exoscale/exoscale.toml}
-LOCAL_IMG=${LOCAL_IMG:-localhost/cluster-api-provider-exoscale:sample}
-CAPX_NAMESPACE=cluster-api-provider-exoscale-system
-CAPX_DEPLOYMENT=cluster-api-provider-exoscale-controller-manager
 
+CAPI_PID=
 KIND_CREATED=false
 
 timestamp_output() {
@@ -36,9 +36,13 @@ require() {
 	}
 }
 
-print_capx_logs() {
-	printf 'Inspect CAPX: KUBECONFIG=%q kubectl logs --namespace %q deployment/%q --container manager\n' \
-		"$MANAGEMENT_KUBECONFIG" "$CAPX_NAMESPACE" "$CAPX_DEPLOYMENT" >&2
+stop_capi() {
+	if [[ -n "$CAPI_PID" ]] && kill -0 "$CAPI_PID" 2>/dev/null; then
+		# setsid gives make/go/controller one process group, so stop all of it.
+		kill -- "-$CAPI_PID" 2>/dev/null || true
+		wait "$CAPI_PID" 2>/dev/null || true
+	fi
+	rm -f -- "$CAPI_PID_FILE"
 }
 
 cleanup() {
@@ -49,36 +53,41 @@ cleanup() {
 	if [[ "$KIND_CREATED" == true ]]; then
 		export KUBECONFIG=$MANAGEMENT_KUBECONFIG
 
+		# Keep CAPI alive until CAPI finalizers remove the real cloud resources.
 		cluster_resource=
 		# A missing Cluster CRD proves the script failed before workload creation.
 		if ! cluster_crd=$(kubectl get customresourcedefinition clusters.cluster.x-k8s.io --ignore-not-found -o name); then
 			printf '\nCould not verify workload-cluster state. Kind and CAPI were left running.\n' >&2
+			printf 'Inspect CAPI with: tail -f %s\n' "$CAPI_LOG" >&2
 			printf 'Use management kubeconfig: export KUBECONFIG=%s\n' "$MANAGEMENT_KUBECONFIG" >&2
 			exit 1
 		fi
-		if [[ -n "$cluster_crd" ]] && ! cluster_resource=$(kubectl get cluster my-cluster --namespace default --ignore-not-found -o name); then
+		if [[ -n "$cluster_crd" ]] && ! cluster_resource=$(kubectl get cluster my-cluster --ignore-not-found -o name); then
 			printf '\nCould not verify workload-cluster state. Kind and CAPI were left running.\n' >&2
+			printf 'Inspect CAPI with: tail -f %s\n' "$CAPI_LOG" >&2
 			printf 'Use management kubeconfig: export KUBECONFIG=%s\n' "$MANAGEMENT_KUBECONFIG" >&2
 			exit 1
 		fi
 		if [[ -n "$cluster_resource" ]]; then
 			printf '\nDeleting workload cluster and Exoscale resources...\n'
-			if ! kubectl delete cluster my-cluster --namespace default --wait --timeout=10m; then
+			if ! kubectl delete cluster my-cluster --wait --timeout=10m; then
 				printf '\nCleanup did not finish. Kind and CAPI were left running.\n' >&2
-				print_capx_logs
+				printf 'Inspect CAPI with: tail -f %s\n' "$CAPI_LOG" >&2
 				printf 'Use management kubeconfig: export KUBECONFIG=%s\n' "$MANAGEMENT_KUBECONFIG" >&2
 				exit 1
 			fi
 		fi
 
-		kubectl delete secret exoscale --namespace default --ignore-not-found >/dev/null 2>&1 || true
+		kubectl delete secret exoscale --ignore-not-found >/dev/null 2>&1 || true
+		stop_capi
 		if ! kind delete cluster --name "$KIND_CLUSTER"; then
-			printf 'Cloud cleanup finished, but Kind cleanup failed.\n' >&2
+			printf 'Cloud cleanup finished, but Kind cleanup failed. Local state was retained.\n' >&2
 			exit 1
 		fi
 		rm -f -- "$MANAGEMENT_KUBECONFIG" "$WORKLOAD_KUBECONFIG" "$RUNNER_PID_FILE"
-		printf 'Cleanup complete.\n'
+		printf 'Cleanup complete. Controller log retained at %s\n' "$CAPI_LOG"
 	else
+		stop_capi
 		rm -f -- "$RUNNER_PID_FILE"
 	fi
 
@@ -88,7 +97,7 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT TERM
 
-for tool in docker kind kubectl make go; do
+for tool in docker kind kubectl make go curl setsid; do
 	require "$tool"
 done
 
@@ -128,6 +137,9 @@ export KUBECONFIG=$MANAGEMENT_KUBECONFIG
 printf '\nInstalling CAPI core and kubeadm providers...\n'
 ./bin/clusterctl init --infrastructure -
 
+printf '\nInstalling CAPI CRDs...\n'
+make install
+
 # Read the default Exoscale account. Values stay in shell variables and are
 # passed to kubectl through file descriptors, not command-line arguments.
 export EXOSCALE_ACCOUNT
@@ -143,14 +155,35 @@ if [[ -z "$EXOSCALE_ACCOUNT" || "$EXOSCALE_ACCOUNT" == null ||
 fi
 
 kubectl create secret generic exoscale \
-	--namespace default \
 	--from-file=apikey=<(printf '%s' "$EXOSCALE_API_KEY") \
 	--from-file=apisecret=<(printf '%s' "$EXOSCALE_API_SECRET") \
 	--dry-run=client -o yaml | kubectl apply -f -
 unset EXOSCALE_API_KEY EXOSCALE_API_SECRET
 
-printf '\nBuilding and deploying CAPX with webhooks...\n'
-make run LOCAL_KIND_CLUSTER="$KIND_CLUSTER" LOCAL_IMG="$LOCAL_IMG"
+# Run CAPI in a separate process group so this terminal remains available and
+# cleanup can reliably stop make, go run, and the controller together.
+printf '\nStarting CAPI; log: %s\n' "$CAPI_LOG"
+: >"$CAPI_LOG"
+setsid make run >"$CAPI_LOG" 2>&1 &
+CAPI_PID=$!
+printf '%s\n' "$CAPI_PID" >"$CAPI_PID_FILE"
+
+ready=false
+for ((attempt = 1; attempt <= 180; attempt++)); do
+	if ! kill -0 "$CAPI_PID" 2>/dev/null; then
+		printf 'CAPI exited before becoming ready. Inspect %s\n' "$CAPI_LOG" >&2
+		exit 1
+	fi
+	if curl --fail --silent http://127.0.0.1:8081/readyz >/dev/null; then
+		ready=true
+		break
+	fi
+	sleep 1
+done
+if [[ "$ready" != true ]]; then
+	printf 'CAPI did not become ready within 3 minutes. Inspect %s\n' "$CAPI_LOG" >&2
+	exit 1
+fi
 
 # clusterctl can return before every CAPI admission webhook accepts traffic.
 # Retry a server-side dry run so a startup race cannot leave half of the real
@@ -162,6 +195,10 @@ for ((attempt = 1; attempt <= 90; attempt++)); do
 	if last_webhook_error=$(kubectl apply --server-side --dry-run=server -k config/samples/cluster/ 2>&1); then
 		webhooks_ready=true
 		break
+	fi
+	if ! kill -0 "$CAPI_PID" 2>/dev/null; then
+		printf 'CAPI exited while waiting for admission webhooks. Inspect %s\n' "$CAPI_LOG" >&2
+		exit 1
 	fi
 	sleep 2
 done
@@ -211,7 +248,6 @@ kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" get nodes -o wide
 printf '\nThe sample is ready.\n'
 printf 'Management cluster: kubectl --kubeconfig=%q get cluster,kubeadmcontrolplane,exoscalecluster,exoscalemachinetemplate,machine,exoscalemachine\n' "$MANAGEMENT_KUBECONFIG"
 printf 'Workload cluster:   kubectl --kubeconfig=%q get pods -A\n' "$WORKLOAD_KUBECONFIG"
-printf 'Controller logs:    kubectl --kubeconfig=%q logs --namespace %q deployment/%q --container manager --follow\n' \
-	"$MANAGEMENT_KUBECONFIG" "$CAPX_NAMESPACE" "$CAPX_DEPLOYMENT"
-printf '\nPress Enter to delete the workload cluster and remove Kind.\n'
+printf 'Controller logs:    tail -f %q\n' "$CAPI_LOG"
+printf '\nPress Enter to delete the workload cluster, stop CAPI, and remove Kind.\n'
 read -r

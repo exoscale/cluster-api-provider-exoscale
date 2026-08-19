@@ -24,19 +24,11 @@ $> ./bin/clusterctl init --infrastructure - # installs CAPI core and kubeadm pro
 
 ### Run CAPX
 ```bash
+$> make generate manifests install
 $> make run
 ```
 
-This builds the controller image, loads it into the `capi-test` Kind cluster,
-and deploys CAPX with its validating webhooks and TLS certificates. The command
-returns once the in-cluster manager is available.
-
-Follow its logs with:
-```bash
-$> kubectl logs --namespace cluster-api-provider-exoscale-system \
-     deployment/cluster-api-provider-exoscale-controller-manager \
-     --container manager --follow
-```
+Keep the manager running and use another terminal for the remaining commands.
 
 ### Deploy a simple cluster
 ```bash

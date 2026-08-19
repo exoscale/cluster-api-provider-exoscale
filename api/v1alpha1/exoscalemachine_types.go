@@ -48,6 +48,7 @@ type ExoscaleMachineSpec struct {
 	// securityGroups lists UUIDs of Exoscale Security Groups to attach in addition
 	// to the cluster's control-plane or worker security group.
 	// +optional
+	// +kubebuilder:validation:items:Format=uuid
 	SecurityGroups []string `json:"securityGroups,omitempty"`
 
 	// rootVolumeSizeGiB overrides the disk size declared by the template.
@@ -113,7 +114,6 @@ type ExoscaleMachineStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:path=exoscalemachines,scope=Namespaced,categories=cluster-api,shortName=exom
 // +kubebuilder:storageversion
-// +kubebuilder:validation:XValidation:rule="self.spec.template == oldSelf.spec.template && self.spec.instanceType == oldSelf.spec.instanceType && has(self.spec.sshKey) == has(oldSelf.spec.sshKey) && (!has(self.spec.sshKey) || self.spec.sshKey == oldSelf.spec.sshKey) && has(self.spec.securityGroups) == has(oldSelf.spec.securityGroups) && (!has(self.spec.securityGroups) || self.spec.securityGroups == oldSelf.spec.securityGroups) && has(self.spec.rootVolumeSizeGiB) == has(oldSelf.spec.rootVolumeSizeGiB) && (!has(self.spec.rootVolumeSizeGiB) || self.spec.rootVolumeSizeGiB == oldSelf.spec.rootVolumeSizeGiB)",message="instance creation fields are immutable"
 // +kubebuilder:printcolumn:name="Cluster",type=string,JSONPath=`.metadata.labels.cluster\.x-k8s\.io/cluster-name`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.ready`
 // +kubebuilder:printcolumn:name="ProviderID",type=string,JSONPath=`.spec.providerID`

@@ -22,7 +22,7 @@ $> kind create cluster --name capi-test
 $> ./bin/clusterctl init --infrastructure - # installs CAPI core and kubeadm providers
 ```
 
-### Run CAPX
+### Run Exoscale CAPI
 ```bash
 $> make generate manifests install
 $> make run

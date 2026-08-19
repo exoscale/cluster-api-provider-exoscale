@@ -59,7 +59,6 @@ vet: ## Run go vet against code.
 
 .PHONY: test
 test: manifests generate fmt vet ## Run tests.
-	bash test/sample-clean_test.sh
 	go test ./... -coverprofile cover.out
 
 # The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.

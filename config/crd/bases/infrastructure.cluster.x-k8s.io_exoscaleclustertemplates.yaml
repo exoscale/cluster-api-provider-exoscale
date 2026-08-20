@@ -174,7 +174,9 @@ spec:
                                 endPort:
                                   description: |-
                                     endPort is the last port of the port range this rule applies to (inclusive).
-                                    Must be greater than or equal to startPort.
+                                    Must be greater than or equal to startPort. Required when protocol is tcp or udp;
+                                    must be left unset otherwise, since other protocols aren't port-based and the
+                                    Exoscale API ignores this field for them.
                                   format: int64
                                   maximum: 65535
                                   minimum: 1
@@ -216,18 +218,18 @@ spec:
                                     control-plane or worker security group.
                                   type: string
                                 startPort:
-                                  description: startPort is the first port of the
-                                    port range this rule applies to (inclusive).
+                                  description: |-
+                                    startPort is the first port of the port range this rule applies to (inclusive).
+                                    Required when protocol is tcp or udp; must be left unset otherwise, since
+                                    other protocols aren't port-based and the Exoscale API ignores this field for them.
                                   format: int64
                                   maximum: 65535
                                   minimum: 1
                                   type: integer
                               required:
                               - description
-                              - endPort
                               - flowDirection
                               - protocol
-                              - startPort
                               type: object
                             type: array
                         type: object
@@ -254,7 +256,9 @@ spec:
                                 endPort:
                                   description: |-
                                     endPort is the last port of the port range this rule applies to (inclusive).
-                                    Must be greater than or equal to startPort.
+                                    Must be greater than or equal to startPort. Required when protocol is tcp or udp;
+                                    must be left unset otherwise, since other protocols aren't port-based and the
+                                    Exoscale API ignores this field for them.
                                   format: int64
                                   maximum: 65535
                                   minimum: 1
@@ -296,18 +300,18 @@ spec:
                                     control-plane or worker security group.
                                   type: string
                                 startPort:
-                                  description: startPort is the first port of the
-                                    port range this rule applies to (inclusive).
+                                  description: |-
+                                    startPort is the first port of the port range this rule applies to (inclusive).
+                                    Required when protocol is tcp or udp; must be left unset otherwise, since
+                                    other protocols aren't port-based and the Exoscale API ignores this field for them.
                                   format: int64
                                   maximum: 65535
                                   minimum: 1
                                   type: integer
                               required:
                               - description
-                              - endPort
                               - flowDirection
                               - protocol
-                              - startPort
                               type: object
                             type: array
                         type: object

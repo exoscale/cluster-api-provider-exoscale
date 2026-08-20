@@ -209,6 +209,56 @@ func Test_exoscaleClusterValidator_validateSecurityGroup(t *testing.T) {
 			wantErr: `Unsupported value: "carrier-pigeon"`,
 		},
 		{
+			name: "ipip rule without ports is valid",
+			rules: []infrav1alpha1.SecurityGroupRule{
+				{
+					FlowDirection: egoscale.SecurityGroupRuleFlowDirectionIngress,
+					Protocol:      egoscale.SecurityGroupRuleProtocolIpip,
+					Description:   "overlay",
+					Network:       new("0.0.0.0/0"),
+				},
+			},
+		},
+		{
+			name: "ipip rule with ports set is invalid",
+			rules: []infrav1alpha1.SecurityGroupRule{
+				{
+					FlowDirection: egoscale.SecurityGroupRuleFlowDirectionIngress,
+					Protocol:      egoscale.SecurityGroupRuleProtocolIpip,
+					StartPort:     1, EndPort: 65535,
+					Description: "overlay",
+					Network:     new("0.0.0.0/0"),
+				},
+			},
+			wantErr: "must be unset when protocol is not tcp or udp",
+		},
+		{
+			name: "tcp rule missing startPort is invalid",
+			rules: []infrav1alpha1.SecurityGroupRule{
+				{
+					FlowDirection: egoscale.SecurityGroupRuleFlowDirectionIngress,
+					Protocol:      egoscale.SecurityGroupRuleProtocolTCP,
+					EndPort:       80,
+					Description:   "custom",
+					Network:       new("0.0.0.0/0"),
+				},
+			},
+			wantErr: "startPort: Required value",
+		},
+		{
+			name: "tcp rule missing endPort is invalid",
+			rules: []infrav1alpha1.SecurityGroupRule{
+				{
+					FlowDirection: egoscale.SecurityGroupRuleFlowDirectionIngress,
+					Protocol:      egoscale.SecurityGroupRuleProtocolTCP,
+					StartPort:     80,
+					Description:   "custom",
+					Network:       new("0.0.0.0/0"),
+				},
+			},
+			wantErr: "endPort: Required value",
+		},
+		{
 			name: "rule with startPort after endPort",
 			rules: []infrav1alpha1.SecurityGroupRule{
 				{

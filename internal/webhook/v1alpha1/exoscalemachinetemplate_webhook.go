@@ -66,6 +66,7 @@ func (*ExoscaleMachineTemplateCustomValidator) ValidateUpdate(ctx context.Contex
 	}
 
 	allErrs := newObj.Spec.Template.ObjectMeta.Validate(field.NewPath("spec", "template", "metadata"))
+	// CAPI dry-runs updates to detect spec changes before rotating immutable templates.
 	isTopologyDryRun := topology.IsDryRunRequest(req, newObj)
 	specChanged := !reflect.DeepEqual(oldObj.Spec.Template.Spec, newObj.Spec.Template.Spec)
 	if !isTopologyDryRun && specChanged {

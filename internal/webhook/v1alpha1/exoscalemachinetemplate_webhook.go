@@ -66,7 +66,9 @@ func (*ExoscaleMachineTemplateCustomValidator) ValidateUpdate(ctx context.Contex
 	}
 
 	allErrs := newObj.Spec.Template.ObjectMeta.Validate(field.NewPath("spec", "template", "metadata"))
-	if !topology.IsDryRunRequest(req, newObj) && !reflect.DeepEqual(oldObj.Spec.Template.Spec, newObj.Spec.Template.Spec) {
+	isTopologyDryRun := topology.IsDryRunRequest(req, newObj)
+	specChanged := !reflect.DeepEqual(oldObj.Spec.Template.Spec, newObj.Spec.Template.Spec)
+	if !isTopologyDryRun && specChanged {
 		allErrs = append(allErrs,
 			field.Forbidden(field.NewPath("spec", "template", "spec"), "ExoscaleMachineTemplate spec.template.spec is immutable"),
 		)

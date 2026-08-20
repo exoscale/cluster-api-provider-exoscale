@@ -15,7 +15,7 @@ spec:
         - apply:
             file: exoscalemachinetemplate.yaml
 
-    - name: allow updating machine creation fields
+    - name: allow updating template metadata
       try:
         - update:
             resource:
@@ -26,9 +26,12 @@ spec:
                 namespace: ($namespace)
               spec:
                 template:
+                  metadata:
+                    labels:
+                      role: control-plane
                   spec:
                     template: Linux Ubuntu 24.04 LTS 64-bit
-                    instanceType: medium
+                    instanceType: small
         - assert:
             resource:
               apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
@@ -38,8 +41,46 @@ spec:
                 namespace: ($namespace)
               spec:
                 template:
+                  metadata:
+                    labels:
+                      role: control-plane
+
+    - name: allow topology dry-run
+      try:
+        - script:
+            timeout: 10s
+            env:
+              - name: TEMPLATE_NAME
+                value: ($templateName)
+            content: |
+              kubectl patch exoscalemachinetemplate "$TEMPLATE_NAME" -n default \
+                --type=merge --dry-run=server -o name \
+                -p '{"metadata":{"annotations":{"topology.cluster.x-k8s.io/dry-run":""}},"spec":{"template":{"spec":{"template":"Linux Ubuntu 24.04 LTS 64-bit","instanceType":"medium"}}}}'
+
+    - name: reject updating machine creation fields
+      try:
+        - update:
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleMachineTemplate
+              metadata:
+                name: ($templateName)
+                namespace: ($namespace)
+              spec:
+                template:
+                  metadata:
+                    labels:
+                      role: control-plane
                   spec:
+                    template: Linux Ubuntu 24.04 LTS 64-bit
                     instanceType: medium
+            expect:
+              - match:
+                  apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+                  kind: ExoscaleMachineTemplate
+                check:
+                  ($error != null): true
+                  (contains($error, 'spec.template.spec is immutable')): true
 
     - name: reject provider ID
       try:
@@ -52,9 +93,12 @@ spec:
                 namespace: ($namespace)
               spec:
                 template:
+                  metadata:
+                    labels:
+                      role: control-plane
                   spec:
                     template: Linux Ubuntu 24.04 LTS 64-bit
-                    instanceType: medium
+                    instanceType: small
                     providerID: exoscale://11111111-2222-3333-4444-555555555555
             expect:
               - match:

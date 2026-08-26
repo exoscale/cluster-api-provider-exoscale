@@ -1,0 +1,103 @@
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: ExoscaleCluster
+metadata:
+  name: my-k0s-cluster
+  namespace: default
+spec:
+  zone: ch-gva-2
+  securityGroupControlPlane:
+    rules:
+      - description: k0s controller join API
+        securityGroup: control-plane
+        endPort: 9443
+        startPort: 9443
+        protocol: tcp
+        flowDirection: ingress
+      - description: k0s konnectivity tunnel (from control-plane nodes)
+        securityGroup: control-plane
+        endPort: 8132
+        startPort: 8132
+        protocol: tcp
+        flowDirection: ingress
+      - description: k0s konnectivity tunnel (from worker nodes)
+        securityGroup: worker
+        endPort: 8132
+        startPort: 8132
+        protocol: tcp
+        flowDirection: ingress
+      # kube-router (k0s's default CNI) needs both of the below, for two
+      # different jobs:
+      #  - BGP (port 179): the control plane. Each node tells every other
+      #    node which pod CIDR it owns, so they learn the routes.
+      #  - ipip: the data plane. These instances have no shared private
+      #    network, only public IPs, so a plain route via a peer's public IP
+      #    can't carry pod traffic on its own. kube-router instead wraps each
+      #    pod-to-pod packet inside an outer node-to-node packet (ipip
+      #    encapsulation) to actually deliver it.
+      # Without both, kube-router pods still report Running (their health
+      # checks only look at themselves), but pod-to-pod traffic between
+      # nodes silently drops end-to-end.
+      - description: kube-router BGP peering (control-plane peers)
+        securityGroup: control-plane
+        endPort: 179
+        startPort: 179
+        protocol: tcp
+        flowDirection: ingress
+      - description: kube-router BGP peering (worker peers)
+        securityGroup: worker
+        endPort: 179
+        startPort: 179
+        protocol: tcp
+        flowDirection: ingress
+      - description: kube-router pod overlay traffic (from control-plane nodes)
+        securityGroup: control-plane
+        protocol: ipip
+        flowDirection: ingress
+      - description: kube-router pod overlay traffic (from worker nodes)
+        securityGroup: worker
+        protocol: ipip
+        flowDirection: ingress
+  # Mirror of securityGroupControlPlane's kube-router rules above: the same
+  # BGP peering and pod overlay traffic needs to reach worker nodes too, from
+  # both control-plane and worker peers.
+  securityGroupWorker:
+    rules:
+      - description: kube-router BGP peering (control-plane peers)
+        securityGroup: control-plane
+        endPort: 179
+        startPort: 179
+        protocol: tcp
+        flowDirection: ingress
+      - description: kube-router BGP peering (worker peers)
+        securityGroup: worker
+        endPort: 179
+        startPort: 179
+        protocol: tcp
+        flowDirection: ingress
+      - description: kube-router pod overlay traffic (from control-plane nodes)
+        securityGroup: control-plane
+        protocol: ipip
+        flowDirection: ingress
+      - description: kube-router pod overlay traffic (from worker nodes)
+        securityGroup: worker
+        protocol: ipip
+        flowDirection: ingress
+---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: my-k0s-cluster
+  namespace: default
+spec:
+  clusterNetwork:
+    pods:
+      cidrBlocks:
+        - 10.244.0.0/16
+  controlPlaneRef:
+    apiGroup: controlplane.cluster.x-k8s.io
+    kind: K0sControlPlane
+    name: my-k0s-cluster-cp
+  infrastructureRef:
+    apiGroup: infrastructure.cluster.x-k8s.io
+    kind: ExoscaleCluster
+    name: my-k0s-cluster

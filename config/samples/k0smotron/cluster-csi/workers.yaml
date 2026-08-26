@@ -50,6 +50,10 @@ spec:
         pool: worker-pool-1
     spec:
       clusterName: my-k0s-cluster
+      # Must match Node.status.nodeInfo.kubeletVersion exactly — CAPI >= v1.14
+      # compares these as raw strings (machine_controller_status.go:726).
+      # k0s reports "+k0s" while its release tag is "+k0s.0".
+      version: v1.36.3+k0s
       bootstrap:
         configRef:
           apiGroup: bootstrap.cluster.x-k8s.io

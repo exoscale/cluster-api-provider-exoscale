@@ -27,7 +27,7 @@ two `k0s` args, applied to every node. Compared to the base cluster's
    namespace: default
  spec:
    replicas: 1
-   version: v1.36.3+k0s.0
+   version: v1.34.10+k0s.0
    k0sConfigSpec:
      args:
        - --enable-worker
@@ -46,7 +46,7 @@ And the base cluster's `K0sWorkerConfigTemplate`:
  spec:
    template:
      spec:
-       version: v1.36.3+k0s.0
+       version: v1.34.10+k0s.0
 +      args:
 +        - --kubelet-root-dir=/var/lib/kubelet
 +        - --labels=topology.kubernetes.io/zone=ch-gva-2,topology.kubernetes.io/region=ch-gva-2
@@ -179,20 +179,28 @@ $> kubectl --kubeconfig /tmp/my-k0s-cluster.kubeconfig get pods,pvc -n awesome
 # You should get something like that
 # NAME                                         READY   STATUS    RESTARTS   AGE
 # pod/my-awesome-deployment-7786bb6547-xnr27   1/1     Running   0          48s
-# 
+#
 # NAME                               STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
 # persistentvolumeclaim/my-sbs-pvc   Bound    pvc-45b893af-20b7-48a0-a67f-a30b1eecd277   200Gi      RWO            exoscale-sbs   <unset>                 54s
 ```
 
 Check the Block Storage page of the [Exoscale portal][exoscale-portal] and
-you'll see a volume matching the PVC's name.
+you'll see a block storage volume matching the PVC's volume.
 
 ## Clean up
 
 ```bash
+$> PV_NAME=$(kubectl --kubeconfig /tmp/my-k0s-cluster.kubeconfig \
+    get pvc/my-sbs-pvc -n awesome -o jsonpath='{.spec.volumeName}')
 $> kubectl delete \
     --kubeconfig /tmp/my-k0s-cluster.kubeconfig \
     -f https://raw.githubusercontent.com/exoscale/exoscale-csi-driver/main/doc/examples/namespace.yaml
+
+# Namespace deletion wait for the pvc deletion but does not wait for the CSI driver to delete the backend
+# volume. Wait on the PV itself before tearing down the cluster, otherwise the volume can be
+# orphaned in your Exoscale account.
+$> kubectl --kubeconfig /tmp/my-k0s-cluster.kubeconfig \
+    wait pv/$PV_NAME --for=delete --timeout=5m
 ```
 
 This deletes the PVC and its backing volume, but leaves the k0s cluster

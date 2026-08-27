@@ -74,8 +74,11 @@ after Cluster deletion.
 $> export EXOSCALE_API_KEY=<api-key>       # Optional if exocli is not configured
 $> export EXOSCALE_API_SECRET=<api-secret> # Optional if exocli is not configured
 
-$> make chainsaw-test-e2e \
-     CHAINSAW_MACHINE_TEMPLATE='Linux Ubuntu 24.04 LTS 64-bit'
+# run every e2e tests
+$> make chainsaw-test-e2e
+
+# run specific tests
+$> make chainsaw-test-e2e CHAINSAW_TEST_DIRS="test/chainsaw/full-deployment test/chainsaw/deploy-cluster"
 ```
 
 ## License

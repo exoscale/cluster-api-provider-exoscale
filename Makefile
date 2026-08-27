@@ -82,9 +82,7 @@ CHAINSAW_VALUES_SUFFIX ?=
 CHAINSAW_VALUES_ZONE ?=
 CHAINSAW_MACHINE_TEMPLATE ?=
 CHAINSAW_MACHINE_INSTANCE_TYPE ?= small
-CHAINSAW_ALL_TEST_DIRS := $(shell ls -d -1 test/chainsaw/*)
-CHAINSAW_MACHINE_TEST_DIR := test/chainsaw/deploy-machine
-CHAINSAW_TEST_DIRS ?= $(if $(CHAINSAW_MACHINE_TEMPLATE),$(CHAINSAW_ALL_TEST_DIRS),$(filter-out $(CHAINSAW_MACHINE_TEST_DIR),$(CHAINSAW_ALL_TEST_DIRS)))
+CHAINSAW_TEST_DIRS ?= $(shell ls -d -1 test/chainsaw/*)
 
 .PHONY: chainsaw-test-e2e
 chainsaw-test-e2e: setup-test-e2e-chainsaw chainsaw ## Run the e2e tests. Expected an isolated environment using Kind.
@@ -107,8 +105,8 @@ setup-test-e2e-chainsaw: check-exoscale-creds setup-test-e2e docker-build manife
 	## Load docker image into kind cluster.
 	$(KIND) load docker-image --name $(KIND_CLUSTER) $(IMG)
 
-	## Install CAPI.
-	$(CLUSTERCTL) init --infrastructure -
+	## Install CAPI, plus k0smotron's bootstrap/control-plane providers.
+	$(CLUSTERCTL) init --infrastructure - --bootstrap k0sproject-k0smotron --control-plane k0sproject-k0smotron
 
 	## Deploy exoscale infrastructure provider.
 	## We need to create a simple temporary kustomize file to set image name and tag

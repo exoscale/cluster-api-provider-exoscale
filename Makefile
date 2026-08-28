@@ -107,6 +107,9 @@ setup-test-e2e-chainsaw: check-exoscale-creds setup-test-e2e docker-build manife
 
 	## Install CAPI, plus k0smotron's bootstrap/control-plane providers.
 	$(CLUSTERCTL) init --infrastructure - --bootstrap k0sproject-k0smotron --control-plane k0sproject-k0smotron
+	$(KUBECTL) wait deployment/k0smotron-controller-manager-{bootstrap,control-plane} \
+		--namespace k0smotron \
+		--for=condition=Available
 
 	## Deploy exoscale infrastructure provider.
 	## We need to create a simple temporary kustomize file to set image name and tag

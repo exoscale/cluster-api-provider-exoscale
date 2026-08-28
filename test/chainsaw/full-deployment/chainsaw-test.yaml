@@ -220,6 +220,26 @@ spec:
               (contains(status.securityGroupWorker.rules[?description == 'Kubelet API from control plane'].securityGroupRef.id, status.securityGroupControlPlane.id)): true
               (contains(status.securityGroupWorker.rules[?description == 'Kubelet API worker-to-worker'].securityGroupRef.id, status.securityGroupWorker.id)): true
 
+    # Gate the machine assertions on the k0s control plane actually being up: the
+    # worker K0sWorkerConfig cannot produce bootstrap data (and therefore the worker
+    # ExoscaleMachine never provisions an instance) until the control plane API is
+    # reachable. Asserting this explicitly keeps a slow control-plane boot from
+    # surfacing as a misleading "worker machine not ready" failure.
+    - name: assert - controlplane ready
+      try:
+        - description: wait for the k0s control plane to be initialized
+          assert:
+            timeout: 15m
+            resource:
+              apiVersion: cluster.x-k8s.io/v1beta2
+              kind: Cluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+              status:
+                initialization:
+                  controlPlaneInitialized: true
+
     - name: assert - exoscalemachine
       try:
         - description: assert control plane machine ready
@@ -247,7 +267,7 @@ spec:
 
         - description: assert control plane machine providerID
           assert:
-            timeout: 30s
+            timeout: 1m
             resource:
               apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
               kind: ExoscaleMachine
@@ -262,7 +282,7 @@ spec:
 
         - description: assert worker machine ready
           assert:
-            timeout: 5m
+            timeout: 10m
             resource:
               apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
               kind: ExoscaleMachine
@@ -285,7 +305,7 @@ spec:
 
         - description: assert worker machine providerID
           assert:
-            timeout: 30s
+            timeout: 1m
             resource:
               apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
               kind: ExoscaleMachine

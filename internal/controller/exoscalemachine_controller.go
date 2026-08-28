@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -78,6 +79,9 @@ type ExoscaleMachineReconciler struct {
 	Scheme             *runtime.Scheme
 	WatchFilter        string
 	NewInstanceService func(apiKey, apiSecret string, zone egoscale.ZoneName, logger logr.Logger) (domain.InstanceService, error)
+	// MaxConcurrentReconciles is the number of concurrent reconcile workers. When <= 0,
+	// DefaultMaxConcurrentReconciles is used.
+	MaxConcurrentReconciles int
 }
 
 func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
@@ -479,6 +483,7 @@ func (r *ExoscaleMachineReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	return capicontrollerutil.NewControllerManagedBy(mgr, logger).
 		For(&infrastructurev1alpha1.ExoscaleMachine{}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles}).
 		WithEventFilter(capipredicates.ResourceHasFilterLabel(mgr.GetScheme(), logger, r.WatchFilter)).
 		Watches(
 			&clusterv1.Machine{},

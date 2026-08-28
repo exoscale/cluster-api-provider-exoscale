@@ -35,6 +35,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -50,9 +51,10 @@ import (
 // ExoscaleClusterReconciler reconciles a ExoscaleCluster object
 type ExoscaleClusterReconciler struct {
 	client.Client
-	Scheme            *runtime.Scheme
-	WatchFilter       string
-	NewClusterService func(apiKey, apiSecret string, zone egoscale.ZoneName, logger logr.Logger) (domain.ClusterService, error)
+	Scheme                  *runtime.Scheme
+	WatchFilter             string
+	NewClusterService       func(apiKey, apiSecret string, zone egoscale.ZoneName, logger logr.Logger) (domain.ClusterService, error)
+	MaxConcurrentReconciles int
 }
 
 // Read CAPI cluster resource
@@ -196,7 +198,9 @@ func (r *ExoscaleClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		&infrav1alpha1.ExoscaleCluster{},
 	)
 
-	blder := ctrl.NewControllerManagedBy(mgr).Named("exoscalecluster")
+	blder := ctrl.NewControllerManagedBy(mgr).
+		Named("exoscalecluster").
+		WithOptions(controller.Options{MaxConcurrentReconciles: r.MaxConcurrentReconciles})
 
 	if r.WatchFilter != "" {
 		blder = blder.For(&infrav1alpha1.ExoscaleCluster{}, builder.WithPredicates(

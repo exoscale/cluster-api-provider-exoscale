@@ -51,6 +51,8 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
+const defaultMaxConcurrentReconciles int = 5
+
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(clusterv1.AddToScheme(scheme))
@@ -78,6 +80,14 @@ func main() {
 	// cluster-wide (i.e. without --namespace), set a distinct label on each managed ExoscaleCluster
 	// and pass the matching value here so each instance only processes its own resources.
 	var watchFilter string
+	// exoscaleClusterConcurrency / exoscaleMachineConcurrency set the number of concurrent
+	// reconcile workers for each controller. Raising them keeps a single slow reconcile
+	// from starving every other object of the same kind.
+	var exoscaleClusterConcurrency, exoscaleMachineConcurrency int
+	flag.IntVar(&exoscaleClusterConcurrency, "exoscalecluster-concurrency", defaultMaxConcurrentReconciles,
+		"Maximum number of ExoscaleClusters to process simultaneously.")
+	flag.IntVar(&exoscaleMachineConcurrency, "exoscalemachine-concurrency", defaultMaxConcurrentReconciles,
+		"Maximum number of ExoscaleMachines to process simultaneously.")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -211,19 +221,21 @@ func main() {
 	}
 
 	if err := (&controller.ExoscaleClusterReconciler{
-		Client:            mgr.GetClient(),
-		Scheme:            mgr.GetScheme(),
-		WatchFilter:       watchFilter,
-		NewClusterService: service.NewClusterService,
+		Client:                  mgr.GetClient(),
+		Scheme:                  mgr.GetScheme(),
+		WatchFilter:             watchFilter,
+		NewClusterService:       service.NewClusterService,
+		MaxConcurrentReconciles: exoscaleClusterConcurrency,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "ExoscaleCluster")
 		os.Exit(1)
 	}
 	if err := (&controller.ExoscaleMachineReconciler{
-		Client:             mgr.GetClient(),
-		Scheme:             mgr.GetScheme(),
-		WatchFilter:        watchFilter,
-		NewInstanceService: service.NewInstanceServiceFactory(logExoscaleAPI),
+		Client:                  mgr.GetClient(),
+		Scheme:                  mgr.GetScheme(),
+		WatchFilter:             watchFilter,
+		NewInstanceService:      service.NewInstanceServiceFactory(logExoscaleAPI),
+		MaxConcurrentReconciles: exoscaleMachineConcurrency,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "ExoscaleMachine")
 		os.Exit(1)

@@ -78,3 +78,21 @@ spec:
                     reason: NotReady
                     status: "False"
                 (instanceID == null): true
+
+    - name: delete cluster
+      try:
+        # The ExoscaleMachine is only labelled with the cluster name, not owned by
+        # a Machine, so deleting the Cluster does not garbage-collect it.
+        - delete:
+            ref:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleMachine
+              name: ($machineName)
+              namespace: ($namespace)
+        - delete:
+            timeout: 10m
+            ref:
+              apiVersion: cluster.x-k8s.io/v1beta2
+              kind: Cluster
+              name: ($clusterName)
+              namespace: ($namespace)

@@ -67,3 +67,12 @@ spec:
                 check:
                   ($error != null): true
                   (contains($error, 'zone cannot be changed once set')): true
+
+    - name: cleanup
+      try:
+        - delete:
+            ref:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleCluster
+              name: ($clusterName)
+              namespace: ($namespace)

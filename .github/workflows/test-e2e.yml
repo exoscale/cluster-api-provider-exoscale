@@ -45,6 +45,11 @@ jobs:
           chmod +x ./kind
           sudo mv ./kind /usr/local/bin/kind
 
+      # Skip delete in order to create an artifact with all the information
+      # necessary for an investigation on failure.
+      #
+      # Each tests must delete its cluster at the end of its test case in order
+      # to prevent unnecessary clean or infromation during an investigation.
       - name: Run Chainsaw
         env:
           COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -52,4 +57,44 @@ jobs:
           EXOSCALE_API_KEY: ${{ secrets.EXOSCALE_API_KEY }}
           EXOSCALE_API_SECRET: ${{ secrets.EXOSCALE_API_SECRET }}
         run: |
-          make chainsaw-test-e2e CHAINSAW_VALUES_SUFFIX=$COMMIT_SHA
+          make chainsaw-test-e2e \
+            CHAINSAW_VALUES_SUFFIX=${COMMIT_SHA::8} \
+            CHAINSAW_SKIP_DELETE=1
+
+      # On failure dump the logs and resource into a artifact for further investigation.
+      - name: Dump management cluster diagnostics
+        if: failure()
+        run: ./hack/dump-e2e-diagnostics.sh e2e-diagnostics
+
+      - name: Upload diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: e2e-diagnostics
+          path: e2e-diagnostics
+          if-no-files-found: warn
+          retention-days: 5
+
+      # chainsaw runs with --skip-delete: on a green run each test already deleted
+      # its own resources; on a failed run the failing test skipped its cleanup.
+      # The diagnostics dump above has already captured everything, so here we just
+      # force-delete whatever is left (Clusters first so the provider reaps cloud
+      # resources through owner refs, then any bare infra objects) and verify the
+      # result. Anything still present afterwards means a delete genuinely failed
+      # (e.g. a stuck finalizer) — fail the step so leaked Exoscale VMs/EIP/SGs
+      # never go unnoticed.
+      - name: Teardown workload clusters
+        if: always()
+        run: |
+          kubectl delete clusters.cluster.x-k8s.io -A --all --ignore-not-found --wait --timeout=20m || true
+          kubectl delete exoscaleclusters.infrastructure.cluster.x-k8s.io \
+                         exoscalemachines.infrastructure.cluster.x-k8s.io \
+                         -A --all --ignore-not-found --wait --timeout=15m || true
+
+          leftover=$(kubectl get exoscaleclusters,exoscalemachines -A --no-headers 2>/dev/null | wc -l)
+          if [ "$leftover" -ne 0 ]; then
+            echo "::error::teardown incomplete: $leftover infra resource(s) still present — likely leaked Exoscale VMs/EIP/SGs, clean up manually"
+            kubectl get exoscaleclusters,exoscalemachines -A
+            exit 1
+          fi
+          echo "Teardown complete: no infra resources remaining."

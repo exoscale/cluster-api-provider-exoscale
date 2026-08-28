@@ -81,12 +81,17 @@ setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
 CHAINSAW_VALUES_SUFFIX ?=
 CHAINSAW_VALUES_ZONE ?=
 CHAINSAW_MACHINE_TEMPLATE ?=
-CHAINSAW_MACHINE_INSTANCE_TYPE ?= small
+CHAINSAW_MACHINE_INSTANCE_TYPE ?= standard.medium
 CHAINSAW_TEST_DIRS ?= $(shell ls -d -1 test/chainsaw/*)
+# When set (e.g. CHAINSAW_SKIP_DELETE=1), chainsaw keeps every resource it created
+# so a post-run diagnostics dump can inspect it. The caller is then responsible for
+# tearing the workload clusters down afterwards so the exoscale provider reaps the
+# cloud resources (see the e2e CI workflow).
+CHAINSAW_SKIP_DELETE ?=
 
 .PHONY: chainsaw-test-e2e
 chainsaw-test-e2e: setup-test-e2e-chainsaw chainsaw ## Run the e2e tests. Expected an isolated environment using Kind.
-	$(CHAINSAW) test --set='suffix=$(CHAINSAW_VALUES_SUFFIX),zone=$(CHAINSAW_VALUES_ZONE),template=$(CHAINSAW_MACHINE_TEMPLATE),instanceType=$(CHAINSAW_MACHINE_INSTANCE_TYPE),image=$(IMG)' $(CHAINSAW_TEST_DIRS)
+	$(CHAINSAW) test $(if $(CHAINSAW_SKIP_DELETE),--skip-delete) --set='suffix=$(CHAINSAW_VALUES_SUFFIX),zone=$(CHAINSAW_VALUES_ZONE),template=$(CHAINSAW_MACHINE_TEMPLATE),instanceType=$(CHAINSAW_MACHINE_INSTANCE_TYPE),image=$(IMG)' $(CHAINSAW_TEST_DIRS)
 
 ## Exoscale credentials: use env vars if already set, otherwise read from config file.
 EXOSCALE_CONFIG      ?= $(HOME)/.config/exoscale/exoscale.toml

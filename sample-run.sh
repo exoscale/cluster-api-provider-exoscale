@@ -19,8 +19,8 @@ EXOSCALE_CONFIG=${EXOSCALE_CONFIG:-${HOME}/.config/exoscale/exoscale.toml}
 SAMPLE=${SAMPLE:-traditional}
 
 case "$SAMPLE" in
-traditional) SAMPLE_DIR=config/samples/cluster ;;
-custom-image) SAMPLE_DIR=config/samples/cluster-custom-image ;;
+traditional) SAMPLE_DIR=config/samples/kubeadm/cluster ;;
+custom-image) SAMPLE_DIR=config/samples/kubeadm/cluster-custom-image ;;
 *)
 	printf 'Unknown sample %q; expected traditional or custom-image.\n' "$SAMPLE" >&2
 	exit 1

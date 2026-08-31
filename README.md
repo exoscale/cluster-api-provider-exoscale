@@ -71,7 +71,7 @@ Keep the manager running and use another terminal for the remaining commands.
 $> export EXOSCALE_API_KEY=<api-key>
 $> export EXOSCALE_API_SECRET=<api-secret>
 $> kubectl create secret generic exoscale --from-literal=apikey=$EXOSCALE_API_KEY --from-literal=apisecret=$EXOSCALE_API_SECRET
-$> kubectl apply -k config/samples/cluster/
+$> kubectl apply -k config/samples/kubeadm/cluster/
 ```
 
 #### Wait for the workload cluster
@@ -131,4 +131,4 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 [cluster_api]: https://github.com/kubernetes-sigs/cluster-api
-[pre-built image sample]: config/samples/cluster-custom-image/README.md
+[pre-built image sample]: config/samples/kubeadm/cluster-custom-image/README.md

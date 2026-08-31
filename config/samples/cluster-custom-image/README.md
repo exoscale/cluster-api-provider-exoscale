@@ -45,6 +45,9 @@ EOF
 
 Validate and build the UEFI QCOW2 with the released image-builder container:
 
+<details>
+<summary>Commands and selected output from the tested build</summary>
+
 ```bash
 $ IMAGE_BUILDER_VERSION=v0.1.55
 $ podman run --rm --pull=always \
@@ -64,6 +67,15 @@ $ podman run --rm \
     "registry.k8s.io/scl-image-builder/cluster-node-image-builder-amd64:${IMAGE_BUILDER_VERSION}" \
     build-qemu-ubuntu-2404-efi
 ```
+
+The successful build took about 29 minutes. Its final goss summary was:
+
+```text
+Count: 65, Failed: 0, Skipped: 0
+Builds finished. The artifacts of successful builds are:
+```
+
+</details>
 
 `--userns=keep-id:uid=1001,gid=1001` lets the rootless container write the
 mounted output directory. A successful build runs image-builder's goss suite

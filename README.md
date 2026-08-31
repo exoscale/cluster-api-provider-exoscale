@@ -12,9 +12,9 @@ infrastructure.
 
 ## Get started
 
-CAPEX does not publish release assets yet, so both paths below run the provider
-from this checkout. They create a local Kind management cluster and one real,
-billable Exoscale control-plane VM in `ch-gva-2`.
+Exoscale CAPI does not publish release assets yet, so both paths below run the
+provider from this checkout. They create a local Kind management cluster and
+one real, billable Exoscale control-plane VM in `ch-gva-2`.
 
 Prerequisites: Docker, `kind`, `kubectl`, `make`, `curl`, `setsid`, the Go
 version declared in `go.mod`, and an Exoscale CLI account configured in

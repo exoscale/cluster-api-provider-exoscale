@@ -26,7 +26,7 @@ and `qemu-img` for the final check.
 Create a working directory and an image-builder version override:
 
 ```bash
-$ mkdir capex-image && cd capex-image
+$ mkdir exoscale-capi-image && cd exoscale-capi-image
 $ mkdir output packer-cache
 $ KUBERNETES_VERSION=1.36.4
 $ KUBERNETES_SERIES=v1.36
@@ -81,8 +81,8 @@ zone-local. Custom-template storage is billed until the template is deleted.
 ```bash
 $ ZONE=ch-gva-2
 $ BUCKET=replace-with-a-globally-unique-bucket
-$ OBJECT="capex-ubuntu-2404-k8s-v${KUBERNETES_VERSION}.qcow2"
-$ TEMPLATE_NAME="capex-ubuntu-2404-k8s-v${KUBERNETES_VERSION}"
+$ OBJECT="exoscale-capi-ubuntu-2404-k8s-v${KUBERNETES_VERSION}.qcow2"
+$ TEMPLATE_NAME="exoscale-capi-ubuntu-2404-k8s-v${KUBERNETES_VERSION}"
 $ CHECKSUM=$(md5sum "$ARTIFACT" | cut -d' ' -f1)
 
 $ exo storage mb "sos://${BUCKET}" --zone "$ZONE" --acl private
@@ -114,7 +114,7 @@ In `kustomization.yaml`:
 1. Replace `REPLACE_WITH_TEMPLATE_UUID` with the registered template ID.
 2. Change `v1.36.4` if the image contains another Kubernetes version.
 
-From the CAPEX repository root, run:
+From the Exoscale CAPI repository root, run:
 
 ```console
 $ SAMPLE=custom-image ./sample-run.sh

@@ -16,6 +16,16 @@ CAPI_LOG=${CAPI_LOG:-/tmp/${KIND_CLUSTER}-controller.log}
 CAPI_PID_FILE=${CAPI_PID_FILE:-/tmp/${KIND_CLUSTER}-controller.pid}
 RUNNER_PID_FILE=${RUNNER_PID_FILE:-/tmp/${KIND_CLUSTER}-runner.pid}
 EXOSCALE_CONFIG=${EXOSCALE_CONFIG:-${HOME}/.config/exoscale/exoscale.toml}
+SAMPLE=${SAMPLE:-traditional}
+
+case "$SAMPLE" in
+traditional) SAMPLE_DIR=config/samples/cluster ;;
+custom-image) SAMPLE_DIR=config/samples/cluster-custom-image ;;
+*)
+	printf 'Unknown sample %q; expected traditional or custom-image.\n' "$SAMPLE" >&2
+	exit 1
+	;;
+esac
 
 CAPI_PID=
 KIND_CREATED=false
@@ -124,6 +134,7 @@ fi
 
 cd -- "$ROOT"
 printf '%s\n' "$$" >"$RUNNER_PID_FILE"
+CAPI_VERSION=$(go list -m -f '{{.Version}}' sigs.k8s.io/cluster-api)
 
 # Download repository-pinned tools. clusterctl installs CAPI into Kind; yq
 # reads the existing Exoscale CLI configuration without printing credentials.
@@ -135,7 +146,11 @@ KIND_CREATED=true
 export KUBECONFIG=$MANAGEMENT_KUBECONFIG
 
 printf '\nInstalling CAPI core and kubeadm providers...\n'
-./bin/clusterctl init --infrastructure -
+./bin/clusterctl init \
+	--core "cluster-api:$CAPI_VERSION" \
+	--bootstrap "kubeadm:$CAPI_VERSION" \
+	--control-plane "kubeadm:$CAPI_VERSION" \
+	--infrastructure -
 
 printf '\nInstalling CAPI CRDs...\n'
 make install
@@ -192,7 +207,7 @@ printf '\nWaiting for CAPI admission webhooks...\n'
 webhooks_ready=false
 last_webhook_error=
 for ((attempt = 1; attempt <= 90; attempt++)); do
-	if last_webhook_error=$(kubectl apply --server-side --dry-run=server -k config/samples/cluster/ 2>&1); then
+	if last_webhook_error=$(kubectl apply --server-side --dry-run=server -k "$SAMPLE_DIR" 2>&1); then
 		webhooks_ready=true
 		break
 	fi
@@ -207,11 +222,10 @@ if [[ "$webhooks_ready" != true ]]; then
 	exit 1
 fi
 
-# This sample creates one real Ubuntu control-plane VM in ch-gva-2. cloud-init
-# installs containerd/Kubernetes, kubeadm initializes it, and Flannel supplies
-# the Pod network.
+# The sample creates one real control-plane VM in ch-gva-2. kubeadm initializes
+# it and Flannel supplies the Pod network.
 printf '\nCreating the Exoscale workload cluster...\n'
-kubectl apply -k config/samples/cluster/
+kubectl apply -k "$SAMPLE_DIR"
 
 kubectl wait exoscalecluster/my-cluster --for=condition=Ready --timeout=5m
 kubectl wait kubeadmcontrolplane/my-control-plane --for=condition=Available --timeout=15m

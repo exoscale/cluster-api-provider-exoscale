@@ -10,7 +10,43 @@ resources for self-managed Kubernetes clusters. It currently reconciles
 `ExoscaleCluster` and `ExoscaleMachine` resources into the required cloud
 infrastructure.
 
-## Run locally
+## Get started
+
+CAPEX does not publish release assets yet, so both paths below run the provider
+from this checkout. They create a local Kind management cluster and one real,
+billable Exoscale control-plane VM in `ch-gva-2`.
+
+Prerequisites: Docker, `kind`, `kubectl`, `make`, `curl`, `setsid`, the Go
+version declared in `go.mod`, and an Exoscale CLI account configured in
+`~/.config/exoscale/exoscale.toml`.
+
+### Traditional: official Ubuntu image
+
+This is the default path. It starts from the official
+`Linux Ubuntu 24.04 LTS 64-bit` template and installs containerd, kubeadm,
+kubelet, and kubectl through cloud-init on first boot.
+
+```console
+$ ./sample-run.sh
+```
+
+### Pre-built Kubernetes image
+
+This path starts from a private template where Kubernetes and containerd are
+already installed. First follow the [pre-built image sample] to build and
+register the image, then put its UUID and matching Kubernetes version in the
+sample overlay.
+
+```console
+$ SAMPLE=custom-image ./sample-run.sh
+```
+
+Both commands wait for the kubeadm control plane and its Node to become Ready.
+Press Enter when prompted to delete the workload cluster and its Exoscale
+resources. The pre-built path also creates a billable custom template that must
+be deleted separately when it is no longer needed.
+
+## Development
 
 Prerequisites: Docker, `kind`, `kubectl`, the Go version declared in `go.mod`,
 and Exoscale API credentials.
@@ -95,3 +131,4 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 [cluster_api]: https://github.com/kubernetes-sigs/cluster-api
+[pre-built image sample]: config/samples/cluster-custom-image/README.md

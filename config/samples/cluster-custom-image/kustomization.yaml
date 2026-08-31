@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ../cluster
+patches:
+- target:
+    kind: ExoscaleMachineTemplate
+    name: my-control-plane
+  patch: |-
+    - op: replace
+      path: /spec/template/spec/template
+      value: REPLACE_WITH_TEMPLATE_UUID
+- target:
+    kind: KubeadmControlPlane
+    name: my-control-plane
+  patch: |-
+    - op: replace
+      path: /spec/version
+      value: v1.36.4
+    - op: replace
+      path: /spec/kubeadmConfigSpec/preKubeadmCommands
+      value:
+      - |
+        set -eux
+        printf 'KUBELET_EXTRA_ARGS=--provider-id=exoscale://%s\n' \
+          "$(cat /var/lib/cloud/data/instance-id)" >/etc/default/kubelet

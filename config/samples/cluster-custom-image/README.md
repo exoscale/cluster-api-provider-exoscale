@@ -23,6 +23,9 @@ keeps the per-instance provider-ID command.
 Requirements: Podman, KVM exposed as `/dev/kvm`, at least 15 GiB of free disk,
 and `qemu-img` for the final check.
 
+The tested first build took about 30 minutes and downloaded a 3.4 GiB Ubuntu
+ISO. Keep `packer-cache` between builds so the ISO can be reused.
+
 Create a working directory and an image-builder version override:
 
 ```bash

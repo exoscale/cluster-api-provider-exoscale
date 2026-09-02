@@ -15,8 +15,14 @@ WORKLOAD_KUBECONFIG=${WORKLOAD_KUBECONFIG:-/tmp/${KIND_CLUSTER}-workload.kubecon
 CAPI_LOG=${CAPI_LOG:-/tmp/${KIND_CLUSTER}-controller.log}
 CAPI_PID_FILE=${CAPI_PID_FILE:-/tmp/${KIND_CLUSTER}-controller.pid}
 RUNNER_PID_FILE=${RUNNER_PID_FILE:-/tmp/${KIND_CLUSTER}-runner.pid}
-EXOSCALE_CONFIG=${EXOSCALE_CONFIG:-${HOME}/.config/exoscale/exoscale.toml}
+EXOSCALE_CONFIG=${EXOSCALE_CONFIG:-${HOME:-}/.config/exoscale/exoscale.toml}
 SAMPLE=${SAMPLE:-traditional}
+AUTO_CLEANUP=${AUTO_CLEANUP:-false}
+CUSTOM_IMAGE_TEMPLATE=${CUSTOM_IMAGE_TEMPLATE:-}
+CUSTOM_IMAGE_KUBERNETES_VERSION=${CUSTOM_IMAGE_KUBERNETES_VERSION:-}
+EXOSCALE_API_KEY_INPUT=${EXOSCALE_API_KEY:-}
+EXOSCALE_API_SECRET_INPUT=${EXOSCALE_API_SECRET:-}
+unset EXOSCALE_API_KEY EXOSCALE_API_SECRET
 
 case "$SAMPLE" in
 traditional) SAMPLE_DIR=config/samples/kubeadm/cluster ;;
@@ -27,8 +33,24 @@ custom-image) SAMPLE_DIR=config/samples/kubeadm/cluster-custom-image ;;
 	;;
 esac
 
+if [[ "$SAMPLE" != custom-image && ( -n "$CUSTOM_IMAGE_TEMPLATE" || -n "$CUSTOM_IMAGE_KUBERNETES_VERSION" ) ]]; then
+	printf 'Custom image variables require SAMPLE=custom-image.\n' >&2
+	exit 1
+fi
+if [[ "$SAMPLE" == custom-image &&
+	( -z "$CUSTOM_IMAGE_TEMPLATE" || ! "$CUSTOM_IMAGE_KUBERNETES_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ) ]]; then
+	printf 'CUSTOM_IMAGE_TEMPLATE and an exact v-prefixed CUSTOM_IMAGE_KUBERNETES_VERSION are required together.\n' >&2
+	exit 1
+fi
+
+if [[ "$AUTO_CLEANUP" != true && "$AUTO_CLEANUP" != false ]]; then
+	printf 'AUTO_CLEANUP must be true or false.\n' >&2
+	exit 1
+fi
+
 CAPI_PID=
 KIND_CREATED=false
+SAMPLE_MANIFEST=
 
 timestamp_output() {
 	while IFS= read -r line || [[ -n "$line" ]]; do
@@ -59,6 +81,10 @@ cleanup() {
 	status=$?
 	trap - EXIT
 	set +e
+	if [[ -n "$SAMPLE_MANIFEST" ]]; then
+		rm -f -- "$SAMPLE_MANIFEST"
+		SAMPLE_MANIFEST=
+	fi
 
 	if [[ "$KIND_CREATED" == true ]]; then
 		export KUBECONFIG=$MANAGEMENT_KUBECONFIG
@@ -100,7 +126,6 @@ cleanup() {
 		stop_capi
 		rm -f -- "$RUNNER_PID_FILE"
 	fi
-
 	exit "$status"
 }
 
@@ -116,8 +141,13 @@ if ! docker info >/dev/null 2>&1; then
 	exit 1
 fi
 
-if [[ ! -f "$EXOSCALE_CONFIG" ]]; then
+if [[ -z "$EXOSCALE_API_KEY_INPUT" && -z "$EXOSCALE_API_SECRET_INPUT" && ! -f "$EXOSCALE_CONFIG" ]]; then
 	printf 'Exoscale CLI configuration not found: %s\n' "$EXOSCALE_CONFIG" >&2
+	exit 1
+fi
+if [[ ( -n "$EXOSCALE_API_KEY_INPUT" && -z "$EXOSCALE_API_SECRET_INPUT" ) ||
+	( -z "$EXOSCALE_API_KEY_INPUT" && -n "$EXOSCALE_API_SECRET_INPUT" ) ]]; then
+	printf 'EXOSCALE_API_KEY and EXOSCALE_API_SECRET must be set together.\n' >&2
 	exit 1
 fi
 
@@ -138,7 +168,11 @@ CAPI_VERSION=$(go list -m -f '{{.Version}}' sigs.k8s.io/cluster-api)
 
 # Download repository-pinned tools. clusterctl installs CAPI into Kind; yq
 # reads the existing Exoscale CLI configuration without printing credentials.
-make clusterctl yq
+make clusterctl kustomize yq
+
+SAMPLE_MANIFEST=$(mktemp /tmp/exoscale-capi-sample.XXXXXX.yaml)
+bash hack/render-kubeadm-sample.sh "$SAMPLE_DIR" >"$SAMPLE_MANIFEST"
+SAMPLE_APPLY_ARGS=(-f "$SAMPLE_MANIFEST")
 
 printf '\nCreating Kind management cluster %s...\n' "$KIND_CLUSTER"
 kind create cluster --name "$KIND_CLUSTER" --kubeconfig "$MANAGEMENT_KUBECONFIG"
@@ -157,23 +191,28 @@ make install
 
 # Read the default Exoscale account. Values stay in shell variables and are
 # passed to kubectl through file descriptors, not command-line arguments.
-export EXOSCALE_ACCOUNT
-EXOSCALE_ACCOUNT=$(./bin/yq -r '.defaultaccount' "$EXOSCALE_CONFIG")
-EXOSCALE_API_KEY=$(./bin/yq -r '.accounts[] | select(.name == env(EXOSCALE_ACCOUNT)) | .key' "$EXOSCALE_CONFIG")
-EXOSCALE_API_SECRET=$(./bin/yq -r '.accounts[] | select(.name == env(EXOSCALE_ACCOUNT)) | .secret' "$EXOSCALE_CONFIG")
+if [[ -z "$EXOSCALE_API_KEY_INPUT" ]]; then
+	export EXOSCALE_ACCOUNT
+	EXOSCALE_ACCOUNT=$(./bin/yq -r '.defaultaccount' "$EXOSCALE_CONFIG")
+	EXOSCALE_API_KEY_VALUE=$(./bin/yq -r '.accounts[] | select(.name == env(EXOSCALE_ACCOUNT)) | .key' "$EXOSCALE_CONFIG")
+	EXOSCALE_API_SECRET_VALUE=$(./bin/yq -r '.accounts[] | select(.name == env(EXOSCALE_ACCOUNT)) | .secret' "$EXOSCALE_CONFIG")
+else
+	EXOSCALE_API_KEY_VALUE=$EXOSCALE_API_KEY_INPUT
+	EXOSCALE_API_SECRET_VALUE=$EXOSCALE_API_SECRET_INPUT
+fi
+unset EXOSCALE_API_KEY_INPUT EXOSCALE_API_SECRET_INPUT
 
-if [[ -z "$EXOSCALE_ACCOUNT" || "$EXOSCALE_ACCOUNT" == null ||
-	-z "$EXOSCALE_API_KEY" || "$EXOSCALE_API_KEY" == null ||
-	-z "$EXOSCALE_API_SECRET" || "$EXOSCALE_API_SECRET" == null ]]; then
-	printf 'Could not load the default Exoscale account credentials.\n' >&2
+if [[ -z "$EXOSCALE_API_KEY_VALUE" || "$EXOSCALE_API_KEY_VALUE" == null ||
+	-z "$EXOSCALE_API_SECRET_VALUE" || "$EXOSCALE_API_SECRET_VALUE" == null ]]; then
+	printf 'Could not load Exoscale credentials.\n' >&2
 	exit 1
 fi
 
 kubectl create secret generic exoscale \
-	--from-file=apikey=<(printf '%s' "$EXOSCALE_API_KEY") \
-	--from-file=apisecret=<(printf '%s' "$EXOSCALE_API_SECRET") \
+	--from-file=apikey=<(printf '%s' "$EXOSCALE_API_KEY_VALUE") \
+	--from-file=apisecret=<(printf '%s' "$EXOSCALE_API_SECRET_VALUE") \
 	--dry-run=client -o yaml | kubectl apply -f -
-unset EXOSCALE_API_KEY EXOSCALE_API_SECRET
+unset EXOSCALE_API_KEY_VALUE EXOSCALE_API_SECRET_VALUE
 
 # Run CAPI in a separate process group so this terminal remains available and
 # cleanup can reliably stop make, go run, and the controller together.
@@ -207,7 +246,7 @@ printf '\nWaiting for CAPI admission webhooks...\n'
 webhooks_ready=false
 last_webhook_error=
 for ((attempt = 1; attempt <= 90; attempt++)); do
-	if last_webhook_error=$(kubectl apply --server-side --dry-run=server -k "$SAMPLE_DIR" 2>&1); then
+	if last_webhook_error=$(kubectl apply --server-side --dry-run=server "${SAMPLE_APPLY_ARGS[@]}" 2>&1); then
 		webhooks_ready=true
 		break
 	fi
@@ -225,10 +264,10 @@ fi
 # The sample creates one real control-plane VM in ch-gva-2. kubeadm initializes
 # it and Flannel supplies the Pod network.
 printf '\nCreating the Exoscale workload cluster...\n'
-kubectl apply -k "$SAMPLE_DIR"
+kubectl apply "${SAMPLE_APPLY_ARGS[@]}"
 
 kubectl wait exoscalecluster/my-cluster --for=condition=Ready --timeout=5m
-kubectl wait kubeadmcontrolplane/my-control-plane --for=condition=Available --timeout=15m
+kubectl wait cluster/my-cluster --for=condition=ControlPlaneInitialized --timeout=15m
 
 ./bin/clusterctl get kubeconfig my-cluster >"$WORKLOAD_KUBECONFIG"
 node_found=false
@@ -245,7 +284,29 @@ if [[ "$node_found" != true ]]; then
 fi
 kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" wait node --all --for=condition=Ready --timeout=10m
 
-kubectl wait cluster/my-cluster --for=condition=ControlPlaneInitialized --timeout=5m
+machine_provider_id=$(kubectl get machine \
+	--selector=cluster.x-k8s.io/cluster-name=my-cluster,cluster.x-k8s.io/control-plane \
+	-o jsonpath='{.items[0].spec.providerID}')
+node_provider_id=$(kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" get nodes \
+	-o jsonpath='{.items[0].spec.providerID}')
+if [[ -z "$machine_provider_id" || "$machine_provider_id" != "$node_provider_id" ]]; then
+	printf 'Provider ID mismatch: Machine=%q Node=%q\n' "$machine_provider_id" "$node_provider_id" >&2
+	exit 1
+fi
+printf 'Provider ID verified: %s\n' "$node_provider_id"
+
+if [[ -n "$CUSTOM_IMAGE_KUBERNETES_VERSION" ]]; then
+	node_kubelet_version=$(kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" get nodes \
+		-o jsonpath='{.items[0].status.nodeInfo.kubeletVersion}')
+	if [[ "$node_kubelet_version" != "$CUSTOM_IMAGE_KUBERNETES_VERSION" ]]; then
+		printf 'Kubelet version mismatch: expected=%q actual=%q\n' \
+			"$CUSTOM_IMAGE_KUBERNETES_VERSION" "$node_kubelet_version" >&2
+		exit 1
+	fi
+	printf 'Kubelet version verified: %s\n' "$node_kubelet_version"
+fi
+
+kubectl wait kubeadmcontrolplane/my-control-plane --for=condition=Available --timeout=5m
 kubectl wait cluster/my-cluster --for=condition=RemoteConnectionProbe --timeout=5m
 kubectl wait machine \
 	--selector=cluster.x-k8s.io/cluster-name=my-cluster,cluster.x-k8s.io/control-plane \
@@ -263,5 +324,9 @@ printf '\nThe sample is ready.\n'
 printf 'Management cluster: kubectl --kubeconfig=%q get cluster,kubeadmcontrolplane,exoscalecluster,exoscalemachinetemplate,machine,exoscalemachine\n' "$MANAGEMENT_KUBECONFIG"
 printf 'Workload cluster:   kubectl --kubeconfig=%q get pods -A\n' "$WORKLOAD_KUBECONFIG"
 printf 'Controller logs:    tail -f %q\n' "$CAPI_LOG"
-printf '\nPress Enter to delete the workload cluster, stop CAPI, and remove Kind.\n'
-read -r
+if [[ "$AUTO_CLEANUP" == true ]]; then
+	printf '\nAUTO_CLEANUP=true, deleting the workload cluster and Kind.\n'
+else
+	printf '\nPress Enter to delete the workload cluster, stop CAPI, and remove Kind.\n'
+	read -r
+fi

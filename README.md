@@ -17,7 +17,8 @@ provider from this checkout. They create a local Kind management cluster and
 one real, billable Exoscale control-plane VM in `ch-gva-2`.
 
 Prerequisites: Docker, `kind`, `kubectl`, `make`, `curl`, `setsid`, the Go
-version declared in `go.mod`, and an Exoscale CLI account configured in
+version declared in `go.mod`, and either `EXOSCALE_API_KEY` plus
+`EXOSCALE_API_SECRET` or an Exoscale CLI account configured in
 `~/.config/exoscale/exoscale.toml`.
 
 ### Traditional: official Ubuntu image
@@ -34,11 +35,13 @@ $ ./sample-run.sh
 
 This path starts from a private template where Kubernetes and containerd are
 already installed. First follow the [pre-built image sample] to build and
-register the image, then put its UUID and matching Kubernetes version in the
-sample overlay.
+register the image, then pass its UUID and matching Kubernetes version:
 
 ```console
-$ SAMPLE=custom-image ./sample-run.sh
+$ CUSTOM_IMAGE_TEMPLATE=<template-id> \
+    CUSTOM_IMAGE_KUBERNETES_VERSION=v1.36.4 \
+    SAMPLE=custom-image \
+    ./sample-run.sh
 ```
 
 Both commands wait for the kubeadm control plane and its Node to become Ready.

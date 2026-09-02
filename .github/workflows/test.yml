@@ -23,3 +23,29 @@ jobs:
         run: |
           go mod tidy
           make test
+
+      - name: Check sample runner
+        run: |
+          bash -n sample-run.sh
+          bash -n hack/render-kubeadm-sample.sh
+          message=$(CUSTOM_IMAGE_TEMPLATE=test ./sample-run.sh 2>&1) && exit 1
+          if [[ "$message" != "Custom image variables require SAMPLE=custom-image." ]]; then
+            exit 1
+          fi
+          message=$(SAMPLE=custom-image ./sample-run.sh 2>&1) && exit 1
+          if [[ "$message" != "CUSTOM_IMAGE_TEMPLATE and an exact v-prefixed CUSTOM_IMAGE_KUBERNETES_VERSION are required together." ]]; then
+            exit 1
+          fi
+          message=$(AUTO_CLEANUP=invalid ./sample-run.sh 2>&1) && exit 1
+          if [[ "$message" != "AUTO_CLEANUP must be true or false." ]]; then
+            exit 1
+          fi
+
+          make kustomize yq
+          export CUSTOM_IMAGE_TEMPLATE=test-template
+          export CUSTOM_IMAGE_KUBERNETES_VERSION=v1.36.4
+          bash hack/render-kubeadm-sample.sh config/samples/kubeadm/cluster-custom-image \
+            >/tmp/rendered-custom-image.yaml
+          test "$(bin/yq eval-all '[.] | map(select(.kind != null)) | length' /tmp/rendered-custom-image.yaml)" -eq 4
+          test "$(bin/yq eval-all 'select(.kind == "ExoscaleMachineTemplate") | .spec.template.spec.template' /tmp/rendered-custom-image.yaml)" = test-template
+          test "$(bin/yq eval-all 'select(.kind == "KubeadmControlPlane") | .spec.version' /tmp/rendered-custom-image.yaml)" = v1.36.4

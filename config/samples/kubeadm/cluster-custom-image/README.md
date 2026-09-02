@@ -12,7 +12,7 @@ Kubernetes `v1.36.4`, and containerd `2.3.2` on amd64.
 
 The image must include cloud-init with the Exoscale datasource, containerd,
 kubeadm, kubelet, and kubectl. The Kubernetes version baked into the image must
-match `KubeadmControlPlane.spec.version` in `kustomization.yaml`.
+match `CUSTOM_IMAGE_KUBERNETES_VERSION` when the sample runs.
 
 The provider ID cannot be baked into the image because it contains the new VM's
 UUID. This overlay therefore removes package installation from cloud-init but
@@ -112,20 +112,21 @@ $ exo storage rb "sos://${BUCKET}" --recursive --force
 
 ## Create the cluster
 
-In `kustomization.yaml`:
-
-1. Replace `REPLACE_WITH_TEMPLATE_UUID` with the registered template ID.
-2. Change `v1.36.4` if the image contains another Kubernetes version.
-
-From the Exoscale CAPI repository root, run:
+From the Exoscale CAPI repository root, pass the registered template ID and its
+exact Kubernetes version:
 
 ```console
-$ SAMPLE=custom-image ./sample-run.sh
+$ CUSTOM_IMAGE_TEMPLATE=<template-id> \
+    CUSTOM_IMAGE_KUBERNETES_VERSION=v1.36.4 \
+    SAMPLE=custom-image \
+    ./sample-run.sh
 ```
 
 The script waits for the kubeadm control plane and its Node to become Ready.
 Press Enter when prompted to delete the workload cluster and its Exoscale
 resources. The private template remains until it is deleted explicitly.
+
+Set `AUTO_CLEANUP=true` for a non-interactive acceptance run.
 
 ```console
 $ exo compute instance-template delete <template-id> --zone ch-gva-2

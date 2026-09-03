@@ -141,10 +141,6 @@ func (s *clusterService) DeleteCluster(ctx context.Context, cluster infrav1alpha
 	if err != nil {
 		return cluster, err
 	}
-	if clusterID == nil {
-		return s.deleteClusterFromStatus(ctx, cluster)
-	}
-
 	var eipID *uuid.UUID
 	if cluster.Status.ControlPlaneEndpoint != nil {
 		eipID, err = parseStatusID(cluster.Status.ControlPlaneEndpoint.ID, ".status.controlPlaneEndpoint.id")
@@ -152,17 +148,6 @@ func (s *clusterService) DeleteCluster(ctx context.Context, cluster infrav1alpha
 			return cluster, err
 		}
 	}
-	eip, err := s.elasticIPSvc.FindElasticIP(ctx, *clusterID, eipID)
-	if err != nil && !errors.Is(err, domain.ErrElasticIPNotFound) {
-		return cluster, fmt.Errorf("unable to recover elastic IP: %w", err)
-	}
-	if err == nil {
-		if err := s.elasticIPSvc.DeleteElasticIP(ctx, eip.ID); err != nil {
-			return cluster, err
-		}
-	}
-
-	controlPlaneName := fmt.Sprintf("capi - %s - control plane", clusterID)
 	var controlPlaneID *uuid.UUID
 	if cluster.Status.SecurityGroupControlPlan != nil {
 		controlPlaneID, err = parseStatusID(cluster.Status.SecurityGroupControlPlan.ID, ".status.securityGroupControlPlane.id")
@@ -170,11 +155,6 @@ func (s *clusterService) DeleteCluster(ctx context.Context, cluster infrav1alpha
 			return cluster, err
 		}
 	}
-	controlPlaneGroup, err := s.securityGroupSvc.FindSecurityGroup(ctx, *clusterID, controlPlaneName, controlPlaneID)
-	if err != nil && !errors.Is(err, domain.ErrSecurityGroupNotFound) {
-		return cluster, fmt.Errorf("unable to recover control-plane security group: %w", err)
-	}
-	workerName := fmt.Sprintf("capi - %s - worker", clusterID)
 	var workerID *uuid.UUID
 	if cluster.Status.SecurityGroupWorker != nil {
 		workerID, err = parseStatusID(cluster.Status.SecurityGroupWorker.ID, ".status.securityGroupWorker.id")
@@ -182,9 +162,42 @@ func (s *clusterService) DeleteCluster(ctx context.Context, cluster infrav1alpha
 			return cluster, err
 		}
 	}
-	workerGroup, workerErr := s.securityGroupSvc.FindSecurityGroup(ctx, *clusterID, workerName, workerID)
-	if workerErr != nil && !errors.Is(workerErr, domain.ErrSecurityGroupNotFound) {
-		return cluster, fmt.Errorf("unable to recover worker security group: %w", workerErr)
+
+	var eip domain.ElasticIP
+	var controlPlaneGroup, workerGroup domain.SecurityGroup
+	if clusterID == nil {
+		if eipID != nil {
+			eip.ID = *eipID
+		}
+		if controlPlaneID != nil {
+			controlPlaneGroup.ID = *controlPlaneID
+		}
+		if workerID != nil {
+			workerGroup.ID = *workerID
+		}
+	} else {
+		eip, err = s.elasticIPSvc.FindElasticIP(ctx, *clusterID, eipID)
+		if err != nil && !errors.Is(err, domain.ErrElasticIPNotFound) {
+			return cluster, fmt.Errorf("unable to recover elastic IP: %w", err)
+		}
+
+		controlPlaneName := fmt.Sprintf("capi - %s - control plane", clusterID)
+		controlPlaneGroup, err = s.securityGroupSvc.FindSecurityGroup(ctx, *clusterID, controlPlaneName, controlPlaneID)
+		if err != nil && !errors.Is(err, domain.ErrSecurityGroupNotFound) {
+			return cluster, fmt.Errorf("unable to recover control-plane security group: %w", err)
+		}
+
+		workerName := fmt.Sprintf("capi - %s - worker", clusterID)
+		workerGroup, err = s.securityGroupSvc.FindSecurityGroup(ctx, *clusterID, workerName, workerID)
+		if err != nil && !errors.Is(err, domain.ErrSecurityGroupNotFound) {
+			return cluster, fmt.Errorf("unable to recover worker security group: %w", err)
+		}
+	}
+
+	if eip.ID != uuid.Nil {
+		if err := s.elasticIPSvc.DeleteElasticIP(ctx, eip.ID); err != nil {
+			return cluster, err
+		}
 	}
 
 	// Rules must be purged from all security groups before deleting them. Security groups can
@@ -213,55 +226,6 @@ func (s *clusterService) DeleteCluster(ctx context.Context, cluster infrav1alpha
 		}
 	}
 
-	return cluster, nil
-}
-
-// deleteClusterFromStatus keeps cleanup working for legacy objects that entered
-// deletion before the durable cluster ID annotation was persisted.
-func (s *clusterService) deleteClusterFromStatus(ctx context.Context, cluster infrav1alpha1.ExoscaleCluster) (infrav1alpha1.ExoscaleCluster, error) {
-	if cluster.Status.ControlPlaneEndpoint != nil {
-		id, err := uuid.Parse(cluster.Status.ControlPlaneEndpoint.ID)
-		if err != nil {
-			return cluster, fmt.Errorf("unable to parse %q: %w: %w", ".status.controlPlaneEndpoint.id", errInvalidID, err)
-		}
-		if err := s.elasticIPSvc.DeleteElasticIP(ctx, id); err != nil {
-			return cluster, err
-		}
-	}
-
-	var controlPlaneID *uuid.UUID
-	if cluster.Status.SecurityGroupControlPlan != nil {
-		id, err := uuid.Parse(cluster.Status.SecurityGroupControlPlan.ID)
-		if err != nil {
-			return cluster, fmt.Errorf("unable to parse %q: %w: %w", ".status.securityGroupControlPlane.id", errInvalidID, err)
-		}
-		controlPlaneID = &id
-		if err := s.securityGroupSvc.PurgeSecurityGroup(ctx, id); err != nil {
-			return cluster, err
-		}
-	}
-	var workerID *uuid.UUID
-	if cluster.Status.SecurityGroupWorker != nil {
-		id, err := uuid.Parse(cluster.Status.SecurityGroupWorker.ID)
-		if err != nil {
-			return cluster, fmt.Errorf("unable to parse %q: %w: %w", ".status.securityGroupWorker.id", errInvalidID, err)
-		}
-		workerID = &id
-		if err := s.securityGroupSvc.PurgeSecurityGroup(ctx, id); err != nil {
-			return cluster, err
-		}
-	}
-
-	if controlPlaneID != nil {
-		if err := s.securityGroupSvc.DeleteSecurityGroup(ctx, *controlPlaneID); err != nil {
-			return cluster, fmt.Errorf("unable to delete security group for control plane: %w", err)
-		}
-	}
-	if workerID != nil {
-		if err := s.securityGroupSvc.DeleteSecurityGroup(ctx, *workerID); err != nil {
-			return cluster, fmt.Errorf("unable to delete security group for worker: %w", err)
-		}
-	}
 	return cluster, nil
 }
 

@@ -28,7 +28,7 @@ spec:
               spec:
                 zone: bg-sof-1
 
-    - name: reject controlPlaneEndpoint host on create
+    - name: reject controlPlaneEndpoint host without move identity
       try:
         - apply:
             resource:
@@ -47,7 +47,7 @@ spec:
                   kind: ExoscaleCluster
                 check:
                   ($error != null): true
-                  (contains($error, 'must be empty')): true
+                  (contains($error, 'required for a moved cluster')): true
 
     - name: reject zone change on update
       try:

@@ -1289,6 +1289,83 @@ func (_c *ExoscaleClient_ListInstances_Call) RunAndReturn(run func(ctx context.C
 	return _c
 }
 
+// ListSecurityGroups provides a mock function for the type ExoscaleClient
+func (_mock *ExoscaleClient) ListSecurityGroups(ctx context.Context, opts ...v3.ListSecurityGroupsOpt) (*v3.ListSecurityGroupsResponse, error) {
+	var tmpRet mock.Arguments
+	if len(opts) > 0 {
+		tmpRet = _mock.Called(ctx, opts)
+	} else {
+		tmpRet = _mock.Called(ctx)
+	}
+	ret := tmpRet
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListSecurityGroups")
+	}
+
+	var r0 *v3.ListSecurityGroupsResponse
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, ...v3.ListSecurityGroupsOpt) (*v3.ListSecurityGroupsResponse, error)); ok {
+		return returnFunc(ctx, opts...)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, ...v3.ListSecurityGroupsOpt) *v3.ListSecurityGroupsResponse); ok {
+		r0 = returnFunc(ctx, opts...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*v3.ListSecurityGroupsResponse)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, ...v3.ListSecurityGroupsOpt) error); ok {
+		r1 = returnFunc(ctx, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// ExoscaleClient_ListSecurityGroups_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListSecurityGroups'
+type ExoscaleClient_ListSecurityGroups_Call struct {
+	*mock.Call
+}
+
+// ListSecurityGroups is a helper method to define mock.On call
+//   - ctx context.Context
+//   - opts ...v3.ListSecurityGroupsOpt
+func (_e *ExoscaleClient_Expecter) ListSecurityGroups(ctx any, opts ...any) *ExoscaleClient_ListSecurityGroups_Call {
+	return &ExoscaleClient_ListSecurityGroups_Call{Call: _e.mock.On("ListSecurityGroups",
+		append([]any{ctx}, opts...)...)}
+}
+
+func (_c *ExoscaleClient_ListSecurityGroups_Call) Run(run func(ctx context.Context, opts ...v3.ListSecurityGroupsOpt)) *ExoscaleClient_ListSecurityGroups_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 []v3.ListSecurityGroupsOpt
+		var variadicArgs []v3.ListSecurityGroupsOpt
+		if len(args) > 1 {
+			variadicArgs = args[1].([]v3.ListSecurityGroupsOpt)
+		}
+		arg1 = variadicArgs
+		run(
+			arg0,
+			arg1...,
+		)
+	})
+	return _c
+}
+
+func (_c *ExoscaleClient_ListSecurityGroups_Call) Return(listSecurityGroupsResponse *v3.ListSecurityGroupsResponse, err error) *ExoscaleClient_ListSecurityGroups_Call {
+	_c.Call.Return(listSecurityGroupsResponse, err)
+	return _c
+}
+
+func (_c *ExoscaleClient_ListSecurityGroups_Call) RunAndReturn(run func(ctx context.Context, opts ...v3.ListSecurityGroupsOpt) (*v3.ListSecurityGroupsResponse, error)) *ExoscaleClient_ListSecurityGroups_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListTemplates provides a mock function for the type ExoscaleClient
 func (_mock *ExoscaleClient) ListTemplates(ctx context.Context, opts ...v3.ListTemplatesOpt) (*v3.ListTemplatesResponse, error) {
 	var tmpRet mock.Arguments

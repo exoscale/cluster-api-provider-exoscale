@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	infrastructurev1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
+	"github.com/exoscale/cluster-api-provider-exoscale/internal/domain"
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/mocks"
 	egoscale "github.com/exoscale/egoscale/v3"
 )
@@ -47,6 +48,10 @@ func Test_ExoscaleClusterTemplateCustomValidator_ValidateCreate(t *testing.T) {
 			},
 		},
 	}
+	claimedObj := obj.DeepCopy()
+	claimedObj.Spec.Template.ObjectMeta.Annotations = map[string]string{domain.ClusterIDKey: "shared"}
+	hostObj := obj.DeepCopy()
+	hostObj.Spec.Template.Spec.ControlPlaneEndpoint.Host = "192.0.2.1"
 
 	tests := []struct {
 		name      string
@@ -82,6 +87,26 @@ func Test_ExoscaleClusterTemplateCustomValidator_ValidateCreate(t *testing.T) {
 					Return(nil)
 			},
 			err: errors.New("invalid label key"),
+		},
+		{
+			name: "reserved ownership annotation is rejected",
+			obj:  claimedObj,
+			validator: func(m *mocks.ClusterValidator) {
+				m.EXPECT().
+					ValidateCreate(claimedObj.Spec.Template.Spec, field.NewPath("spec", "template", "spec")).
+					Return(nil)
+			},
+			err: errors.New(domain.ClusterIDKey),
+		},
+		{
+			name: "control plane host is rejected",
+			obj:  hostObj,
+			validator: func(m *mocks.ClusterValidator) {
+				m.EXPECT().
+					ValidateCreate(hostObj.Spec.Template.Spec, field.NewPath("spec", "template", "spec")).
+					Return(nil)
+			},
+			err: errors.New("controlPlaneEndpoint.host"),
 		},
 	}
 

@@ -71,25 +71,24 @@ setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
 		echo "Kind is not installed. Please install Kind manually."; \
 		exit 1; \
 	}
-	@case "$$($(KIND) get clusters)" in \
-		*"$(KIND_CLUSTER)"*) \
-			echo "Kind cluster '$(KIND_CLUSTER)' already exists. Skipping creation." ;; \
-		*) \
-			echo "Creating Kind cluster '$(KIND_CLUSTER)'..."; \
-			$(KIND) create cluster --name $(KIND_CLUSTER) ;; \
-	esac
+	@if [ -n "$$($(KIND) get nodes --name "$(KIND_CLUSTER)" 2>/dev/null || true)" ]; then \
+		echo "Kind cluster '$(KIND_CLUSTER)' already exists. Skipping creation."; \
+	else \
+		echo "Creating Kind cluster '$(KIND_CLUSTER)'..."; \
+		$(KIND) create cluster --name "$(KIND_CLUSTER)"; \
+	fi
 
 CHAINSAW_VALUES_SUFFIX ?=
 CHAINSAW_VALUES_ZONE ?=
 CHAINSAW_MACHINE_TEMPLATE ?=
 CHAINSAW_MACHINE_INSTANCE_TYPE ?= small
 CHAINSAW_ALL_TEST_DIRS := $(shell ls -d -1 test/chainsaw/*)
-CHAINSAW_MACHINE_TEST_DIR := test/chainsaw/deploy-machine
-CHAINSAW_TEST_DIRS ?= $(if $(CHAINSAW_MACHINE_TEMPLATE),$(CHAINSAW_ALL_TEST_DIRS),$(filter-out $(CHAINSAW_MACHINE_TEST_DIR),$(CHAINSAW_ALL_TEST_DIRS)))
+CHAINSAW_MACHINE_TEST_DIRS := test/chainsaw/deploy-machine test/chainsaw/move-cluster
+CHAINSAW_TEST_DIRS ?= $(if $(CHAINSAW_MACHINE_TEMPLATE),$(CHAINSAW_ALL_TEST_DIRS),$(filter-out $(CHAINSAW_MACHINE_TEST_DIRS),$(CHAINSAW_ALL_TEST_DIRS)))
 
 .PHONY: chainsaw-test-e2e
-chainsaw-test-e2e: setup-test-e2e-chainsaw chainsaw ## Run the e2e tests. Expected an isolated environment using Kind.
-	$(CHAINSAW) test --set='suffix=$(CHAINSAW_VALUES_SUFFIX),zone=$(CHAINSAW_VALUES_ZONE),template=$(CHAINSAW_MACHINE_TEMPLATE),instanceType=$(CHAINSAW_MACHINE_INSTANCE_TYPE),image=$(IMG)' $(CHAINSAW_TEST_DIRS)
+chainsaw-test-e2e: setup-test-e2e-chainsaw chainsaw check-cloud-resources ## Run the e2e tests. Expected an isolated environment using Kind.
+	$(CHAINSAW) test --set='suffix=$(CHAINSAW_VALUES_SUFFIX),zone=$(CHAINSAW_VALUES_ZONE),template=$(CHAINSAW_MACHINE_TEMPLATE),instanceType=$(CHAINSAW_MACHINE_INSTANCE_TYPE),image=$(IMG),sourceClusterName=$(KIND_CLUSTER),kind=$(KIND),containerTool=$(CONTAINER_TOOL)' $(CHAINSAW_TEST_DIRS)
 
 ## Exoscale credentials: use env vars if already set, otherwise read from config file.
 EXOSCALE_CONFIG      ?= $(HOME)/.config/exoscale/exoscale.toml
@@ -106,10 +105,23 @@ check-exoscale-creds: yq ## Check that exoscale creds are setup before running e
 
 setup-test-e2e-chainsaw: check-exoscale-creds setup-test-e2e docker-build manifests generate kustomize clusterctl ## Set up a Kind, CAPI,  cluster for e2e tests if it does not exist
 	## Load docker image into kind cluster.
-	$(KIND) load docker-image --name $(KIND_CLUSTER) $(IMG)
+	$(KIND) load docker-image --name $(KIND_CLUSTER) $(IMG) || { \
+		test "$$KIND_EXPERIMENTAL_PROVIDER" = podman; \
+		$(CONTAINER_TOOL) save $(IMG) | $(CONTAINER_TOOL) exec -i "$(KIND_CLUSTER)-control-plane" \
+			ctr --namespace=k8s.io images import -; \
+	}
 
 	## Install CAPI.
-	$(CLUSTERCTL) init --infrastructure -
+	MODULE_CAPI_VERSION="$$(go list -m -f '{{.Version}}' sigs.k8s.io/cluster-api)"; \
+	CORE_VERSION="$$( $(KUBECTL) get providers.clusterctl.cluster.x-k8s.io -A -o jsonpath='{.items[?(@.type=="CoreProvider")].version}' 2>/dev/null || true )"; \
+	BOOTSTRAP_VERSION="$$( $(KUBECTL) get providers.clusterctl.cluster.x-k8s.io -A -o jsonpath='{.items[?(@.type=="BootstrapProvider")].version}' 2>/dev/null || true )"; \
+	CONTROL_PLANE_VERSION="$$( $(KUBECTL) get providers.clusterctl.cluster.x-k8s.io -A -o jsonpath='{.items[?(@.type=="ControlPlaneProvider")].version}' 2>/dev/null || true )"; \
+	$(CLUSTERCTL) init \
+		--core "cluster-api:$${CORE_VERSION:-$$MODULE_CAPI_VERSION}" \
+		--bootstrap "kubeadm:$${BOOTSTRAP_VERSION:-$$MODULE_CAPI_VERSION}" \
+		--control-plane "kubeadm:$${CONTROL_PLANE_VERSION:-$$MODULE_CAPI_VERSION}" \
+		--wait-providers \
+		--infrastructure -
 
 	## Deploy exoscale infrastructure provider.
 	## We need to create a simple temporary kustomize file to set image name and tag
@@ -239,6 +251,10 @@ undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.
 LOCALBIN ?= $(shell pwd)/bin
 $(LOCALBIN):
 	mkdir -p "$(LOCALBIN)"
+
+.PHONY: check-cloud-resources
+check-cloud-resources: $(LOCALBIN)
+	go build -o "$(LOCALBIN)/check-cloud-resources" ./test/check-cloud-resources
 
 ## Tool Binaries
 KUBECTL ?= kubectl

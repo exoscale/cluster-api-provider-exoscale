@@ -87,14 +87,22 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	patchHelper, err := capipatch.NewHelper(exoMachine, r.Client)
+	deleting := !exoMachine.DeletionTimestamp.IsZero()
+	var machine *clusterv1.Machine
+	machine, err := util.GetOwnerMachine(ctx, r.Client, exoMachine.ObjectMeta)
+	if err := client.IgnoreNotFound(err); err != nil {
+		return ctrl.Result{}, err
+	}
+	patchHelper, err := r.persistMachineIdentity(ctx, exoMachine, machine)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	defer func() { reterr = patchExoscaleMachine(ctx, patchHelper, exoMachine, reterr) }()
-
-	deleting := !exoMachine.DeletionTimestamp.IsZero()
-	var machine *clusterv1.Machine
+	skipDeferredPatch := false
+	defer func() {
+		if !skipDeferredPatch {
+			reterr = patchExoscaleMachine(ctx, patchHelper, exoMachine, reterr)
+		}
+	}()
 	cluster, clusterErr := util.GetClusterFromMetadata(ctx, r.Client, exoMachine.ObjectMeta)
 
 	if clusterErr == nil && annotations.IsPaused(cluster, exoMachine) {
@@ -105,10 +113,6 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	conditions.Delete(exoMachine, clusterv1.PausedCondition)
 
 	if !deleting && clusterErr != nil {
-		machine, err = util.GetOwnerMachine(ctx, r.Client, exoMachine.ObjectMeta)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
 		if machine == nil {
 			log.Info("owner Machine not yet set, requeueing")
 			setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.NotReadyReason, "Waiting for owner Machine")
@@ -123,41 +127,7 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	if deleting {
-		setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.DeletingReason, "Deleting instance")
-		// Deletion returns before the normal owner lookup below, so fetch the Machine here for its ownership UID.
-		machine, err = util.GetOwnerMachine(ctx, r.Client, exoMachine.ObjectMeta)
-		// The owner Machine may already be gone when garbage collection deletes its infrastructure object.
-		if err := client.IgnoreNotFound(err); err != nil {
-			return ctrl.Result{}, err
-		}
-		machineUID, instanceID, err := getDeletionInstanceIDs(machine, exoMachine)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		// Without either identifier, there is no cloud resource the controller can safely identify for deletion.
-		if machineUID == "" && instanceID == nil {
-			controllerutil.RemoveFinalizer(exoMachine, machineFinalizer)
-			return ctrl.Result{}, nil
-		}
-		// Ownership-safe cleanup of an identifiable instance requires its cluster context and credentials.
-		if clusterErr != nil {
-			return ctrl.Result{}, clusterErr
-		}
-		exoCluster, err := r.getExoscaleCluster(ctx, cluster)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		clusterID, err := exoscaleClusterID(exoCluster)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-
-		instanceService, err := r.instanceService(ctx, exoCluster)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-
-		return ctrl.Result{}, r.reconcileDelete(ctx, exoMachine, instanceService, machineUID, clusterID, instanceID)
+		return ctrl.Result{}, r.reconcileDeletingMachine(ctx, exoMachine, machine, cluster, clusterErr)
 	}
 	if machine == nil {
 		machine, err = util.GetOwnerMachine(ctx, r.Client, exoMachine.ObjectMeta)
@@ -170,15 +140,30 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			return ctrl.Result{}, nil
 		}
 	}
+	if exoMachine.Annotations[domain.MachineUIDKey] == "" {
+		patchHelper, err = r.persistMachineIdentity(ctx, exoMachine, machine)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+	}
 
 	exoCluster, err := r.getExoscaleCluster(ctx, cluster)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+	beforeFinalizer := exoMachine.DeepCopy()
 	if controllerutil.AddFinalizer(exoMachine, machineFinalizer) {
-		if err := patchHelper.Patch(ctx, exoMachine); err != nil {
+		desiredStatus := exoMachine.Status
+		exoMachine.Status = beforeFinalizer.Status
+		if err := r.Patch(ctx, exoMachine, client.MergeFromWithOptions(beforeFinalizer, client.MergeFromWithOptimisticLock{})); err != nil {
+			skipDeferredPatch = true
+			return ctrl.Result{}, fmt.Errorf("unable to persist machine finalizer: %w", err)
+		}
+		patchHelper, err = capipatch.NewHelper(exoMachine, r.Client)
+		if err != nil {
 			return ctrl.Result{}, err
 		}
+		exoMachine.Status = desiredStatus
 	}
 	if cluster.Status.Initialization.InfrastructureProvisioned == nil || !*cluster.Status.Initialization.InfrastructureProvisioned {
 		log.Info("cluster infrastructure not yet ready")
@@ -196,7 +181,55 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 
-	return r.reconcileNormal(ctx, exoMachine, machine, exoCluster, instanceService, patchHelper)
+	return r.reconcileNormal(ctx, exoMachine, machine, exoCluster, instanceService)
+}
+
+func (r *ExoscaleMachineReconciler) persistMachineIdentity(ctx context.Context, exoMachine *infrastructurev1alpha1.ExoscaleMachine, machine *clusterv1.Machine) (*capipatch.Helper, error) {
+	before := exoMachine.DeepCopy()
+	if machine != nil {
+		if _, changed, err := ensureMachineUID(exoMachine, machine); err != nil {
+			return nil, err
+		} else if changed {
+			if err := r.Patch(ctx, exoMachine, client.MergeFromWithOptions(before, client.MergeFromWithOptimisticLock{})); err != nil {
+				return nil, fmt.Errorf("unable to claim machine UID: %w", err)
+			}
+		}
+	}
+	return capipatch.NewHelper(exoMachine, r.Client)
+}
+
+func (r *ExoscaleMachineReconciler) reconcileDeletingMachine(
+	ctx context.Context,
+	exoMachine *infrastructurev1alpha1.ExoscaleMachine,
+	machine *clusterv1.Machine,
+	cluster *clusterv1.Cluster,
+	clusterErr error,
+) error {
+	setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.DeletingReason, "Deleting instance")
+	machineUID, instanceID, err := getDeletionInstanceIDs(machine, exoMachine)
+	if err != nil {
+		return err
+	}
+	if machineUID == "" && instanceID == nil {
+		controllerutil.RemoveFinalizer(exoMachine, machineFinalizer)
+		return nil
+	}
+	if clusterErr != nil {
+		return clusterErr
+	}
+	exoCluster, err := r.getExoscaleCluster(ctx, cluster)
+	if err != nil {
+		return err
+	}
+	clusterID, err := exoscaleClusterID(exoCluster)
+	if err != nil {
+		return err
+	}
+	instanceService, err := r.instanceService(ctx, exoCluster)
+	if err != nil {
+		return err
+	}
+	return r.reconcileDelete(ctx, exoMachine, instanceService, machineUID, clusterID, instanceID)
 }
 
 func setMachinePaused(exoMachine *infrastructurev1alpha1.ExoscaleMachine) {
@@ -248,15 +281,8 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 	machine *clusterv1.Machine,
 	exoCluster *infrastructurev1alpha1.ExoscaleCluster,
 	instanceService domain.InstanceService,
-	patchHelper *capipatch.Helper,
 ) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
-
-	if controllerutil.AddFinalizer(exoMachine, machineFinalizer) {
-		if err := patchHelper.Patch(ctx, exoMachine); err != nil {
-			return ctrl.Result{}, err
-		}
-	}
 
 	userData, err := r.bootstrapData(ctx, machine)
 	if err != nil {
@@ -303,9 +329,9 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 		return ctrl.Result{}, err
 	}
 
-	machineUID := domain.MachineUID(machine.GetUID())
-	if machineUID == "" {
-		return ctrl.Result{}, fmt.Errorf("machine UID is empty")
+	machineUID, _, err := ensureMachineUID(exoMachine, machine)
+	if err != nil {
+		return ctrl.Result{}, err
 	}
 
 	spec := domain.InstanceSpec{
@@ -369,6 +395,9 @@ func getDeletionInstanceIDs(
 	if err != nil {
 		return "", nil, err
 	}
+	if machineUID := exoMachine.Annotations[domain.MachineUIDKey]; machineUID != "" {
+		return domain.MachineUID(machineUID), instanceID, nil
+	}
 	if machine == nil {
 		// The instance service rejects deletion by instance ID alone when ownership cannot be verified.
 		return "", instanceID, nil
@@ -378,14 +407,46 @@ func getDeletionInstanceIDs(
 }
 
 func exoscaleClusterID(exoCluster *infrastructurev1alpha1.ExoscaleCluster) (uuid.UUID, error) {
-	if exoCluster.Status.ID == nil {
+	annotationID := exoCluster.Annotations[domain.ClusterIDKey]
+	statusID := ""
+	if exoCluster.Status.ID != nil {
+		statusID = *exoCluster.Status.ID
+	}
+	if annotationID != "" && statusID != "" && annotationID != statusID {
+		return uuid.Nil, fmt.Errorf("cluster ID annotation %q does not match status %q", annotationID, statusID)
+	}
+	clusterID := annotationID
+	if clusterID == "" {
+		clusterID = statusID
+	}
+	if clusterID == "" {
 		return uuid.Nil, fmt.Errorf("cluster ID is not available")
 	}
-	id, err := uuid.Parse(*exoCluster.Status.ID)
+	id, err := uuid.Parse(clusterID)
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("invalid cluster ID %q: %w", *exoCluster.Status.ID, err)
+		return uuid.Nil, fmt.Errorf("invalid cluster ID %q: %w", clusterID, err)
 	}
 	return id, nil
+}
+
+func ensureMachineUID(exoMachine *infrastructurev1alpha1.ExoscaleMachine, machine *clusterv1.Machine) (domain.MachineUID, bool, error) {
+	if machineUID := exoMachine.Annotations[domain.MachineUIDKey]; machineUID != "" {
+		if exoMachine.Spec.ProviderID == nil && exoMachine.Status.InstanceID == "" && machine != nil && machineUID != string(machine.UID) {
+			return "", false, fmt.Errorf("machine UID annotation %q is not valid for a new ExoscaleMachine", machineUID)
+		}
+		return domain.MachineUID(machineUID), false, nil
+	}
+	if machine == nil || machine.UID == "" {
+		return "", false, fmt.Errorf("machine UID is empty")
+	}
+	if exoMachine.Spec.ProviderID != nil && exoMachine.Status.InstanceID == "" {
+		return "", false, fmt.Errorf("machine UID annotation is missing from a moved ExoscaleMachine")
+	}
+	if exoMachine.Annotations == nil {
+		exoMachine.Annotations = map[string]string{}
+	}
+	exoMachine.Annotations[domain.MachineUIDKey] = string(machine.UID)
+	return domain.MachineUID(machine.UID), true, nil
 }
 
 func exoscaleMachineInstanceID(exoMachine *infrastructurev1alpha1.ExoscaleMachine) (*uuid.UUID, error) {

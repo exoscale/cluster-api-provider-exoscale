@@ -21,9 +21,45 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clusterctlv1 "sigs.k8s.io/cluster-api/cmd/clusterctl/api/v1alpha3"
 
 	infrastructurev1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
+	"github.com/exoscale/cluster-api-provider-exoscale/internal/domain"
 )
+
+func Test_ExoscaleMachineCustomValidator_ValidateCreate(t *testing.T) {
+	t.Parallel()
+
+	providerID := "exoscale://11111111-2222-3333-4444-555555555555"
+	tests := []struct {
+		name       string
+		providerID *string
+		claimed    bool
+		wantErr    string
+	}{
+		{name: "new machine"},
+		{name: "claimed new machine", claimed: true, wantErr: "spec.providerID"},
+		{name: "provider ID without identity", providerID: &providerID, wantErr: domain.MachineUIDKey},
+		{name: "moved machine", providerID: &providerID, claimed: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			obj := &infrastructurev1alpha1.ExoscaleMachine{
+				Spec: infrastructurev1alpha1.ExoscaleMachineSpec{ProviderID: tt.providerID},
+			}
+			if tt.claimed {
+				obj.Annotations = map[string]string{domain.MachineUIDKey: "source-uid"}
+			}
+			_, err := (&ExoscaleMachineCustomValidator{}).ValidateCreate(context.Background(), obj)
+			if tt.wantErr != "" {
+				assert.ErrorContains(t, err, tt.wantErr)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
 
 func Test_ExoscaleMachineCustomValidator_ValidateUpdate(t *testing.T) {
 	t.Parallel()
@@ -31,6 +67,7 @@ func Test_ExoscaleMachineCustomValidator_ValidateUpdate(t *testing.T) {
 	rootVolumeSize := int64(20)
 	providerID := "exoscale://11111111-2222-3333-4444-555555555555"
 	old := &infrastructurev1alpha1.ExoscaleMachine{
+		ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{domain.MachineUIDKey: "source-uid"}},
 		Spec: infrastructurev1alpha1.ExoscaleMachineSpec{
 			Template:          "ubuntu",
 			InstanceType:      "small",
@@ -64,6 +101,19 @@ func Test_ExoscaleMachineCustomValidator_ValidateUpdate(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "ownership annotation",
+			mutate: func(machine *infrastructurev1alpha1.ExoscaleMachine) {
+				machine.Annotations[domain.MachineUIDKey] = "other-uid"
+			},
+			wantErr: true,
+		},
+		{
+			name: "delete for move",
+			mutate: func(machine *infrastructurev1alpha1.ExoscaleMachine) {
+				machine.Annotations = map[string]string{clusterctlv1.DeleteForMoveAnnotation: ""}
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -75,7 +125,7 @@ func Test_ExoscaleMachineCustomValidator_ValidateUpdate(t *testing.T) {
 
 			assert.Nil(t, warnings)
 			if tt.wantErr {
-				assert.ErrorContains(t, err, "instance creation fields are immutable")
+				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
 			}

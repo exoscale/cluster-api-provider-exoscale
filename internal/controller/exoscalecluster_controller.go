@@ -82,11 +82,15 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return reconcile.Result{}, err
 	}
 
-	patchHelper, err := patch.NewHelper(&exoCluster, r.Client)
+	patchHelper, err := r.persistClusterIdentity(ctx, &exoCluster)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+	skipDeferredPatch := false
 	defer func() {
+		if skipDeferredPatch {
+			return
+		}
 		// TODO: maybe create a real error management with custom type
 		if reterr != nil {
 			conditions.Set(&exoCluster, metav1.Condition{
@@ -101,10 +105,6 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			reterr = errors.Join(reterr, fmt.Errorf("patch error: %w", err))
 		}
 	}()
-
-	if exoCluster.Status.ID == nil {
-		exoCluster.Status.ID = func() *string { v := uuid.New().String(); return &v }()
-	}
 
 	log = log.WithValues("cluster_id", *exoCluster.Status.ID)
 
@@ -134,6 +134,22 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, nil
 	}
 	conditions.Delete(&exoCluster, clusterv1.PausedCondition)
+	if exoCluster.DeletionTimestamp.IsZero() {
+		beforeFinalizer := exoCluster.DeepCopy()
+		if controllerutil.AddFinalizer(&exoCluster, infrav1alpha1.ExoscaleClusterFinalizer) {
+			desiredStatus := exoCluster.Status
+			exoCluster.Status = beforeFinalizer.Status
+			if err := r.Patch(ctx, &exoCluster, client.MergeFromWithOptions(beforeFinalizer, client.MergeFromWithOptimisticLock{})); err != nil {
+				skipDeferredPatch = true
+				return ctrl.Result{}, fmt.Errorf("unable to persist cluster finalizer: %w", err)
+			}
+			patchHelper, err = patch.NewHelper(&exoCluster, r.Client)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			exoCluster.Status = desiredStatus
+		}
+	}
 
 	// fetch creds affiliated to this cluster.
 	var creds v1.Secret
@@ -161,8 +177,6 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			controllerutil.RemoveFinalizer(&exoCluster, infrav1alpha1.ExoscaleClusterFinalizer)
 		}
 		return ctrl.Result{}, nil
-	} else {
-		controllerutil.AddFinalizer(&exoCluster, infrav1alpha1.ExoscaleClusterFinalizer)
 	}
 
 	exoCluster, err = clusterSvc.ReconcileCluster(ctx, exoCluster)
@@ -180,6 +194,80 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	})
 
 	return ctrl.Result{}, nil
+}
+
+func (r *ExoscaleClusterReconciler) persistClusterIdentity(ctx context.Context, exoCluster *infrav1alpha1.ExoscaleCluster) (*patch.Helper, error) {
+	before := exoCluster.DeepCopy()
+	changed, err := ensureClusterID(exoCluster)
+	if err != nil {
+		return nil, err
+	}
+	patchHelper, err := patch.NewHelper(before, r.Client)
+	if err != nil {
+		return nil, err
+	}
+	if !changed {
+		return patchHelper, nil
+	}
+
+	if before.Annotations[domain.ClusterIDKey] != exoCluster.Annotations[domain.ClusterIDKey] {
+		desiredStatus := exoCluster.Status
+		exoCluster.Status = before.Status
+		if err := r.Patch(ctx, exoCluster, client.MergeFromWithOptions(before, client.MergeFromWithOptimisticLock{})); err != nil {
+			return nil, fmt.Errorf("unable to claim cluster ID: %w", err)
+		}
+		patchHelper, err = patch.NewHelper(exoCluster, r.Client)
+		if err != nil {
+			return nil, err
+		}
+		exoCluster.Status = desiredStatus
+	}
+	if err := patchHelper.Patch(ctx, exoCluster); err != nil {
+		return nil, fmt.Errorf("unable to persist cluster ID status: %w", err)
+	}
+	if err := r.Get(ctx, client.ObjectKeyFromObject(exoCluster), exoCluster); err != nil {
+		return nil, fmt.Errorf("unable to refresh persisted cluster ID: %w", err)
+	}
+	return patch.NewHelper(exoCluster, r.Client)
+}
+
+func ensureClusterID(exoCluster *infrav1alpha1.ExoscaleCluster) (bool, error) {
+	annotationID := exoCluster.Annotations[domain.ClusterIDKey]
+	statusID := ""
+	if exoCluster.Status.ID != nil {
+		statusID = *exoCluster.Status.ID
+	}
+	if annotationID != "" && statusID != "" && annotationID != statusID {
+		return false, fmt.Errorf("cluster ID annotation %q does not match status %q", annotationID, statusID)
+	}
+	if annotationID != "" && statusID == "" && exoCluster.Spec.ControlPlaneEndpoint.Host == "" && exoCluster.UID != "" && annotationID != string(exoCluster.UID) {
+		return false, fmt.Errorf("cluster ID annotation %q is not valid for a new ExoscaleCluster", annotationID)
+	}
+
+	clusterID := annotationID
+	if clusterID == "" {
+		clusterID = statusID
+	}
+	if clusterID == "" {
+		if exoCluster.Spec.ControlPlaneEndpoint.Host != "" {
+			return false, fmt.Errorf("cluster ID is missing for provisioned endpoint %q", exoCluster.Spec.ControlPlaneEndpoint.Host)
+		}
+		clusterID = string(exoCluster.UID)
+		if clusterID == "" {
+			clusterID = uuid.NewString()
+		}
+	}
+	if _, err := uuid.Parse(clusterID); err != nil {
+		return false, fmt.Errorf("invalid cluster ID %q: %w", clusterID, err)
+	}
+
+	changed := annotationID != clusterID || statusID != clusterID
+	if exoCluster.Annotations == nil {
+		exoCluster.Annotations = map[string]string{}
+	}
+	exoCluster.Annotations[domain.ClusterIDKey] = clusterID
+	exoCluster.Status.ID = &clusterID
+	return changed, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

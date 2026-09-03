@@ -1,0 +1,331 @@
+# Moves a running workload cluster between two management clusters and verifies
+# that the target adopts the existing Exoscale resources.
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: move-cluster
+spec:
+  timeouts:
+    assert: 20m
+    cleanup: 15m
+    delete: 15m
+    exec: 20m
+  bindings:
+    - name: zone
+      value: ($values.zone || 'bg-sof-1')
+    - name: suffix
+      value: ($values.suffix || 'local')
+    - name: clusterName
+      value: (join('-', ['mv', $suffix]))
+    - name: targetClusterName
+      value: (join('-', ['mvt', $suffix]))
+    - name: sourceClusterName
+      value: ($values.sourceClusterName || 'cluster-api-provider-exoscale-test-e2e')
+    - name: namespace
+      value: (join('-', ['mv', $suffix]))
+    - name: image
+      value: ($values.image || 'controller:latest')
+    - name: kind
+      value: ($values.kind || 'kind')
+    - name: containerTool
+      value: ($values.containerTool || 'docker')
+    - name: template
+      value: ($values.template)
+    - name: instanceType
+      value: ($values.instanceType || 'small')
+  steps:
+    - name: create target management cluster
+      try:
+        - script:
+            timeout: 10m
+            env:
+              - name: CAPX_IMAGE
+                value: ($image)
+              - name: CONTAINER_TOOL
+                value: ($containerTool)
+              - name: KIND_BINARY
+                value: ($kind)
+              - name: NAMESPACE
+                value: ($namespace)
+              - name: SOURCE_CLUSTER_NAME
+                value: ($sourceClusterName)
+              - name: TARGET_CLUSTER_NAME
+                value: ($targetClusterName)
+              - name: ZONE
+                value: ($zone)
+            content: |
+              set -eu
+              umask 077
+              "$KIND_BINARY" get kubeconfig --name "$SOURCE_CLUSTER_NAME" >./source.kubeconfig
+              "$KIND_BINARY" create cluster --name "$TARGET_CLUSTER_NAME" --kubeconfig ./target.kubeconfig
+              : >./target-kind-created
+              "$KIND_BINARY" load docker-image --name "$TARGET_CLUSTER_NAME" "$CAPX_IMAGE" || {
+                [ "${KIND_EXPERIMENTAL_PROVIDER:-}" = podman ]
+                "$CONTAINER_TOOL" save "$CAPX_IMAGE" | "$CONTAINER_TOOL" exec -i "$TARGET_CLUSTER_NAME-control-plane" \
+                  ctr --namespace=k8s.io images import -
+              }
+
+              core_version="$(kubectl --kubeconfig ./source.kubeconfig get providers.clusterctl.cluster.x-k8s.io -A \
+                -o jsonpath='{.items[?(@.type=="CoreProvider")].version}')"
+              bootstrap_version="$(kubectl --kubeconfig ./source.kubeconfig get providers.clusterctl.cluster.x-k8s.io -A \
+                -o jsonpath='{.items[?(@.type=="BootstrapProvider")].version}')"
+              control_plane_version="$(kubectl --kubeconfig ./source.kubeconfig get providers.clusterctl.cluster.x-k8s.io -A \
+                -o jsonpath='{.items[?(@.type=="ControlPlaneProvider")].version}')"
+              ../../../bin/clusterctl init --kubeconfig ./target.kubeconfig \
+                --core "cluster-api:$core_version" \
+                --bootstrap "kubeadm:$bootstrap_version" \
+                --control-plane "kubeadm:$control_plane_version" \
+                --wait-providers \
+                --infrastructure -
+
+              rendered="$(mktemp)"
+              ../../../bin/kustomize build ../../../config/e2e-chainsaw >"$rendered"
+              kubectl --kubeconfig ./target.kubeconfig apply -f "$rendered"
+              rm -f "$rendered"
+              kubectl --kubeconfig ./target.kubeconfig \
+                --namespace cluster-api-provider-exoscale-system \
+                set image deployment/cluster-api-provider-exoscale-controller-manager manager="$CAPX_IMAGE"
+              kubectl --kubeconfig ./target.kubeconfig \
+                --namespace cluster-api-provider-exoscale-system \
+                wait deployment/cluster-api-provider-exoscale-controller-manager \
+                --for=condition=Available --timeout=5m
+
+              [ -z "$(kubectl --kubeconfig ./source.kubeconfig get namespace "$NAMESPACE" --ignore-not-found -o name)" ]
+              kubectl --kubeconfig ./source.kubeconfig create namespace "$NAMESPACE"
+              : >./source-namespace-created
+              [ -z "$(kubectl --kubeconfig ./target.kubeconfig get namespace "$NAMESPACE" --ignore-not-found -o name)" ]
+              kubectl --kubeconfig ./target.kubeconfig create namespace "$NAMESPACE"
+              : >./target-namespace-created
+              credentials="$(mktemp -d)"
+              trap 'rm -rf "$credentials"' EXIT
+              kubectl --kubeconfig ./source.kubeconfig --namespace default get secret exoscale \
+                -o jsonpath='{.data.apikey}' | base64 -d >"$credentials/apikey"
+              kubectl --kubeconfig ./source.kubeconfig --namespace default get secret exoscale \
+                -o jsonpath='{.data.apisecret}' | base64 -d >"$credentials/apisecret"
+              for kubeconfig in ./source.kubeconfig ./target.kubeconfig; do
+                kubectl --kubeconfig "$kubeconfig" --namespace "$NAMESPACE" create secret generic exoscale \
+                  --from-file=apikey="$credentials/apikey" \
+                  --from-file=apisecret="$credentials/apisecret"
+              done
+      cleanup:
+        - script:
+            timeout: 15m
+            env:
+              - name: CLUSTER_NAME
+                value: ($clusterName)
+              - name: KIND_BINARY
+                value: ($kind)
+              - name: NAMESPACE
+                value: ($namespace)
+              - name: TARGET_CLUSTER_NAME
+                value: ($targetClusterName)
+              - name: ZONE
+                value: ($zone)
+            content: |
+              set -u
+              failed=false
+              for kubeconfig in ./source.kubeconfig ./target.kubeconfig; do
+                [ -f "$kubeconfig" ] || continue
+                case "$kubeconfig" in
+                  ./source.kubeconfig) namespace_marker=./source-namespace-created ;;
+                  ./target.kubeconfig) namespace_marker=./target-namespace-created ;;
+                esac
+                [ -f "$namespace_marker" ] || continue
+                cluster="$(kubectl --kubeconfig "$kubeconfig" --namespace "$NAMESPACE" \
+                  get cluster "$CLUSTER_NAME" --ignore-not-found -o name)" || {
+                    failed=true
+                    continue
+                  }
+                if [ -n "$cluster" ]; then
+                  kubectl --kubeconfig "$kubeconfig" --namespace "$NAMESPACE" \
+                    patch cluster "$CLUSTER_NAME" --type=merge \
+                    -p '{"metadata":{"annotations":{"cluster.x-k8s.io/paused":null}},"spec":{"paused":false}}' || {
+                      failed=true
+                      continue
+                    }
+                  kubectl --kubeconfig "$kubeconfig" --namespace "$NAMESPACE" \
+                    delete cluster "$CLUSTER_NAME" --wait --timeout=10m || failed=true
+                fi
+              done
+              if [ -f ./cloud-resource-ids ]; then
+                read -r instance_id elastic_ip_id control_plane_security_group_id worker_security_group_id <./cloud-resource-ids
+                EXOSCALE_API_KEY="$(kubectl --kubeconfig ./target.kubeconfig --namespace "$NAMESPACE" \
+                  get secret exoscale -o jsonpath='{.data.apikey}' | base64 -d)" || failed=true
+                EXOSCALE_API_SECRET="$(kubectl --kubeconfig ./target.kubeconfig --namespace "$NAMESPACE" \
+                  get secret exoscale -o jsonpath='{.data.apisecret}' | base64 -d)" || failed=true
+                export EXOSCALE_API_KEY EXOSCALE_API_SECRET
+                if [ "$failed" = false ]; then
+                  ../../../bin/check-cloud-resources \
+                    --zone "$ZONE" \
+                    --instance "$instance_id" \
+                    --elastic-ip "$elastic_ip_id" \
+                    --security-groups "$control_plane_security_group_id,$worker_security_group_id" || failed=true
+                fi
+              fi
+              if [ "$failed" = true ]; then
+                printf 'Workload cleanup failed; target Kind cluster %s was retained.\n' "$TARGET_CLUSTER_NAME" >&2
+                exit 1
+              fi
+              for kubeconfig in ./source.kubeconfig ./target.kubeconfig; do
+                case "$kubeconfig" in
+                  ./source.kubeconfig) namespace_marker=./source-namespace-created ;;
+                  ./target.kubeconfig) namespace_marker=./target-namespace-created ;;
+                esac
+                if [ -f "$kubeconfig" ] && [ -f "$namespace_marker" ]; then
+                  kubectl --kubeconfig "$kubeconfig" delete namespace "$NAMESPACE" \
+                    --ignore-not-found --wait --timeout=5m && rm -f "$namespace_marker" || failed=true
+                fi
+              done
+              if [ "$failed" = true ]; then
+                printf 'Namespace cleanup failed; target Kind cluster %s was retained.\n' "$TARGET_CLUSTER_NAME" >&2
+                exit 1
+              fi
+              if [ -f ./target-kind-created ]; then
+                "$KIND_BINARY" delete cluster --name "$TARGET_CLUSTER_NAME" || {
+                  printf 'Kind cleanup failed; target cluster %s was retained.\n' "$TARGET_CLUSTER_NAME" >&2
+                  exit 1
+                }
+                rm -f ./target-kind-created
+              fi
+              rm -f ./source.kubeconfig ./target.kubeconfig ./workload.kubeconfig ./cloud-resource-ids
+
+    - name: create workload cluster
+      try:
+        - script:
+            timeout: 2m
+            env:
+              - name: CLUSTER_NAME
+                value: ($clusterName)
+              - name: EXOSCALE_INSTANCE_TYPE
+                value: ($instanceType)
+              - name: EXOSCALE_TEMPLATE
+                value: ($template)
+              - name: EXOSCALE_ZONE
+                value: ($zone)
+              - name: NAMESPACE
+                value: ($namespace)
+            content: |
+              set -eu
+              manifest="$(mktemp)"
+              trap 'rm -f "$manifest"' EXIT
+              export EXOSCALE_INSTANCE_TYPE EXOSCALE_TEMPLATE EXOSCALE_ZONE
+              ../../../bin/clusterctl generate cluster "$CLUSTER_NAME" \
+                --from ../../../templates/cluster-template.yaml \
+                --kubernetes-version v1.36.4 \
+                --control-plane-machine-count 1 \
+                --worker-machine-count 0 \
+                --target-namespace "$NAMESPACE" >"$manifest"
+              kubectl --kubeconfig ./source.kubeconfig apply -f "$manifest"
+
+    - name: wait for workload cluster
+      try:
+        - script:
+            timeout: 20m
+            env:
+              - name: CLUSTER_NAME
+                value: ($clusterName)
+              - name: NAMESPACE
+                value: ($namespace)
+            content: |
+              set -eu
+              umask 077
+              kubectl --kubeconfig ./source.kubeconfig --namespace "$NAMESPACE" \
+                wait exoscalecluster/"$CLUSTER_NAME" --for=condition=Ready --timeout=5m
+              kubectl --kubeconfig ./source.kubeconfig --namespace "$NAMESPACE" \
+                wait cluster/"$CLUSTER_NAME" --for=condition=ControlPlaneInitialized --timeout=15m
+              ../../../bin/clusterctl get kubeconfig "$CLUSTER_NAME" \
+                --namespace "$NAMESPACE" \
+                --kubeconfig ./source.kubeconfig >./workload.kubeconfig
+
+              node_found=false
+              for _ in $(seq 1 300); do
+                if [ -n "$(kubectl --kubeconfig ./workload.kubeconfig get nodes -o name 2>/dev/null)" ]; then
+                  node_found=true
+                  break
+                fi
+                sleep 2
+              done
+              [ "$node_found" = true ]
+              kubectl --kubeconfig ./workload.kubeconfig wait node --all --for=condition=Ready --timeout=10m
+              kubectl --kubeconfig ./source.kubeconfig --namespace "$NAMESPACE" \
+                wait kubeadmcontrolplane/"$CLUSTER_NAME" --for=condition=Available --timeout=5m
+              kubectl --kubeconfig ./source.kubeconfig --namespace "$NAMESPACE" \
+                wait machine --selector=cluster.x-k8s.io/cluster-name="$CLUSTER_NAME" \
+                --for=condition=Ready --timeout=5m
+
+    - name: move workload cluster and verify adoption
+      try:
+        - script:
+            timeout: 20m
+            env:
+              - name: CLUSTER_NAME
+                value: ($clusterName)
+              - name: NAMESPACE
+                value: ($namespace)
+              - name: ZONE
+                value: ($zone)
+            content: |
+              set -eu
+              umask 077
+              exo_cluster="$(kubectl --kubeconfig ./source.kubeconfig --namespace "$NAMESPACE" \
+                get exoscalecluster "$CLUSTER_NAME" -o jsonpath='{.metadata.annotations.cluster-api-provider-exoscale/cluster-id} {.status.controlPlaneEndpoint.id} {.status.securityGroupControlPlane.id} {.status.securityGroupWorker.id} {.metadata.uid}')"
+              exo_machine="$(kubectl --kubeconfig ./source.kubeconfig --namespace "$NAMESPACE" \
+                get exoscalemachine --selector=cluster.x-k8s.io/cluster-name="$CLUSTER_NAME" \
+                -o jsonpath='{.items[0].metadata.annotations.cluster-api-provider-exoscale/machine-uid} {.items[0].status.instanceID} {.items[0].metadata.uid}')"
+              set -- $exo_cluster $exo_machine
+              cluster_id="$1"
+              elastic_ip_id="$2"
+              control_plane_security_group_id="$3"
+              worker_security_group_id="$4"
+              source_exoscale_cluster_uid="$5"
+              machine_uid="$6"
+              instance_id="$7"
+              source_exoscale_machine_uid="$8"
+              printf '%s %s %s %s\n' "$instance_id" "$elastic_ip_id" \
+                "$control_plane_security_group_id" "$worker_security_group_id" >./cloud-resource-ids
+
+              ../../../bin/clusterctl move \
+                --kubeconfig ./source.kubeconfig \
+                --namespace "$NAMESPACE" \
+                --to-kubeconfig ./target.kubeconfig
+              kubectl --kubeconfig ./target.kubeconfig --namespace "$NAMESPACE" \
+                wait exoscalecluster/"$CLUSTER_NAME" --for=condition=Ready --timeout=5m
+              kubectl --kubeconfig ./target.kubeconfig --namespace "$NAMESPACE" \
+                wait machine --selector=cluster.x-k8s.io/cluster-name="$CLUSTER_NAME" \
+                --for=condition=Ready --timeout=5m
+              kubectl --kubeconfig ./workload.kubeconfig wait node --all --for=condition=Ready --timeout=2m
+
+              actual="$(kubectl --kubeconfig ./target.kubeconfig --namespace "$NAMESPACE" \
+                get exoscalecluster "$CLUSTER_NAME" \
+                -o jsonpath='{.metadata.annotations.cluster-api-provider-exoscale/cluster-id} {.status.id} {.status.controlPlaneEndpoint.id} {.status.securityGroupControlPlane.id} {.status.securityGroupWorker.id} {.metadata.uid}')"
+              set -- $actual
+              [ "$1" = "$cluster_id" ]
+              [ "$2" = "$cluster_id" ]
+              [ "$3" = "$elastic_ip_id" ]
+              [ "$4" = "$control_plane_security_group_id" ]
+              [ "$5" = "$worker_security_group_id" ]
+              [ "$6" != "$source_exoscale_cluster_uid" ]
+
+              actual="$(kubectl --kubeconfig ./target.kubeconfig --namespace "$NAMESPACE" \
+                get exoscalemachine --selector=cluster.x-k8s.io/cluster-name="$CLUSTER_NAME" \
+                -o jsonpath='{.items[0].metadata.annotations.cluster-api-provider-exoscale/machine-uid} {.items[0].status.instanceID} {.items[0].metadata.uid}')"
+              set -- $actual
+              [ "$1" = "$machine_uid" ]
+              [ "$2" = "$instance_id" ]
+              [ "$3" != "$source_exoscale_machine_uid" ]
+
+              source_cluster="$(kubectl --kubeconfig ./source.kubeconfig --namespace "$NAMESPACE" \
+                get cluster "$CLUSTER_NAME" --ignore-not-found -o name)"
+              [ -z "$source_cluster" ]
+              kubectl --kubeconfig ./target.kubeconfig --namespace "$NAMESPACE" \
+                delete cluster "$CLUSTER_NAME" --wait --timeout=10m
+              EXOSCALE_API_KEY="$(kubectl --kubeconfig ./target.kubeconfig --namespace "$NAMESPACE" \
+                get secret exoscale -o jsonpath='{.data.apikey}' | base64 -d)"
+              EXOSCALE_API_SECRET="$(kubectl --kubeconfig ./target.kubeconfig --namespace "$NAMESPACE" \
+                get secret exoscale -o jsonpath='{.data.apisecret}' | base64 -d)"
+              export EXOSCALE_API_KEY EXOSCALE_API_SECRET
+              ../../../bin/check-cloud-resources \
+                --zone "$ZONE" \
+                --instance "$instance_id" \
+                --elastic-ip "$elastic_ip_id" \
+                --security-groups "$control_plane_security_group_id,$worker_security_group_id"

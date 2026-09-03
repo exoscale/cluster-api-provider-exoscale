@@ -96,6 +96,78 @@ func (_c *ElasticIPService_DeleteElasticIP_Call) RunAndReturn(run func(ctx conte
 	return _c
 }
 
+// FindElasticIP provides a mock function for the type ElasticIPService
+func (_mock *ElasticIPService) FindElasticIP(ctx context.Context, clusterID uuid.UUID, eipID *uuid.UUID) (domain.ElasticIP, error) {
+	ret := _mock.Called(ctx, clusterID, eipID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FindElasticIP")
+	}
+
+	var r0 domain.ElasticIP
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID, *uuid.UUID) (domain.ElasticIP, error)); ok {
+		return returnFunc(ctx, clusterID, eipID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID, *uuid.UUID) domain.ElasticIP); ok {
+		r0 = returnFunc(ctx, clusterID, eipID)
+	} else {
+		r0 = ret.Get(0).(domain.ElasticIP)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, uuid.UUID, *uuid.UUID) error); ok {
+		r1 = returnFunc(ctx, clusterID, eipID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// ElasticIPService_FindElasticIP_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindElasticIP'
+type ElasticIPService_FindElasticIP_Call struct {
+	*mock.Call
+}
+
+// FindElasticIP is a helper method to define mock.On call
+//   - ctx context.Context
+//   - clusterID uuid.UUID
+//   - eipID *uuid.UUID
+func (_e *ElasticIPService_Expecter) FindElasticIP(ctx any, clusterID any, eipID any) *ElasticIPService_FindElasticIP_Call {
+	return &ElasticIPService_FindElasticIP_Call{Call: _e.mock.On("FindElasticIP", ctx, clusterID, eipID)}
+}
+
+func (_c *ElasticIPService_FindElasticIP_Call) Run(run func(ctx context.Context, clusterID uuid.UUID, eipID *uuid.UUID)) *ElasticIPService_FindElasticIP_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 uuid.UUID
+		if args[1] != nil {
+			arg1 = args[1].(uuid.UUID)
+		}
+		var arg2 *uuid.UUID
+		if args[2] != nil {
+			arg2 = args[2].(*uuid.UUID)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *ElasticIPService_FindElasticIP_Call) Return(elasticIP domain.ElasticIP, err error) *ElasticIPService_FindElasticIP_Call {
+	_c.Call.Return(elasticIP, err)
+	return _c
+}
+
+func (_c *ElasticIPService_FindElasticIP_Call) RunAndReturn(run func(ctx context.Context, clusterID uuid.UUID, eipID *uuid.UUID) (domain.ElasticIP, error)) *ElasticIPService_FindElasticIP_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // UpsertElasticIP provides a mock function for the type ElasticIPService
 func (_mock *ElasticIPService) UpsertElasticIP(ctx context.Context, clusterID uuid.UUID, eipID *uuid.UUID, port int32) (domain.ElasticIP, error) {
 	ret := _mock.Called(ctx, clusterID, eipID, port)

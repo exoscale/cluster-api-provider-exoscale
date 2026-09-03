@@ -37,15 +37,12 @@ func NewClusterService(apiKey, apisecret string, zone egoscale.ZoneName, logger 
 }
 
 func (s *clusterService) ReconcileCluster(ctx context.Context, cluster infrav1alpha1.ExoscaleCluster) (infrav1alpha1.ExoscaleCluster, error) {
-	var clusterID uuid.UUID
-	if cluster.Status.ID == nil {
+	clusterID, err := clusterOwnershipID(cluster)
+	if err != nil {
+		return cluster, err
+	}
+	if clusterID == nil {
 		return cluster, fmt.Errorf("cluster: %q has no id", cluster.Name)
-	} else {
-		id, err := uuid.Parse(*cluster.Status.ID)
-		if err != nil {
-			return cluster, fmt.Errorf("unable to parse \".status.ClusterID\": %w: %w", errInvalidID, err)
-		}
-		clusterID = id
 	}
 
 	/*
@@ -60,7 +57,7 @@ func (s *clusterService) ReconcileCluster(ctx context.Context, cluster infrav1al
 		eipID = &id
 	}
 
-	eip, err := s.elasticIPSvc.UpsertElasticIP(ctx, clusterID, eipID, cluster.Spec.ControlPlaneEndpoint.Port)
+	eip, err := s.elasticIPSvc.UpsertElasticIP(ctx, *clusterID, eipID, cluster.Spec.ControlPlaneEndpoint.Port)
 	if err != nil {
 		return cluster, err
 	}
@@ -83,7 +80,7 @@ func (s *clusterService) ReconcileCluster(ctx context.Context, cluster infrav1al
 		}
 		securityGroupControlPlaneID = &id
 	}
-	securityGroupControlPlane, err := s.securityGroupSvc.UpsertSecurityGroup(ctx, clusterID, securityGroupControlPlaneID, securityGroupControlPlaneName)
+	securityGroupControlPlane, err := s.securityGroupSvc.UpsertSecurityGroup(ctx, *clusterID, securityGroupControlPlaneID, securityGroupControlPlaneName)
 	if err != nil {
 		return cluster, fmt.Errorf("unable to upsert security group for control plane: %w", err)
 	}
@@ -102,7 +99,7 @@ func (s *clusterService) ReconcileCluster(ctx context.Context, cluster infrav1al
 		}
 		securityGroupWorkerID = &id
 	}
-	securityGroupWorker, err := s.securityGroupSvc.UpsertSecurityGroup(ctx, clusterID, securityGroupWorkerID, securityGroupWorkerName)
+	securityGroupWorker, err := s.securityGroupSvc.UpsertSecurityGroup(ctx, *clusterID, securityGroupWorkerID, securityGroupWorkerName)
 	if err != nil {
 		return cluster, fmt.Errorf("unable to upsert security group for worker: %w", err)
 	}
@@ -140,6 +137,88 @@ func (s *clusterService) ReconcileCluster(ctx context.Context, cluster infrav1al
 }
 
 func (s *clusterService) DeleteCluster(ctx context.Context, cluster infrav1alpha1.ExoscaleCluster) (infrav1alpha1.ExoscaleCluster, error) {
+	clusterID, err := clusterOwnershipID(cluster)
+	if err != nil {
+		return cluster, err
+	}
+	if clusterID == nil {
+		return s.deleteClusterFromStatus(ctx, cluster)
+	}
+
+	var eipID *uuid.UUID
+	if cluster.Status.ControlPlaneEndpoint != nil {
+		eipID, err = parseStatusID(cluster.Status.ControlPlaneEndpoint.ID, ".status.controlPlaneEndpoint.id")
+		if err != nil {
+			return cluster, err
+		}
+	}
+	eip, err := s.elasticIPSvc.FindElasticIP(ctx, *clusterID, eipID)
+	if err != nil && !errors.Is(err, domain.ErrElasticIPNotFound) {
+		return cluster, fmt.Errorf("unable to recover elastic IP: %w", err)
+	}
+	if err == nil {
+		if err := s.elasticIPSvc.DeleteElasticIP(ctx, eip.ID); err != nil {
+			return cluster, err
+		}
+	}
+
+	controlPlaneName := fmt.Sprintf("capi - %s - control plane", clusterID)
+	var controlPlaneID *uuid.UUID
+	if cluster.Status.SecurityGroupControlPlan != nil {
+		controlPlaneID, err = parseStatusID(cluster.Status.SecurityGroupControlPlan.ID, ".status.securityGroupControlPlane.id")
+		if err != nil {
+			return cluster, err
+		}
+	}
+	controlPlaneGroup, err := s.securityGroupSvc.FindSecurityGroup(ctx, *clusterID, controlPlaneName, controlPlaneID)
+	if err != nil && !errors.Is(err, domain.ErrSecurityGroupNotFound) {
+		return cluster, fmt.Errorf("unable to recover control-plane security group: %w", err)
+	}
+	workerName := fmt.Sprintf("capi - %s - worker", clusterID)
+	var workerID *uuid.UUID
+	if cluster.Status.SecurityGroupWorker != nil {
+		workerID, err = parseStatusID(cluster.Status.SecurityGroupWorker.ID, ".status.securityGroupWorker.id")
+		if err != nil {
+			return cluster, err
+		}
+	}
+	workerGroup, workerErr := s.securityGroupSvc.FindSecurityGroup(ctx, *clusterID, workerName, workerID)
+	if workerErr != nil && !errors.Is(workerErr, domain.ErrSecurityGroupNotFound) {
+		return cluster, fmt.Errorf("unable to recover worker security group: %w", workerErr)
+	}
+
+	// Rules must be purged from all security groups before deleting them. Security groups can
+	// reference each other in their rules (e.g. group A has a rule pointing to group B, and group B
+	// has a rule pointing to group A), creating a circular dependency that prevents deletion of either
+	// group until both are fully cleared of their rules.
+	if controlPlaneGroup.ID != uuid.Nil {
+		if err := s.securityGroupSvc.PurgeSecurityGroup(ctx, controlPlaneGroup.ID); err != nil {
+			return cluster, err
+		}
+	}
+	if workerGroup.ID != uuid.Nil {
+		if err := s.securityGroupSvc.PurgeSecurityGroup(ctx, workerGroup.ID); err != nil {
+			return cluster, err
+		}
+	}
+
+	if controlPlaneGroup.ID != uuid.Nil {
+		if err := s.securityGroupSvc.DeleteSecurityGroup(ctx, controlPlaneGroup.ID); err != nil {
+			return cluster, fmt.Errorf("unable to delete security group for control plane: %w", err)
+		}
+	}
+	if workerGroup.ID != uuid.Nil {
+		if err := s.securityGroupSvc.DeleteSecurityGroup(ctx, workerGroup.ID); err != nil {
+			return cluster, fmt.Errorf("unable to delete security group for worker: %w", err)
+		}
+	}
+
+	return cluster, nil
+}
+
+// deleteClusterFromStatus keeps cleanup working for legacy objects that entered
+// deletion before the durable cluster ID annotation was persisted.
+func (s *clusterService) deleteClusterFromStatus(ctx context.Context, cluster infrav1alpha1.ExoscaleCluster) (infrav1alpha1.ExoscaleCluster, error) {
 	if cluster.Status.ControlPlaneEndpoint != nil {
 		id, err := uuid.Parse(cluster.Status.ControlPlaneEndpoint.ID)
 		if err != nil {
@@ -150,43 +229,70 @@ func (s *clusterService) DeleteCluster(ctx context.Context, cluster infrav1alpha
 		}
 	}
 
-	// Rules must be purged from all security groups before deleting them. Security groups can
-	// reference each other in their rules (e.g. group A has a rule pointing to group B, and group B
-	// has a rule pointing to group A), creating a circular dependency that prevents deletion of either
-	// group until both are fully cleared of their rules.
-	var securityGroupControlPlaneID *uuid.UUID
+	var controlPlaneID *uuid.UUID
 	if cluster.Status.SecurityGroupControlPlan != nil {
 		id, err := uuid.Parse(cluster.Status.SecurityGroupControlPlan.ID)
 		if err != nil {
 			return cluster, fmt.Errorf("unable to parse %q: %w: %w", ".status.securityGroupControlPlane.id", errInvalidID, err)
 		}
-		securityGroupControlPlaneID = &id
+		controlPlaneID = &id
 		if err := s.securityGroupSvc.PurgeSecurityGroup(ctx, id); err != nil {
 			return cluster, err
 		}
 	}
-	var securityGroupWorkerID *uuid.UUID
+	var workerID *uuid.UUID
 	if cluster.Status.SecurityGroupWorker != nil {
 		id, err := uuid.Parse(cluster.Status.SecurityGroupWorker.ID)
 		if err != nil {
 			return cluster, fmt.Errorf("unable to parse %q: %w: %w", ".status.securityGroupWorker.id", errInvalidID, err)
 		}
-		securityGroupWorkerID = &id
+		workerID = &id
 		if err := s.securityGroupSvc.PurgeSecurityGroup(ctx, id); err != nil {
 			return cluster, err
 		}
 	}
 
-	if securityGroupControlPlaneID != nil {
-		if err := s.securityGroupSvc.DeleteSecurityGroup(ctx, *securityGroupControlPlaneID); err != nil {
+	if controlPlaneID != nil {
+		if err := s.securityGroupSvc.DeleteSecurityGroup(ctx, *controlPlaneID); err != nil {
 			return cluster, fmt.Errorf("unable to delete security group for control plane: %w", err)
 		}
 	}
-	if securityGroupWorkerID != nil {
-		if err := s.securityGroupSvc.DeleteSecurityGroup(ctx, *securityGroupWorkerID); err != nil {
+	if workerID != nil {
+		if err := s.securityGroupSvc.DeleteSecurityGroup(ctx, *workerID); err != nil {
 			return cluster, fmt.Errorf("unable to delete security group for worker: %w", err)
 		}
 	}
-
 	return cluster, nil
+}
+
+func clusterOwnershipID(cluster infrav1alpha1.ExoscaleCluster) (*uuid.UUID, error) {
+	annotationID := cluster.Annotations[domain.ClusterIDKey]
+	statusID := ""
+	if cluster.Status.ID != nil {
+		statusID = *cluster.Status.ID
+	}
+	if annotationID != "" && statusID != "" && annotationID != statusID {
+		return nil, fmt.Errorf("cluster ID annotation %q does not match status %q", annotationID, statusID)
+	}
+
+	rawID := annotationID
+	if rawID == "" {
+		rawID = statusID
+	}
+	if rawID == "" {
+		return nil, nil
+	}
+	id, err := uuid.Parse(rawID)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse cluster ID: %w: %w", errInvalidID, err)
+	}
+	return &id, nil
+}
+
+func parseStatusID(rawID, fieldPath string) (*uuid.UUID, error) {
+	id, err := uuid.Parse(rawID)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse %q: %w: %w", fieldPath, errInvalidID, err)
+	}
+	return &id, nil
 }

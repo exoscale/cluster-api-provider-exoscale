@@ -176,6 +176,7 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 	updated := &infrav1alpha1.ExoscaleMachine{}
 	assert.NoError(t, client.Get(ctx, types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}, updated))
 	assert.Equal(t, instanceID.String(), updated.Status.InstanceID)
+	assert.Equal(t, machineUID.String(), updated.Annotations[domain.MachineUIDKey])
 	assert.Equal(t, template, updated.Spec.Template)
 	assert.Equal(t, &rootVolumeSize, updated.Spec.RootVolumeSizeGiB)
 	assert.Equal(t, []clusterv1.MachineAddress{
@@ -278,6 +279,7 @@ func TestExoscaleMachineReconciler_Reconcile_prerequisites(t *testing.T) {
 			assert.Empty(t, updated.Status.InstanceID)
 			assert.Empty(t, updated.Status.Addresses)
 			assert.Nil(t, updated.Status.Initialization.Provisioned)
+			assert.Equal(t, "machine-uid", updated.Annotations[domain.MachineUIDKey])
 		})
 	}
 }
@@ -336,7 +338,7 @@ func TestExoscaleMachineReconciler_reconcileNormal_controlPlaneEndpoint(t *testi
 				ControlPlaneEndpoint:     tc.endpoint,
 			}}
 
-			result, err := r.reconcileNormal(ctx, exoMachine, machine, exoCluster, mocks.NewInstanceService(t), nil)
+			result, err := r.reconcileNormal(ctx, exoMachine, machine, exoCluster, mocks.NewInstanceService(t))
 
 			if tc.wantErr != "" {
 				assert.ErrorContains(t, err, tc.wantErr)

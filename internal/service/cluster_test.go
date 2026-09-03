@@ -868,3 +868,116 @@ func Test_clusterService_DeleteCluster(t *testing.T) {
 		})
 	}
 }
+
+func Test_clusterService_DeleteCluster_recoversMovedResources(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	clusterID := uuid.New()
+	eip := domain.ElasticIP{ID: uuid.New()}
+	controlPlane := domain.SecurityGroup{ID: uuid.New(), Name: fmt.Sprintf("capi - %s - control plane", clusterID)}
+	worker := domain.SecurityGroup{ID: uuid.New(), Name: fmt.Sprintf("capi - %s - worker", clusterID)}
+	cluster := infrav1alpha1.ExoscaleCluster{ObjectMeta: metav1.ObjectMeta{
+		Name:        "moved-cluster",
+		Annotations: map[string]string{domain.ClusterIDKey: clusterID.String()},
+	}}
+
+	eipSvc := mocks.NewElasticIPService(t)
+	eipSvc.EXPECT().FindElasticIP(ctx, clusterID, (*uuid.UUID)(nil)).Return(eip, nil)
+	eipSvc.EXPECT().DeleteElasticIP(ctx, eip.ID).Return(nil)
+	sgSvc := mocks.NewSecurityGroupService(t)
+	sgSvc.EXPECT().FindSecurityGroup(ctx, clusterID, controlPlane.Name, (*uuid.UUID)(nil)).Return(controlPlane, nil)
+	sgSvc.EXPECT().FindSecurityGroup(ctx, clusterID, worker.Name, (*uuid.UUID)(nil)).Return(worker, nil)
+	sgSvc.EXPECT().PurgeSecurityGroup(ctx, controlPlane.ID).Return(nil)
+	sgSvc.EXPECT().PurgeSecurityGroup(ctx, worker.ID).Return(nil)
+	sgSvc.EXPECT().DeleteSecurityGroup(ctx, controlPlane.ID).Return(nil)
+	sgSvc.EXPECT().DeleteSecurityGroup(ctx, worker.ID).Return(nil)
+
+	got, err := (&clusterService{elasticIPSvc: eipSvc, securityGroupSvc: sgSvc}).DeleteCluster(ctx, cluster)
+
+	assert.NoError(t, err)
+	assert.Equal(t, cluster, got)
+}
+
+func Test_clusterService_DeleteCluster_usesOwnedStatusResources(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	clusterID := uuid.New()
+	eip := domain.ElasticIP{ID: uuid.New()}
+	controlPlane := domain.SecurityGroup{ID: uuid.New(), Name: fmt.Sprintf("capi - %s - control plane", clusterID)}
+	worker := domain.SecurityGroup{ID: uuid.New(), Name: fmt.Sprintf("capi - %s - worker", clusterID)}
+	cluster := infrav1alpha1.ExoscaleCluster{
+		ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{domain.ClusterIDKey: clusterID.String()}},
+		Status: infrav1alpha1.ExoscaleClusterStatus{
+			ID:                       new(clusterID.String()),
+			ControlPlaneEndpoint:     &infrav1alpha1.APIEndpointStatus{ID: eip.ID.String()},
+			SecurityGroupControlPlan: &infrav1alpha1.SecurityGroupStatus{ID: controlPlane.ID.String()},
+			SecurityGroupWorker:      &infrav1alpha1.SecurityGroupStatus{ID: worker.ID.String()},
+		},
+	}
+
+	eipSvc := mocks.NewElasticIPService(t)
+	eipSvc.EXPECT().FindElasticIP(ctx, clusterID, &eip.ID).Return(eip, nil)
+	eipSvc.EXPECT().DeleteElasticIP(ctx, eip.ID).Return(nil)
+	sgSvc := mocks.NewSecurityGroupService(t)
+	sgSvc.EXPECT().FindSecurityGroup(ctx, clusterID, controlPlane.Name, &controlPlane.ID).Return(controlPlane, nil)
+	sgSvc.EXPECT().FindSecurityGroup(ctx, clusterID, worker.Name, &worker.ID).Return(worker, nil)
+	sgSvc.EXPECT().PurgeSecurityGroup(ctx, controlPlane.ID).Return(nil)
+	sgSvc.EXPECT().PurgeSecurityGroup(ctx, worker.ID).Return(nil)
+	sgSvc.EXPECT().DeleteSecurityGroup(ctx, controlPlane.ID).Return(nil)
+	sgSvc.EXPECT().DeleteSecurityGroup(ctx, worker.ID).Return(nil)
+
+	_, err := (&clusterService{elasticIPSvc: eipSvc, securityGroupSvc: sgSvc}).DeleteCluster(ctx, cluster)
+	assert.NoError(t, err)
+}
+
+func Test_clusterOwnershipID(t *testing.T) {
+	t.Parallel()
+
+	id := uuid.NewString()
+	tests := []struct {
+		name       string
+		cluster    infrav1alpha1.ExoscaleCluster
+		want       string
+		wantErrMsg string
+	}{
+		{name: "annotation", cluster: infrav1alpha1.ExoscaleCluster{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{domain.ClusterIDKey: id}}}, want: id},
+		{name: "legacy status", cluster: infrav1alpha1.ExoscaleCluster{Status: infrav1alpha1.ExoscaleClusterStatus{ID: &id}}, want: id},
+		{
+			name: "matching annotation and status",
+			cluster: infrav1alpha1.ExoscaleCluster{
+				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{domain.ClusterIDKey: id}},
+				Status:     infrav1alpha1.ExoscaleClusterStatus{ID: &id},
+			},
+			want: id,
+		},
+		{
+			name: "conflict",
+			cluster: infrav1alpha1.ExoscaleCluster{
+				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{domain.ClusterIDKey: id}},
+				Status:     infrav1alpha1.ExoscaleClusterStatus{ID: new(uuid.NewString())},
+			},
+			wantErrMsg: "does not match status",
+		},
+		{name: "invalid", cluster: infrav1alpha1.ExoscaleCluster{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{domain.ClusterIDKey: "bad"}}}, wantErrMsg: "invalid id"},
+		{name: "missing"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := clusterOwnershipID(tc.cluster)
+
+			if tc.wantErrMsg != "" {
+				assert.ErrorContains(t, err, tc.wantErrMsg)
+				return
+			}
+			assert.NoError(t, err)
+			if tc.want == "" {
+				assert.Nil(t, got)
+			} else if assert.NotNil(t, got) {
+				assert.Equal(t, tc.want, got.String())
+			}
+		})
+	}
+}

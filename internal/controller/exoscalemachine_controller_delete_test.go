@@ -46,6 +46,7 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 		ownerReference   bool
 		ownerMachine     bool
 		paused           bool
+		stableMachineUID domain.MachineUID
 		statusInstanceID string
 		deleteErr        error
 		wantService      bool
@@ -59,6 +60,7 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 		{name: "instance not found removes finalizer", ownerReference: true, ownerMachine: true, statusInstanceID: instanceID.String(), deleteErr: domain.ErrInstanceNotFound, wantService: true},
 		{name: "delete error keeps finalizer", ownerReference: true, ownerMachine: true, statusInstanceID: instanceID.String(), deleteErr: assert.AnError, wantService: true, wantErr: assert.AnError, wantFinalizer: true},
 		{name: "paused deletion keeps finalizer", ownerReference: true, paused: true, statusInstanceID: instanceID.String(), wantFinalizer: true},
+		{name: "moved machine keeps source ownership", ownerReference: true, ownerMachine: true, stableMachineUID: "source-machine-uid", statusInstanceID: instanceID.String(), wantService: true},
 	}
 
 	for _, tc := range tests {
@@ -69,7 +71,9 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 			instanceSvc := mocks.NewInstanceService(t)
 			var expectedMachineUID domain.MachineUID
 			var expectedInstanceID *uuid.UUID
-			if tc.ownerMachine {
+			if tc.stableMachineUID != "" {
+				expectedMachineUID = tc.stableMachineUID
+			} else if tc.ownerMachine {
 				expectedMachineUID = machineUID
 			}
 			if tc.statusInstanceID != "" {
@@ -143,6 +147,12 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 			if tc.paused {
 				exoMachine.Annotations = map[string]string{clusterv1.PausedAnnotation: ""}
 			}
+			if tc.stableMachineUID != "" {
+				if exoMachine.Annotations == nil {
+					exoMachine.Annotations = map[string]string{}
+				}
+				exoMachine.Annotations[domain.MachineUIDKey] = tc.stableMachineUID.String()
+			}
 			objects = append(objects, exoMachine)
 
 			client := fake.NewClientBuilder().
@@ -191,6 +201,8 @@ func Test_deletionInstanceIDs(t *testing.T) {
 
 	instanceID := uuid.New()
 	machineUID := domain.MachineUID("not-a-uuid")
+	sourceMachineUID := domain.MachineUID("source-machine-uid")
+	targetMachineUID := domain.MachineUID("target-machine-uid")
 	providerID := "exoscale://" + instanceID.String()
 	legacyProviderID := "exoscale:///" + instanceID.String()
 	invalidProviderID := "bad-id"
@@ -226,6 +238,16 @@ func Test_deletionInstanceIDs(t *testing.T) {
 			name:           "accepts non-UUID Machine UID",
 			machine:        &clusterv1.Machine{ObjectMeta: metav1.ObjectMeta{UID: types.UID(machineUID)}},
 			wantMachineUID: machineUID,
+		},
+		{
+			name: "prefers preserved source Machine UID after move",
+			exoMachine: infrav1alpha1.ExoscaleMachine{
+				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{domain.MachineUIDKey: sourceMachineUID.String()}},
+				Spec:       infrav1alpha1.ExoscaleMachineSpec{ProviderID: &providerID},
+			},
+			machine:        &clusterv1.Machine{ObjectMeta: metav1.ObjectMeta{UID: types.UID(targetMachineUID)}},
+			wantMachineUID: sourceMachineUID,
+			wantInstanceID: &instanceID,
 		},
 	}
 

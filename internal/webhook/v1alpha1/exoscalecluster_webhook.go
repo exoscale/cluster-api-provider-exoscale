@@ -22,6 +22,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	clusterctlv1 "sigs.k8s.io/cluster-api/cmd/clusterctl/api/v1alpha3"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -51,7 +52,14 @@ type ExoscaleClusterCustomValidator struct {
 func (v *ExoscaleClusterCustomValidator) ValidateCreate(_ context.Context, obj *infrastructurev1alpha1.ExoscaleCluster) (admission.Warnings, error) {
 	exoscaleclusterlog.Info("Validation for ExoscaleCluster upon creation", "name", obj.GetName())
 
-	if errs := v.validator.ValidateCreate(obj.Spec, field.NewPath("spec")); len(errs) > 0 {
+	errs := v.validator.ValidateCreate(obj.Spec, field.NewPath("spec"))
+	_, claimed := obj.Annotations[domain.ClusterIDKey]
+	if claimed && obj.Spec.ControlPlaneEndpoint.Host == "" {
+		errs = append(errs, field.Forbidden(field.NewPath("metadata", "annotations").Key(domain.ClusterIDKey), "reserved for moved clusters"))
+	} else if !claimed && obj.Spec.ControlPlaneEndpoint.Host != "" {
+		errs = append(errs, field.Required(field.NewPath("metadata", "annotations").Key(domain.ClusterIDKey), "required for a moved cluster"))
+	}
+	if len(errs) > 0 {
 		return nil, apierrors.NewInvalid(
 			schema.GroupKind{Group: infrastructurev1alpha1.SchemeGroupVersion.Group, Kind: "ExoscaleCluster"},
 			obj.Name, errs,
@@ -65,7 +73,12 @@ func (v *ExoscaleClusterCustomValidator) ValidateCreate(_ context.Context, obj *
 func (v *ExoscaleClusterCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj *infrastructurev1alpha1.ExoscaleCluster) (admission.Warnings, error) {
 	exoscaleclusterlog.Info("Validation for ExoscaleCluster upon update", "name", newObj.GetName())
 
-	if errs := v.validator.ValidateUpdate(oldObj.Spec, newObj.Spec, field.NewPath("spec")); len(errs) > 0 {
+	errs := v.validator.ValidateUpdate(oldObj.Spec, newObj.Spec, field.NewPath("spec"))
+	_, deletingForMove := newObj.Annotations[clusterctlv1.DeleteForMoveAnnotation]
+	if !deletingForMove && oldObj.Annotations[domain.ClusterIDKey] != "" && oldObj.Annotations[domain.ClusterIDKey] != newObj.Annotations[domain.ClusterIDKey] {
+		errs = append(errs, field.Forbidden(field.NewPath("metadata", "annotations").Key(domain.ClusterIDKey), "cluster ID is immutable"))
+	}
+	if len(errs) > 0 {
 		return nil, apierrors.NewInvalid(
 			schema.GroupKind{Group: infrastructurev1alpha1.SchemeGroupVersion.Group, Kind: "ExoscaleCluster"},
 			newObj.Name, errs,

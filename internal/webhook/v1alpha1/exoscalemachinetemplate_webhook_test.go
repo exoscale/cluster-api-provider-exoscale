@@ -27,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	infrastructurev1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
+	"github.com/exoscale/cluster-api-provider-exoscale/internal/domain"
 )
 
 func Test_ExoscaleMachineTemplateCustomValidator_ValidateCreate(t *testing.T) {
@@ -47,6 +48,13 @@ func Test_ExoscaleMachineTemplateCustomValidator_ValidateCreate(t *testing.T) {
 				template.Spec.Template.ObjectMeta.Labels = map[string]string{"invalid key": "value"}
 			},
 			wantErr: "spec.template.metadata.labels",
+		},
+		{
+			name: "reserved ownership annotation",
+			mutate: func(template *infrastructurev1alpha1.ExoscaleMachineTemplate) {
+				template.Spec.Template.ObjectMeta.Annotations = map[string]string{domain.MachineUIDKey: "shared"}
+			},
+			wantErr: domain.MachineUIDKey,
 		},
 	}
 

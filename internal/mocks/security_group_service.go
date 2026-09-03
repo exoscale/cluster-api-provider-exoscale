@@ -96,6 +96,84 @@ func (_c *SecurityGroupService_DeleteSecurityGroup_Call) RunAndReturn(run func(c
 	return _c
 }
 
+// FindSecurityGroup provides a mock function for the type SecurityGroupService
+func (_mock *SecurityGroupService) FindSecurityGroup(ctx context.Context, clusterID uuid.UUID, name string, securityGroupID *uuid.UUID) (domain.SecurityGroup, error) {
+	ret := _mock.Called(ctx, clusterID, name, securityGroupID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FindSecurityGroup")
+	}
+
+	var r0 domain.SecurityGroup
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID, string, *uuid.UUID) (domain.SecurityGroup, error)); ok {
+		return returnFunc(ctx, clusterID, name, securityGroupID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID, string, *uuid.UUID) domain.SecurityGroup); ok {
+		r0 = returnFunc(ctx, clusterID, name, securityGroupID)
+	} else {
+		r0 = ret.Get(0).(domain.SecurityGroup)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, uuid.UUID, string, *uuid.UUID) error); ok {
+		r1 = returnFunc(ctx, clusterID, name, securityGroupID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// SecurityGroupService_FindSecurityGroup_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindSecurityGroup'
+type SecurityGroupService_FindSecurityGroup_Call struct {
+	*mock.Call
+}
+
+// FindSecurityGroup is a helper method to define mock.On call
+//   - ctx context.Context
+//   - clusterID uuid.UUID
+//   - name string
+//   - securityGroupID *uuid.UUID
+func (_e *SecurityGroupService_Expecter) FindSecurityGroup(ctx any, clusterID any, name any, securityGroupID any) *SecurityGroupService_FindSecurityGroup_Call {
+	return &SecurityGroupService_FindSecurityGroup_Call{Call: _e.mock.On("FindSecurityGroup", ctx, clusterID, name, securityGroupID)}
+}
+
+func (_c *SecurityGroupService_FindSecurityGroup_Call) Run(run func(ctx context.Context, clusterID uuid.UUID, name string, securityGroupID *uuid.UUID)) *SecurityGroupService_FindSecurityGroup_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 uuid.UUID
+		if args[1] != nil {
+			arg1 = args[1].(uuid.UUID)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 *uuid.UUID
+		if args[3] != nil {
+			arg3 = args[3].(*uuid.UUID)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *SecurityGroupService_FindSecurityGroup_Call) Return(securityGroup domain.SecurityGroup, err error) *SecurityGroupService_FindSecurityGroup_Call {
+	_c.Call.Return(securityGroup, err)
+	return _c
+}
+
+func (_c *SecurityGroupService_FindSecurityGroup_Call) RunAndReturn(run func(ctx context.Context, clusterID uuid.UUID, name string, securityGroupID *uuid.UUID) (domain.SecurityGroup, error)) *SecurityGroupService_FindSecurityGroup_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // PurgeSecurityGroup provides a mock function for the type SecurityGroupService
 func (_mock *SecurityGroupService) PurgeSecurityGroup(ctx context.Context, sgID uuid.UUID) error {
 	ret := _mock.Called(ctx, sgID)

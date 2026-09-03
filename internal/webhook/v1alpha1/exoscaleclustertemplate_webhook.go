@@ -56,6 +56,12 @@ func (v *ExoscaleClusterTemplateCustomValidator) ValidateCreate(_ context.Contex
 
 	var allErrs field.ErrorList
 	allErrs = append(allErrs, obj.Spec.Template.ObjectMeta.Validate(field.NewPath("spec", "template", "metadata"))...)
+	if _, claimed := obj.Spec.Template.ObjectMeta.Annotations[domain.ClusterIDKey]; claimed {
+		allErrs = append(allErrs, field.Forbidden(field.NewPath("spec", "template", "metadata", "annotations").Key(domain.ClusterIDKey), "reserved for ExoscaleCluster ownership"))
+	}
+	if obj.Spec.Template.Spec.ControlPlaneEndpoint.Host != "" {
+		allErrs = append(allErrs, field.Forbidden(field.NewPath("spec", "template", "spec", "controlPlaneEndpoint", "host"), "must be empty in templates"))
+	}
 	allErrs = append(allErrs, v.validator.ValidateCreate(obj.Spec.Template.Spec, field.NewPath("spec", "template", "spec"))...)
 
 	if len(allErrs) > 0 {

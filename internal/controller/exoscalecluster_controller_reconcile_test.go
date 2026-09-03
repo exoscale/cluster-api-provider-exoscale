@@ -10,6 +10,7 @@ import (
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/mocks"
 	egoscale "github.com/exoscale/egoscale/v3"
 	"github.com/go-logr/logr"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	v1 "k8s.io/api/core/v1"
@@ -110,6 +111,7 @@ func Test_ExoscaleClusterReconciler_Reconcile_nominal(t *testing.T) {
 
 				assert.Contains(t, updated.Finalizers, infrav1alpha1.ExoscaleClusterFinalizer)
 				assert.NotNil(t, updated.Status.ID)
+				assert.Equal(t, *updated.Status.ID, updated.Annotations[domain.ClusterIDKey])
 
 				ready := apimeta.FindStatusCondition(updated.Status.Conditions, infrav1alpha1.ReadyCondition)
 				if assert.NotNil(t, ready) {
@@ -155,6 +157,7 @@ func Test_ExoscaleClusterReconciler_Reconcile_nominal(t *testing.T) {
 				assert.NoError(t, c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: ns}, updated))
 
 				assert.NotNil(t, updated.Status.ID)
+				assert.Equal(t, *updated.Status.ID, updated.Annotations[domain.ClusterIDKey])
 			},
 			output: reconcile.Result{},
 		},
@@ -358,6 +361,78 @@ func Test_ExoscaleClusterReconciler_Reconcile_nominal(t *testing.T) {
 
 			if ut.check != nil {
 				ut.check(t, r.Client)
+			}
+		})
+	}
+}
+
+func TestEnsureClusterID(t *testing.T) {
+	t.Parallel()
+
+	id := uuid.NewString()
+	objectUID := types.UID(uuid.NewString())
+	tests := []struct {
+		name       string
+		cluster    infrav1alpha1.ExoscaleCluster
+		wantID     string
+		wantChange bool
+		wantErr    string
+	}{
+		{name: "new cluster", cluster: infrav1alpha1.ExoscaleCluster{ObjectMeta: metav1.ObjectMeta{UID: objectUID}}, wantID: string(objectUID), wantChange: true},
+		{name: "backfills legacy status", cluster: infrav1alpha1.ExoscaleCluster{Status: infrav1alpha1.ExoscaleClusterStatus{ID: &id}}, wantID: id, wantChange: true},
+		{
+			name: "restores moved status",
+			cluster: infrav1alpha1.ExoscaleCluster{
+				ObjectMeta: metav1.ObjectMeta{UID: objectUID, Annotations: map[string]string{domain.ClusterIDKey: id}},
+				Spec:       infrav1alpha1.ExoscaleClusterSpec{ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Host: "192.0.2.1"}},
+			},
+			wantID: id, wantChange: true,
+		},
+		{
+			name:    "rejects a claimed ID on a new cluster",
+			cluster: infrav1alpha1.ExoscaleCluster{ObjectMeta: metav1.ObjectMeta{UID: objectUID, Annotations: map[string]string{domain.ClusterIDKey: id}}},
+			wantErr: "is not valid for a new ExoscaleCluster",
+		},
+		{
+			name: "keeps matching values",
+			cluster: infrav1alpha1.ExoscaleCluster{
+				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{domain.ClusterIDKey: id}},
+				Status:     infrav1alpha1.ExoscaleClusterStatus{ID: &id},
+			},
+			wantID: id,
+		},
+		{
+			name: "rejects conflicting values",
+			cluster: infrav1alpha1.ExoscaleCluster{
+				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{domain.ClusterIDKey: id}},
+				Status:     infrav1alpha1.ExoscaleClusterStatus{ID: new(uuid.NewString())},
+			},
+			wantErr: "does not match status",
+		},
+		{name: "rejects invalid value", cluster: infrav1alpha1.ExoscaleCluster{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{domain.ClusterIDKey: "bad"}}}, wantErr: "invalid cluster ID"},
+		{
+			name:    "fails closed for provisioned cluster without identity",
+			cluster: infrav1alpha1.ExoscaleCluster{Spec: infrav1alpha1.ExoscaleClusterSpec{ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Host: "192.0.2.1"}}},
+			wantErr: "cluster ID is missing for provisioned endpoint",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			changed, err := ensureClusterID(&tc.cluster)
+
+			if tc.wantErr != "" {
+				assert.ErrorContains(t, err, tc.wantErr)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tc.wantChange, changed)
+			assert.NotNil(t, tc.cluster.Status.ID)
+			assert.Equal(t, *tc.cluster.Status.ID, tc.cluster.Annotations[domain.ClusterIDKey])
+			if tc.wantID != "" {
+				assert.Equal(t, tc.wantID, *tc.cluster.Status.ID)
+			} else {
+				assert.NoError(t, uuid.Validate(*tc.cluster.Status.ID))
 			}
 		})
 	}

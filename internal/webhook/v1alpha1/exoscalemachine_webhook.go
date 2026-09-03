@@ -22,10 +22,12 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	clusterctlv1 "sigs.k8s.io/cluster-api/cmd/clusterctl/api/v1alpha3"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	infrastructurev1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
+	"github.com/exoscale/cluster-api-provider-exoscale/internal/domain"
 )
 
 // SetupExoscaleMachineWebhookWithManager registers the webhook for ExoscaleMachine in the manager.
@@ -43,8 +45,22 @@ type ExoscaleMachineCustomValidator struct{}
 var _ admission.Validator[*infrastructurev1alpha1.ExoscaleMachine] = &ExoscaleMachineCustomValidator{}
 
 // ValidateCreate implements admission.Validator.
-func (*ExoscaleMachineCustomValidator) ValidateCreate(_ context.Context, _ *infrastructurev1alpha1.ExoscaleMachine) (admission.Warnings, error) {
-	return nil, nil
+func (*ExoscaleMachineCustomValidator) ValidateCreate(_ context.Context, obj *infrastructurev1alpha1.ExoscaleMachine) (admission.Warnings, error) {
+	_, claimed := obj.Annotations[domain.MachineUIDKey]
+	if claimed == (obj.Spec.ProviderID != nil) {
+		return nil, nil
+	}
+	var err *field.Error
+	if obj.Spec.ProviderID != nil {
+		err = field.Required(field.NewPath("metadata", "annotations").Key(domain.MachineUIDKey), "required for a moved machine")
+	} else {
+		err = field.Required(field.NewPath("spec", "providerID"), "required when the machine UID annotation is set")
+	}
+	return nil, apierrors.NewInvalid(
+		infrastructurev1alpha1.GroupVersion.WithKind("ExoscaleMachine").GroupKind(),
+		obj.Name,
+		field.ErrorList{err},
+	)
 }
 
 // ValidateUpdate implements admission.Validator.
@@ -56,13 +72,19 @@ func (*ExoscaleMachineCustomValidator) ValidateUpdate(_ context.Context, oldObj,
 	oldSpec.ProviderID = nil
 	newSpec.ProviderID = nil
 
+	var allErrs field.ErrorList
 	if !reflect.DeepEqual(oldSpec, newSpec) {
+		allErrs = append(allErrs, field.Forbidden(field.NewPath("spec"), "instance creation fields are immutable"))
+	}
+	_, deletingForMove := newObj.Annotations[clusterctlv1.DeleteForMoveAnnotation]
+	if !deletingForMove && oldObj.Annotations[domain.MachineUIDKey] != "" && oldObj.Annotations[domain.MachineUIDKey] != newObj.Annotations[domain.MachineUIDKey] {
+		allErrs = append(allErrs, field.Forbidden(field.NewPath("metadata", "annotations").Key(domain.MachineUIDKey), "machine UID is immutable"))
+	}
+	if len(allErrs) > 0 {
 		return nil, apierrors.NewInvalid(
 			infrastructurev1alpha1.GroupVersion.WithKind("ExoscaleMachine").GroupKind(),
 			newObj.Name,
-			field.ErrorList{
-				field.Forbidden(field.NewPath("spec"), "instance creation fields are immutable"),
-			},
+			allErrs,
 		)
 	}
 

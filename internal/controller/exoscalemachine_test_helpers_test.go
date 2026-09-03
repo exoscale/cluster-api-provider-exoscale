@@ -47,6 +47,7 @@ func newMachinePrerequisiteReconciler(t *testing.T, clusterInfrastructureReady, 
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      machineName,
 			Namespace: ns,
+			UID:       types.UID("machine-uid"),
 			Labels:    map[string]string{clusterv1.ClusterNameLabel: clusterName},
 		},
 	}

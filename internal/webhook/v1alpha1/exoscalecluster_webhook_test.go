@@ -23,8 +23,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	clusterctlv1 "sigs.k8s.io/cluster-api/cmd/clusterctl/api/v1alpha3"
 
 	infrastructurev1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
+	"github.com/exoscale/cluster-api-provider-exoscale/internal/domain"
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/mocks"
 )
 
@@ -77,6 +79,54 @@ func Test_ExoscaleClusterCustomValidator_ValidateCreate(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_ExoscaleClusterCustomValidator_ValidatesOwnershipAnnotation(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		name    string
+		host    string
+		claimed bool
+		wantErr bool
+	}{
+		{name: "new cluster"},
+		{name: "claimed new cluster", claimed: true, wantErr: true},
+		{name: "endpoint without identity", host: "192.0.2.1", wantErr: true},
+		{name: "moved cluster", host: "192.0.2.1", claimed: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			obj := &infrastructurev1alpha1.ExoscaleCluster{
+				ObjectMeta: v1.ObjectMeta{Name: "my-cluster"},
+				Spec:       infrastructurev1alpha1.ExoscaleClusterSpec{ControlPlaneEndpoint: infrastructurev1alpha1.APIEndpoint{Host: tt.host}},
+			}
+			if tt.claimed {
+				obj.Annotations = map[string]string{domain.ClusterIDKey: "source-id"}
+			}
+			validatorMock := mocks.NewClusterValidator(t)
+			validatorMock.EXPECT().ValidateCreate(obj.Spec, field.NewPath("spec")).Return(nil)
+
+			_, err := (&ExoscaleClusterCustomValidator{validator: validatorMock}).ValidateCreate(context.Background(), obj)
+			if tt.wantErr {
+				assert.ErrorContains(t, err, domain.ClusterIDKey)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func Test_ExoscaleClusterCustomValidator_AllowsDeleteForMove(t *testing.T) {
+	t.Parallel()
+
+	oldObj := &infrastructurev1alpha1.ExoscaleCluster{ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{domain.ClusterIDKey: "source-id"}}}
+	newObj := oldObj.DeepCopy()
+	newObj.Annotations = map[string]string{clusterctlv1.DeleteForMoveAnnotation: ""}
+	validatorMock := mocks.NewClusterValidator(t)
+	validatorMock.EXPECT().ValidateUpdate(oldObj.Spec, newObj.Spec, field.NewPath("spec")).Return(nil)
+
+	_, err := (&ExoscaleClusterCustomValidator{validator: validatorMock}).ValidateUpdate(context.Background(), oldObj, newObj)
+	assert.NoError(t, err)
 }
 
 func Test_ExoscaleClusterCustomValidator_ValidateUpdate(t *testing.T) {

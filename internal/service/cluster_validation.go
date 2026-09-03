@@ -58,18 +58,7 @@ func NewExoscaleClusterValidator() domain.ClusterValidator {
 
 // ValidateCreate validates an ExoscaleClusterSpec on creation.
 func (v *exoscaleClusterValidator) ValidateCreate(spec infrav1alpha1.ExoscaleClusterSpec, fldPath *field.Path) field.ErrorList {
-	var allErrs field.ErrorList
-
-	if spec.ControlPlaneEndpoint.Host != "" {
-		allErrs = append(allErrs, field.Forbidden(
-			fldPath.Child("controlPlaneEndpoint", "host"),
-			"must be empty; it is set automatically by the controller once the control plane is provisioned",
-		))
-	}
-
-	allErrs = append(allErrs, v.validate(spec, fldPath)...)
-
-	return allErrs
+	return v.validate(spec, fldPath)
 }
 
 // ValidateUpdate validates an ExoscaleClusterSpec on update.

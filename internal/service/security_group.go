@@ -20,40 +20,59 @@ func NewSecurityGroupService(client domain.Cloud, logger logr.Logger) *securityG
 }
 
 func (s securityGroupService) UpsertSecurityGroup(ctx context.Context, clusterID uuid.UUID, scID *uuid.UUID, name string) (domain.SecurityGroup, error) {
-	if scID != nil {
-		sc, err := s.cloud.GetSecurityGroup(ctx, *scID)
-		if err != nil && !errors.Is(err, domain.ErrSecurityGroupNotFound) {
-			return domain.SecurityGroup{}, fmt.Errorf("error while fetching security group: %w", err)
-		} else if errors.Is(err, domain.ErrSecurityGroupNotFound) {
-			s.logger.Info("Security group not found, will create a new one")
-
-			id, err := s.cloud.CreateSecurityGroup(ctx, name)
-			if err != nil {
-				return domain.SecurityGroup{}, fmt.Errorf("error while creating security group: %w", err)
-			}
-			sc, err = s.cloud.GetSecurityGroup(ctx, id)
-			if err != nil {
-				return domain.SecurityGroup{}, fmt.Errorf("error while fetching new security group, %w", err)
-			}
-
-			return sc, nil
-		}
-
-		return sc, nil
-	} else {
-		s.logger.Info("Create security group")
-
-		id, err := s.cloud.CreateSecurityGroup(ctx, name)
-		if err != nil {
-			return domain.SecurityGroup{}, fmt.Errorf("error while creating security group: %w", err)
-		}
-		sc, err := s.cloud.GetSecurityGroup(ctx, id)
-		if err != nil {
-			return domain.SecurityGroup{}, fmt.Errorf("error while fetching new security group, %w", err)
-		}
-
-		return sc, nil
+	existing, err := s.FindSecurityGroup(ctx, clusterID, name, scID)
+	if err != nil && !errors.Is(err, domain.ErrSecurityGroupNotFound) {
+		return domain.SecurityGroup{}, fmt.Errorf("error while searching for existing security group: %w", err)
+	} else if err == nil {
+		s.logger.Info("Found an existing security group by name, reusing it", "securityGroupID", existing.ID.String())
+		return existing, nil
 	}
+
+	s.logger.Info("Create security group")
+	id, err := s.cloud.CreateSecurityGroup(ctx, name)
+	if err != nil {
+		return domain.SecurityGroup{}, fmt.Errorf("error while creating security group: %w", err)
+	}
+	sc, err := s.cloud.GetSecurityGroup(ctx, id)
+	if err != nil {
+		return domain.SecurityGroup{}, fmt.Errorf("error while fetching new security group, %w", err)
+	}
+	return sc, nil
+}
+
+func (s securityGroupService) FindSecurityGroup(ctx context.Context, clusterID uuid.UUID, name string, securityGroupID *uuid.UUID) (domain.SecurityGroup, error) {
+	if securityGroupID != nil {
+		securityGroup, err := s.cloud.GetSecurityGroup(ctx, *securityGroupID)
+		if err == nil {
+			if securityGroup.Name != name {
+				return domain.SecurityGroup{}, fmt.Errorf("security group %s is not owned by cluster %s: name is %q, expected %q", securityGroup.ID, clusterID, securityGroup.Name, name)
+			}
+			return securityGroup, nil
+		}
+		if !errors.Is(err, domain.ErrSecurityGroupNotFound) {
+			return domain.SecurityGroup{}, err
+		}
+		s.logger.Info("Status security group not found, recovering by name")
+	}
+
+	securityGroups, err := s.cloud.ListSecurityGroups(ctx)
+	if err != nil {
+		return domain.SecurityGroup{}, err
+	}
+	var match *domain.SecurityGroup
+	for i := range securityGroups {
+		if securityGroups[i].Name != name {
+			continue
+		}
+		if match != nil {
+			return domain.SecurityGroup{}, fmt.Errorf("multiple security groups named %q", name)
+		}
+		match = &securityGroups[i]
+	}
+	if match == nil {
+		return domain.SecurityGroup{}, domain.ErrSecurityGroupNotFound
+	}
+	return *match, nil
 }
 
 func (s *securityGroupService) DeleteSecurityGroup(ctx context.Context, id uuid.UUID) error {
@@ -116,6 +135,9 @@ func (s *securityGroupService) PurgeSecurityGroup(ctx context.Context, sgID uuid
 	s.logger.Info("Purge security group from rule", "securityGroupID", sgID.String())
 	rules, err := s.cloud.ListSecurityGroupRules(ctx, sgID)
 	if err != nil {
+		if errors.Is(err, domain.ErrSecurityGroupNotFound) {
+			return nil
+		}
 		return fmt.Errorf("unable to list rules from security group: %q: %w", sgID.String(), err)
 	}
 

@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	infrastructurev1alpha1 "github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1"
+	"github.com/exoscale/cluster-api-provider-exoscale/internal/domain"
 )
 
 // SetupExoscaleMachineTemplateWebhookWithManager registers the webhook for ExoscaleMachineTemplate in the manager.
@@ -47,6 +48,9 @@ var _ admission.Validator[*infrastructurev1alpha1.ExoscaleMachineTemplate] = &Ex
 // ValidateCreate implements admission.Validator.
 func (*ExoscaleMachineTemplateCustomValidator) ValidateCreate(_ context.Context, obj *infrastructurev1alpha1.ExoscaleMachineTemplate) (admission.Warnings, error) {
 	allErrs := obj.Spec.Template.ObjectMeta.Validate(field.NewPath("spec", "template", "metadata"))
+	if _, claimed := obj.Spec.Template.ObjectMeta.Annotations[domain.MachineUIDKey]; claimed {
+		allErrs = append(allErrs, field.Forbidden(field.NewPath("spec", "template", "metadata", "annotations").Key(domain.MachineUIDKey), "reserved for ExoscaleMachine ownership"))
+	}
 	if len(allErrs) == 0 {
 		return nil, nil
 	}
@@ -66,6 +70,9 @@ func (*ExoscaleMachineTemplateCustomValidator) ValidateUpdate(ctx context.Contex
 	}
 
 	allErrs := newObj.Spec.Template.ObjectMeta.Validate(field.NewPath("spec", "template", "metadata"))
+	if _, claimed := newObj.Spec.Template.ObjectMeta.Annotations[domain.MachineUIDKey]; claimed {
+		allErrs = append(allErrs, field.Forbidden(field.NewPath("spec", "template", "metadata", "annotations").Key(domain.MachineUIDKey), "reserved for ExoscaleMachine ownership"))
+	}
 	// CAPI dry-runs updates to detect spec changes before rotating immutable templates:
 	// https://github.com/kubernetes-sigs/cluster-api/blob/v1.13.2/internal/controllers/topology/cluster/structuredmerge/dryrun.go#L52-L89
 	// https://github.com/kubernetes-sigs/cluster-api/blob/v1.13.2/internal/controllers/topology/cluster/reconcile_state.go#L1296-L1352

@@ -87,6 +87,10 @@ func Test_elasticIPService_UpsertElasticIP(t *testing.T) {
 						Return(domain.ElasticIP{}, domain.ErrElasticIPNotFound).
 						Once(),
 					m.EXPECT().
+						ListElasticIPs(ctx).
+						Return([]domain.ElasticIP{}, nil).
+						Once(),
+					m.EXPECT().
 						CreateElasticIP(ctx, port, description).
 						Return(eipID, nil).
 						Once(),
@@ -109,7 +113,7 @@ func Test_elasticIPService_UpsertElasticIP(t *testing.T) {
 			},
 		},
 		{
-			name:  "nominal - eip found - need update",
+			name:  "nominal - eip found - health check needs update",
 			eipID: &eipID,
 			port:  port,
 			cloud: func(m *mocks.Cloud) {
@@ -117,7 +121,7 @@ func Test_elasticIPService_UpsertElasticIP(t *testing.T) {
 					GetElasticIP(ctx, eipID).Return(
 					domain.ElasticIP{
 						ID:              eipID,
-						Description:     "diff in description",
+						Description:     description,
 						HealthCheckPort: 0,
 						IP:              "1.2.3.4",
 					}, nil)
@@ -177,7 +181,7 @@ func Test_elasticIPService_UpsertElasticIP(t *testing.T) {
 					GetElasticIP(ctx, eipID).Return(
 					domain.ElasticIP{
 						ID:              eipID,
-						Description:     "diff in description",
+						Description:     description,
 						HealthCheckPort: 0,
 						IP:              "1.2.3.4",
 					}, nil)
@@ -327,6 +331,16 @@ func Test_elasticIPService_findElasticIPByClusterID(t *testing.T) {
 			err: domain.ErrElasticIPNotFound,
 		},
 		{
+			name: "substring match is not ownership",
+			cloud: func(m *mocks.Cloud) {
+				m.EXPECT().ListElasticIPs(ctx).Return([]domain.ElasticIP{{
+					ID:          uuid.New(),
+					Description: "prefix-" + matchingEIP.Description,
+				}}, nil)
+			},
+			err: domain.ErrElasticIPNotFound,
+		},
+		{
 			name: "empty list returns ErrElasticIPNotFound",
 			cloud: func(m *mocks.Cloud) {
 				m.EXPECT().ListElasticIPs(ctx).Return([]domain.ElasticIP{}, nil)
@@ -351,10 +365,33 @@ func Test_elasticIPService_findElasticIPByClusterID(t *testing.T) {
 
 			svc := elasticIPService{cloud: cloud, logger: logr.Discard()}
 
-			output, err := svc.findElasticIPByClusterID(ctx, clusterID)
+			output, err := svc.FindElasticIP(ctx, clusterID, nil)
 
 			assert.ErrorIs(t, err, ut.err)
 			assert.Equal(t, ut.output, output)
 		})
 	}
+}
+
+func Test_elasticIPService_rejectsForeignAndAmbiguousOwnership(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	clusterID := uuid.New()
+	id := uuid.New()
+	svcCloud := mocks.NewCloud(t)
+	svcCloud.EXPECT().GetElasticIP(ctx, id).Return(domain.ElasticIP{ID: id, Description: "foreign"}, nil)
+
+	_, err := (&elasticIPService{cloud: svcCloud, logger: logr.Discard()}).UpsertElasticIP(ctx, clusterID, &id, 6443)
+	assert.ErrorContains(t, err, "is not owned by cluster")
+
+	description := fmt.Sprintf("capi - clusterID - %s", clusterID)
+	listCloud := mocks.NewCloud(t)
+	listCloud.EXPECT().ListElasticIPs(ctx).Return([]domain.ElasticIP{
+		{ID: uuid.New(), Description: description},
+		{ID: uuid.New(), Description: description},
+	}, nil)
+
+	_, err = (&elasticIPService{cloud: listCloud, logger: logr.Discard()}).FindElasticIP(ctx, clusterID, nil)
+	assert.ErrorContains(t, err, "multiple elastic IPs")
 }

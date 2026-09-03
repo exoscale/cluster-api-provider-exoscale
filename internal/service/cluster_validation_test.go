@@ -26,7 +26,7 @@ func Test_exoscaleClusterValidator_ValidateCreate(t *testing.T) {
 			},
 		},
 		{
-			name: "host must be empty",
+			name: "populated host from a moved cluster is valid",
 			input: infrav1alpha1.ExoscaleClusterSpec{
 				Zone: egoscale.ZoneNameCHGva2,
 				ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{
@@ -34,8 +34,6 @@ func Test_exoscaleClusterValidator_ValidateCreate(t *testing.T) {
 					Host: "10.0.0.1",
 				},
 			},
-
-			err: "must be empty",
 		},
 		{
 			name: "unknown zone",

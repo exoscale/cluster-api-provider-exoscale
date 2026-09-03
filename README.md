@@ -168,6 +168,24 @@ $> clusterctl generate cluster my-cluster \
      | kubectl apply -f -
 ```
 
+### Move to another management cluster
+
+Install the same or a newer version of every provider in the target management
+cluster first. The referenced Exoscale credential Secret is shared rather than
+owned by a Cluster, so either create it in the target cluster or explicitly
+include it in the move:
+
+```bash
+$> kubectl label secret exoscale clusterctl.cluster.x-k8s.io/move=""
+$> clusterctl move --to-kubeconfig=/path/to/target.kubeconfig
+```
+
+The controller persists cloud ownership in object annotations before
+provisioning. After upgrading an existing management cluster, wait for the
+ExoscaleCluster and ExoscaleMachine objects to contain the
+`cluster-api-provider-exoscale/cluster-id` and
+`cluster-api-provider-exoscale/machine-uid` annotations before moving them.
+
 ## End-to-End testing
 ```bash
 $> export EXOSCALE_API_KEY=<api-key>       # Optional if exocli is not configured

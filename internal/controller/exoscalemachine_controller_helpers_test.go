@@ -13,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -61,6 +62,80 @@ func TestExoscaleClusterID(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	assert.Equal(t, statusID, id)
+
+	id, err = exoscaleClusterID(&infrav1alpha1.ExoscaleCluster{ObjectMeta: metav1.ObjectMeta{
+		Annotations: map[string]string{domain.ClusterIDKey: statusID.String()},
+	}})
+	assert.NoError(t, err)
+	assert.Equal(t, statusID, id)
+
+	_, err = exoscaleClusterID(&infrav1alpha1.ExoscaleCluster{
+		ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{domain.ClusterIDKey: statusID.String()}},
+		Status:     infrav1alpha1.ExoscaleClusterStatus{ID: new(uuid.NewString())},
+	})
+	assert.ErrorContains(t, err, "does not match status")
+}
+
+func TestEnsureMachineUID(t *testing.T) {
+	t.Parallel()
+
+	sourceUID := types.UID("source-machine-uid")
+	targetUID := types.UID("target-machine-uid")
+	providerID := "exoscale://" + uuid.NewString()
+	tests := []struct {
+		name       string
+		machine    *clusterv1.Machine
+		exoMachine infrav1alpha1.ExoscaleMachine
+		want       domain.MachineUID
+		wantChange bool
+		wantErr    string
+	}{
+		{name: "persists source UID", machine: &clusterv1.Machine{ObjectMeta: metav1.ObjectMeta{UID: sourceUID}}, want: domain.MachineUID(sourceUID), wantChange: true},
+		{
+			name:    "keeps source UID after move",
+			machine: &clusterv1.Machine{ObjectMeta: metav1.ObjectMeta{UID: targetUID}},
+			exoMachine: infrav1alpha1.ExoscaleMachine{
+				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{domain.MachineUIDKey: string(sourceUID)}},
+				Spec:       infrav1alpha1.ExoscaleMachineSpec{ProviderID: &providerID},
+			},
+			want: domain.MachineUID(sourceUID),
+		},
+		{
+			name:       "rejects a claimed UID on a new machine",
+			machine:    &clusterv1.Machine{ObjectMeta: metav1.ObjectMeta{UID: targetUID}},
+			exoMachine: infrav1alpha1.ExoscaleMachine{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{domain.MachineUIDKey: string(sourceUID)}}},
+			wantErr:    "is not valid for a new ExoscaleMachine",
+		},
+		{
+			name:       "backfills a legacy provisioned machine",
+			machine:    &clusterv1.Machine{ObjectMeta: metav1.ObjectMeta{UID: sourceUID}},
+			exoMachine: infrav1alpha1.ExoscaleMachine{Spec: infrav1alpha1.ExoscaleMachineSpec{ProviderID: &providerID}, Status: infrav1alpha1.ExoscaleMachineStatus{InstanceID: uuid.NewString()}},
+			want:       domain.MachineUID(sourceUID),
+			wantChange: true,
+		},
+		{
+			name:       "fails closed when moved identity is missing",
+			machine:    &clusterv1.Machine{ObjectMeta: metav1.ObjectMeta{UID: targetUID}},
+			exoMachine: infrav1alpha1.ExoscaleMachine{Spec: infrav1alpha1.ExoscaleMachineSpec{ProviderID: &providerID}},
+			wantErr:    "machine UID annotation is missing",
+		},
+		{name: "requires Machine UID", machine: &clusterv1.Machine{}, wantErr: "machine UID is empty"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, changed, err := ensureMachineUID(&tc.exoMachine, tc.machine)
+
+			if tc.wantErr != "" {
+				assert.ErrorContains(t, err, tc.wantErr)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tc.want, got)
+			assert.Equal(t, tc.wantChange, changed)
+			assert.Equal(t, tc.want.String(), tc.exoMachine.Annotations[domain.MachineUIDKey])
+		})
+	}
 }
 
 func TestExoscaleMachineReconciler_instanceService(t *testing.T) {

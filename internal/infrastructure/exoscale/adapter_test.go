@@ -577,6 +577,48 @@ func Test_adapter_GetSecurityGroup(t *testing.T) {
 	}
 }
 
+func Test_adapter_ListSecurityGroups(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	id := uuid.New()
+	tests := []struct {
+		name      string
+		response  *egoscale.ListSecurityGroupsResponse
+		clientErr error
+		want      []domain.SecurityGroup
+		wantErr   string
+	}{
+		{
+			name:     "maps security groups",
+			response: &egoscale.ListSecurityGroupsResponse{SecurityGroups: []egoscale.SecurityGroup{{ID: egoscale.UUID(id.String()), Name: "managed"}}},
+			want:     []domain.SecurityGroup{{ID: id, Name: "managed"}},
+		},
+		{name: "returns client error", clientErr: assert.AnError, wantErr: assert.AnError.Error()},
+		{
+			name:     "rejects invalid ID",
+			response: &egoscale.ListSecurityGroupsResponse{SecurityGroups: []egoscale.SecurityGroup{{ID: "bad-id"}}},
+			wantErr:  "unable to parse security group ID",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			exoClient := mocks.NewExoscaleClient(t)
+			exoClient.EXPECT().ListSecurityGroups(ctx).Return(tc.response, tc.clientErr)
+
+			got, err := (&adapter{client: exoClient}).ListSecurityGroups(ctx)
+
+			if tc.wantErr != "" {
+				assert.ErrorContains(t, err, tc.wantErr)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
 func Test_adapter_DeleteSecurityGroup(t *testing.T) {
 	t.Parallel()
 

@@ -26,127 +26,85 @@ func Test_securityGroupService_UpsertSecurityGroup(t *testing.T) {
 	}
 
 	tests := []struct {
-		name   string
-		scID   *uuid.UUID
-		cloud  func(m *mocks.Cloud)
-		output domain.SecurityGroup
-		err    error
+		name       string
+		scID       *uuid.UUID
+		cloud      func(m *mocks.Cloud)
+		output     domain.SecurityGroup
+		wantErr    error
+		wantErrMsg string
 	}{
 		{
-			name: "nominal - no scID",
-			cloud: func(m *mocks.Cloud) {
-				m.EXPECT().
-					CreateSecurityGroup(ctx, name).
-					Return(sgID, nil)
-				m.EXPECT().
-					GetSecurityGroup(ctx, sgID).
-					Return(sg, nil)
-			},
-			output: sg,
-		},
-		{
-			name: "nominal - scID not found",
-			scID: &sgID,
+			name: "creates when no group exists",
 			cloud: func(m *mocks.Cloud) {
 				mock.InOrder(
-					m.EXPECT().
-						GetSecurityGroup(ctx, sgID).
-						Return(domain.SecurityGroup{}, domain.ErrSecurityGroupNotFound).
-						Once(),
-					m.EXPECT().
-						CreateSecurityGroup(ctx, name).
-						Return(sgID, nil).
-						Once(),
-					m.EXPECT().
-						GetSecurityGroup(ctx, sgID).
-						Return(sg, nil).
-						Once(),
+					m.EXPECT().ListSecurityGroups(ctx).Return([]domain.SecurityGroup{}, nil).Once(),
+					m.EXPECT().CreateSecurityGroup(ctx, name).Return(sgID, nil).Once(),
+					m.EXPECT().GetSecurityGroup(ctx, sgID).Return(sg, nil).Once(),
 				)
 			},
 			output: sg,
 		},
 		{
-			name: "nominal - scID found",
-			scID: &sgID,
+			name: "recovers by exact name without status",
 			cloud: func(m *mocks.Cloud) {
-				m.EXPECT().
-					GetSecurityGroup(ctx, sgID).
-					Return(sg, nil)
+				m.EXPECT().ListSecurityGroups(ctx).Return([]domain.SecurityGroup{sg}, nil)
 			},
 			output: sg,
 		},
 		{
-			name: "get security group returned an error",
-			scID: &sgID,
-			cloud: func(m *mocks.Cloud) {
-				m.EXPECT().
-					GetSecurityGroup(ctx, sgID).
-					Return(domain.SecurityGroup{}, assert.AnError)
-			},
-			err: assert.AnError,
-		},
-		{
-			name: "create security group returned an error - no scID",
-			cloud: func(m *mocks.Cloud) {
-				m.EXPECT().
-					CreateSecurityGroup(ctx, name).
-					Return(uuid.Nil, assert.AnError)
-			},
-			err: assert.AnError,
-		},
-		{
-			name: "create security group returned an error - scID not found",
+			name: "recovers stale status by exact name",
 			scID: &sgID,
 			cloud: func(m *mocks.Cloud) {
 				mock.InOrder(
-					m.EXPECT().
-						GetSecurityGroup(ctx, sgID).
-						Return(domain.SecurityGroup{}, domain.ErrSecurityGroupNotFound).
-						Once(),
-					m.EXPECT().
-						CreateSecurityGroup(ctx, name).
-						Return(uuid.Nil, assert.AnError).
-						Once(),
+					m.EXPECT().GetSecurityGroup(ctx, sgID).Return(domain.SecurityGroup{}, domain.ErrSecurityGroupNotFound).Once(),
+					m.EXPECT().ListSecurityGroups(ctx).Return([]domain.SecurityGroup{sg}, nil).Once(),
 				)
 			},
-			err: assert.AnError,
+			output: sg,
 		},
 		{
-			name: "get new security group returned an error - no scID",
-			cloud: func(m *mocks.Cloud) {
-				mock.InOrder(
-					m.EXPECT().
-						CreateSecurityGroup(ctx, name).
-						Return(sgID, nil).
-						Once(),
-					m.EXPECT().
-						GetSecurityGroup(ctx, sgID).
-						Return(domain.SecurityGroup{}, assert.AnError).
-						Once(),
-				)
-			},
-			err: assert.AnError,
-		},
-		{
-			name: "get new security group returned an error - scID not found",
+			name: "uses matching status group",
 			scID: &sgID,
 			cloud: func(m *mocks.Cloud) {
+				m.EXPECT().GetSecurityGroup(ctx, sgID).Return(sg, nil)
+			},
+			output: sg,
+		},
+		{
+			name: "rejects a foreign status group",
+			scID: &sgID,
+			cloud: func(m *mocks.Cloud) {
+				m.EXPECT().GetSecurityGroup(ctx, sgID).Return(domain.SecurityGroup{ID: sgID, Name: "foreign"}, nil)
+			},
+			wantErrMsg: "is not owned by cluster",
+		},
+		{
+			name: "returns lookup error",
+			cloud: func(m *mocks.Cloud) {
+				m.EXPECT().ListSecurityGroups(ctx).Return(nil, assert.AnError)
+			},
+			wantErr: assert.AnError,
+		},
+		{
+			name: "returns create error",
+			cloud: func(m *mocks.Cloud) {
 				mock.InOrder(
-					m.EXPECT().
-						GetSecurityGroup(ctx, sgID).
-						Return(domain.SecurityGroup{}, domain.ErrSecurityGroupNotFound).
-						Once(),
-					m.EXPECT().
-						CreateSecurityGroup(ctx, name).
-						Return(sgID, nil).
-						Once(),
-					m.EXPECT().
-						GetSecurityGroup(ctx, sgID).
-						Return(domain.SecurityGroup{}, assert.AnError).
-						Once(),
+					m.EXPECT().ListSecurityGroups(ctx).Return([]domain.SecurityGroup{}, nil).Once(),
+					m.EXPECT().CreateSecurityGroup(ctx, name).Return(uuid.Nil, assert.AnError).Once(),
 				)
 			},
-			err: assert.AnError,
+			wantErr: assert.AnError,
+		},
+		{
+			name: "returns fetch-after-create error",
+			cloud: func(m *mocks.Cloud) {
+				mock.InOrder(
+					m.EXPECT().ListSecurityGroups(ctx).Return([]domain.SecurityGroup{}, nil).Once(),
+					m.EXPECT().CreateSecurityGroup(ctx, name).Return(sgID, nil).Once(),
+					m.EXPECT().GetSecurityGroup(ctx, sgID).Return(domain.SecurityGroup{}, assert.AnError).Once(),
+				)
+			},
+			wantErr: assert.AnError,
 		},
 	}
 
@@ -161,7 +119,14 @@ func Test_securityGroupService_UpsertSecurityGroup(t *testing.T) {
 
 			output, err := svc.UpsertSecurityGroup(ctx, clusterID, ut.scID, name)
 
-			assert.ErrorIs(t, err, ut.err)
+			if ut.wantErr != nil {
+				assert.ErrorIs(t, err, ut.wantErr)
+			} else if ut.wantErrMsg == "" {
+				assert.NoError(t, err)
+			}
+			if ut.wantErrMsg != "" {
+				assert.ErrorContains(t, err, ut.wantErrMsg)
+			}
 			assert.Equal(t, ut.output, output)
 		})
 	}
@@ -224,6 +189,45 @@ func Test_securityGroupService_DeleteSecurityGroup(t *testing.T) {
 	}
 }
 
+func Test_securityGroupService_FindSecurityGroup(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	clusterID := uuid.New()
+	match := domain.SecurityGroup{ID: uuid.New(), Name: "managed"}
+	tests := []struct {
+		name       string
+		groups     []domain.SecurityGroup
+		cloudErr   error
+		want       domain.SecurityGroup
+		wantErr    error
+		wantErrMsg string
+	}{
+		{name: "finds exact name", groups: []domain.SecurityGroup{{ID: uuid.New(), Name: "other"}, match}, want: match},
+		{name: "returns not found", wantErr: domain.ErrSecurityGroupNotFound},
+		{name: "returns cloud error", cloudErr: assert.AnError, wantErr: assert.AnError},
+		{name: "rejects ambiguous name", groups: []domain.SecurityGroup{match, {ID: uuid.New(), Name: match.Name}}, wantErrMsg: "multiple security groups"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cloud := mocks.NewCloud(t)
+			cloud.EXPECT().ListSecurityGroups(ctx).Return(tc.groups, tc.cloudErr)
+
+			got, err := (&securityGroupService{cloud: cloud, logger: logr.Discard()}).FindSecurityGroup(ctx, clusterID, match.Name, nil)
+
+			if tc.wantErr != nil {
+				assert.ErrorIs(t, err, tc.wantErr)
+			} else if tc.wantErrMsg != "" {
+				assert.ErrorContains(t, err, tc.wantErrMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
 func Test_securityGroupService_PurgeSecurityGroup(t *testing.T) {
 	t.Parallel()
 
@@ -272,6 +276,12 @@ func Test_securityGroupService_PurgeSecurityGroup(t *testing.T) {
 					Return(nil, assert.AnError)
 			},
 			err: assert.AnError,
+		},
+		{
+			name: "missing group is already purged",
+			cloud: func(m *mocks.Cloud) {
+				m.EXPECT().ListSecurityGroupRules(ctx, sgID).Return(nil, domain.ErrSecurityGroupNotFound)
+			},
 		},
 		{
 			name: "delete rule returned an error",

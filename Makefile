@@ -194,6 +194,7 @@ release: kustomize ## Build clusterctl release assets without changing source fi
 		mkdir -p "$(RELEASE_DIR)"; \
 		"$(KUSTOMIZE)" build --load-restrictor LoadRestrictionsNone "$$tmp" > "$(RELEASE_DIR)/infrastructure-components.yaml"; \
 		cp metadata.yaml "$(RELEASE_DIR)/metadata.yaml"; \
+		cp templates/cluster-template-custom-image.yaml "$(RELEASE_DIR)/cluster-template-custom-image.yaml"; \
 		cp templates/cluster-template.yaml "$(RELEASE_DIR)/cluster-template.yaml"
 
 .PHONY: build-installer

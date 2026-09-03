@@ -41,7 +41,7 @@ jobs:
           make release IMG="$IMAGE"
           make yq clusterctl
 
-          expected="$(printf '%s\n' cluster-template.yaml infrastructure-components.yaml metadata.yaml)"
+          expected="$(printf '%s\n' cluster-template-custom-image.yaml cluster-template.yaml infrastructure-components.yaml metadata.yaml)"
           actual="$(for file in out/*; do basename "$file"; done | sort)"
           test "$actual" = "$expected"
 
@@ -55,17 +55,31 @@ jobs:
           test "$(bin/yq '.releaseSeries[0].minor' out/metadata.yaml)" -eq 1
           test "$(bin/yq '.releaseSeries[0].contract' out/metadata.yaml)" = v1beta2
           test "$(bin/yq 'select(.kind == "Deployment") | .spec.template.spec.containers[] | select(.name == "manager") | .image' out/infrastructure-components.yaml)" = "$IMAGE"
-          ! grep -q 'controller:latest' out/*.yaml
+          if grep -q 'controller:latest' out/*.yaml; then exit 1; fi
           test -z "$(bin/yq eval-all 'select(.kind != null and .metadata.labels."cluster.x-k8s.io/provider" != "infrastructure-exoscale") | .kind' out/infrastructure-components.yaml)"
           test "$(bin/yq eval-all 'select(.kind == "Namespace") | .kind' out/infrastructure-components.yaml | wc -l)" -eq 1
 
+          unresolved_pattern='[$][{][A-Z][A-Z0-9_]*(:=[^}]*)?[}]'
           EXOSCALE_ZONE=ch-gva-2 bin/clusterctl generate cluster release-validation \
             --from out/cluster-template.yaml \
             --kubernetes-version v1.32.13 \
             --target-namespace default > /tmp/rendered-cluster.yaml
           bin/yq eval-all 'true' /tmp/rendered-cluster.yaml >/dev/null
           test -z "$(bin/yq eval-all 'select(.metadata.namespace != "default") | .kind' /tmp/rendered-cluster.yaml)"
-          ! grep -q '\${' /tmp/rendered-cluster.yaml
+          if grep -Eq "$unresolved_pattern" /tmp/rendered-cluster.yaml; then exit 1; fi
+
+          EXOSCALE_ZONE=ch-gva-2 EXOSCALE_TEMPLATE=00000000-0000-0000-0000-000000000000 \
+            bin/clusterctl generate cluster release-validation \
+            --from out/cluster-template-custom-image.yaml \
+            --kubernetes-version v1.36.4 \
+            --target-namespace default > /tmp/rendered-custom-image-cluster.yaml
+          bin/yq eval-all 'true' /tmp/rendered-custom-image-cluster.yaml >/dev/null
+          test -z "$(bin/yq eval-all 'select(.metadata.namespace != "default") | .kind' /tmp/rendered-custom-image-cluster.yaml)"
+          if grep -Eq "$unresolved_pattern" /tmp/rendered-custom-image-cluster.yaml; then exit 1; fi
+          test "$(bin/yq eval-all 'select(.kind == "ExoscaleMachineTemplate") | .spec.template.spec.template' /tmp/rendered-custom-image-cluster.yaml)" = 00000000-0000-0000-0000-000000000000
+          test "$(bin/yq eval-all 'select(.kind == "KubeadmControlPlane") | .spec.version' /tmp/rendered-custom-image-cluster.yaml)" = v1.36.4
+          test "$(bin/yq eval-all 'select(.kind == "KubeadmControlPlane") | .spec.kubeadmConfigSpec.preKubeadmCommands | length' /tmp/rendered-custom-image-cluster.yaml)" -eq 1
+          if grep -Eq 'apt-get|pkgs.k8s.io|containerd config' /tmp/rendered-custom-image-cluster.yaml; then exit 1; fi
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4

@@ -113,6 +113,22 @@ $> clusterctl generate cluster my-cluster \
      | kubectl apply -f -
 ```
 
+For an Exoscale CAPI image with Kubernetes already installed, use its template
+ID and select the `custom-image` flavor. The image's Kubernetes version must
+match `--kubernetes-version`.
+
+```bash
+$> export EXOSCALE_ZONE=ch-gva-2
+$> export EXOSCALE_TEMPLATE=<template-id>
+$> clusterctl generate cluster my-cluster \
+     --config clusterctl.yaml \
+     --infrastructure exoscale:v0.1.0 \
+     --flavor custom-image \
+     --kubernetes-version v1.36.4 \
+     --target-namespace default \
+     | kubectl apply -f -
+```
+
 ## End-to-End testing
 ```bash
 $> export EXOSCALE_API_KEY=<api-key>       # Optional if exocli is not configured

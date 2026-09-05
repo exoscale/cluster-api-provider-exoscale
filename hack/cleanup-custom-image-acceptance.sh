@@ -1,21 +1,27 @@
 #!/usr/bin/env bash
 
-# Emergency cleanup for sample-run.sh.
+# Emergency cleanup for run-custom-image-acceptance.sh.
 #
-# Delete the CAPI Cluster first while Exoscale CAPI is running. CAPI owner references
-# and Exoscale CAPI finalizers then remove the Exoscale VM, Elastic IP, and security
-# groups. Kind is deleted only after that operation succeeds.
+# Delete the CAPI Cluster first while Exoscale CAPI is running. CAPI owner
+# references and finalizers then remove the Exoscale VM, Elastic IP, and
+# security groups. Kind is deleted only after that operation succeeds.
 
 set -Eeuo pipefail
 umask 077
 
-ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 KIND_CLUSTER=${KIND_CLUSTER:-capi-sample}
 MANAGEMENT_KUBECONFIG=${MANAGEMENT_KUBECONFIG:-/tmp/${KIND_CLUSTER}-management.kubeconfig}
 WORKLOAD_KUBECONFIG=${WORKLOAD_KUBECONFIG:-/tmp/${KIND_CLUSTER}-workload.kubeconfig}
 CAPI_LOG=${CAPI_LOG:-/tmp/${KIND_CLUSTER}-controller.log}
 CAPI_PID_FILE=${CAPI_PID_FILE:-/tmp/${KIND_CLUSTER}-controller.pid}
 RUNNER_PID_FILE=${RUNNER_PID_FILE:-/tmp/${KIND_CLUSTER}-runner.pid}
+ACCEPTANCE_MARKER=${ACCEPTANCE_MARKER:-/tmp/${KIND_CLUSTER}-acceptance}
+
+if [[ ! -f "$ACCEPTANCE_MARKER" ]]; then
+	printf 'Refusing cleanup without an acceptance marker for Kind cluster %s.\n' "$KIND_CLUSTER" >&2
+	exit 1
+fi
 
 CAPI_PID=
 STARTED_CAPI=false
@@ -37,7 +43,7 @@ require() {
 }
 
 # Only trust a recorded PID when it is still a process-group leader running
-# this sample's `make run`. This avoids killing an unrelated reused PID.
+# this acceptance run's `make run`. This avoids killing an unrelated reused PID.
 load_capi_pid() {
 	[[ -f "$CAPI_PID_FILE" ]] || return 1
 	read -r candidate <"$CAPI_PID_FILE"
@@ -80,14 +86,14 @@ signal_runner() {
 	read -r runner_pid <"$RUNNER_PID_FILE"
 	if [[ "$runner_pid" =~ ^[0-9]+$ ]] && kill -0 "$runner_pid" 2>/dev/null; then
 		args=$(ps -o args= -p "$runner_pid" 2>/dev/null || true)
-		if [[ "$args" == *"sample-run.sh"* ]]; then
+		if [[ "$args" == *"run-custom-image-acceptance.sh"* ]]; then
 			kill -TERM "$runner_pid" 2>/dev/null || true
 			for ((attempt = 1; attempt <= 100; attempt++)); do
 				kill -0 "$runner_pid" 2>/dev/null || break
 				sleep 0.1
 			done
 			if kill -0 "$runner_pid" 2>/dev/null; then
-				printf 'The sample runner did not stop; local state was retained.\n' >&2
+				printf 'The acceptance runner did not stop; local state was retained.\n' >&2
 				return 1
 			fi
 		fi
@@ -95,7 +101,7 @@ signal_runner() {
 	rm -f -- "$RUNNER_PID_FILE"
 }
 
-for tool in kind kubectl make go curl setsid ps; do
+for tool in docker kind kubectl make go curl setsid ps; do
 	require "$tool"
 done
 
@@ -118,8 +124,15 @@ if [[ "$kind_cluster_exists" != true ]]; then
 	load_capi_pid || true
 	stop_capi
 	signal_runner
-	rm -f -- "$MANAGEMENT_KUBECONFIG" "$WORKLOAD_KUBECONFIG"
-	printf 'Removed stale local sample state. Cloud cleanup cannot be verified without the management cluster.\n'
+	rm -f -- "$MANAGEMENT_KUBECONFIG" "$WORKLOAD_KUBECONFIG" "$ACCEPTANCE_MARKER"
+	printf 'Removed stale local acceptance state. Cloud cleanup cannot be verified without the management cluster.\n'
+	exit 1
+fi
+
+expected_control_plane_id=$(<"$ACCEPTANCE_MARKER")
+if ! control_plane_id=$(docker inspect --format '{{.Id}}' "${KIND_CLUSTER}-control-plane" 2>/dev/null) ||
+	[[ -z "$expected_control_plane_id" || "$control_plane_id" != "$expected_control_plane_id" ]]; then
+	printf 'Refusing cleanup because the acceptance marker does not match Kind cluster %s.\n' "$KIND_CLUSTER" >&2
 	exit 1
 fi
 
@@ -144,8 +157,8 @@ if [[ -n "$cluster_resource" ]]; then
 	elif curl --fail --silent http://127.0.0.1:8081/readyz >/dev/null 2>&1; then
 		printf 'Using an already-running CAPI controller; it was not started by this helper.\n'
 	else
-		# Recovery path for a crashed/lost run script: restart CAPI long enough to
-		# execute its deletion finalizers.
+		# Recovery path for a crashed or lost acceptance run: restart CAPI long
+		# enough to execute its deletion finalizers.
 		printf 'Starting CAPI temporarily for finalizer cleanup; log: %s\n' "$CAPI_LOG"
 		: >"$CAPI_LOG"
 		setsid make run >"$CAPI_LOG" 2>&1 &
@@ -169,13 +182,13 @@ fi
 
 kubectl delete secret exoscale --ignore-not-found >/dev/null 2>&1 || true
 
-# Stop only a controller recorded by the sample or started by this helper.
+# Stop only a controller recorded by the acceptance run or started here.
 if [[ -n "$CAPI_PID" || "$STARTED_CAPI" == true ]]; then
 	stop_capi
 fi
 
 kind delete cluster --name "$KIND_CLUSTER"
 signal_runner
-rm -f -- "$MANAGEMENT_KUBECONFIG" "$WORKLOAD_KUBECONFIG" "$CAPI_PID_FILE"
+rm -f -- "$MANAGEMENT_KUBECONFIG" "$WORKLOAD_KUBECONFIG" "$CAPI_PID_FILE" "$ACCEPTANCE_MARKER"
 
 printf 'Emergency cleanup complete. Controller log retained at %s\n' "$CAPI_LOG"

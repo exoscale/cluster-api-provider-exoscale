@@ -10,55 +10,21 @@ resources for self-managed Kubernetes clusters. It currently reconciles
 `ExoscaleCluster` and `ExoscaleMachine` resources into the required cloud
 infrastructure.
 
-## Get started
+## Run locally
 
-Exoscale CAPI does not publish release assets yet, so both paths below run the
-provider from this checkout. They create a local Kind management cluster and
-one real, billable Exoscale control-plane VM in `ch-gva-2`.
-
-Prerequisites: Docker, `kind`, `kubectl`, `make`, `curl`, `setsid`, the Go
-version declared in `go.mod`, and either `EXOSCALE_API_KEY` plus
-`EXOSCALE_API_SECRET` or an Exoscale CLI account configured in
-`~/.config/exoscale/exoscale.toml`.
-
-### Traditional: official Ubuntu image
-
-This is the default path. It starts from the official
-`Linux Ubuntu 24.04 LTS 64-bit` template and installs containerd, kubeadm,
-kubelet, and kubectl through cloud-init on first boot.
-
-```console
-$ ./sample-run.sh
-```
-
-### Pre-built Kubernetes image
-
-This path starts from a private template where Kubernetes and containerd are
-already installed. First follow the [pre-built image sample] to build and
-register the image, then pass its UUID and matching Kubernetes version:
-
-```console
-$ CUSTOM_IMAGE_TEMPLATE=<template-id> \
-    CUSTOM_IMAGE_KUBERNETES_VERSION=v1.36.4 \
-    SAMPLE=custom-image \
-    ./sample-run.sh
-```
-
-Both commands wait for the kubeadm control plane and its Node to become Ready.
-Press Enter when prompted to delete the workload cluster and its Exoscale
-resources. The pre-built path also creates a billable custom template that must
-be deleted separately when it is no longer needed.
-
-## Development
-
-Prerequisites: Docker, `kind`, `kubectl`, the Go version declared in `go.mod`,
-and Exoscale API credentials.
+Prerequisites: Docker, `kind`, `kubectl`, `make`, the Go version declared in
+`go.mod`, and Exoscale API credentials.
 
 ### Deploy Cluster API components
 ```bash
 $> make clusterctl
 $> kind create cluster --name capi-test
-$> ./bin/clusterctl init --infrastructure - # installs CAPI core and kubeadm providers
+$> CAPI_VERSION=$(go list -m -f '{{.Version}}' sigs.k8s.io/cluster-api)
+$> ./bin/clusterctl init \
+     --core "cluster-api:$CAPI_VERSION" \
+     --bootstrap "kubeadm:$CAPI_VERSION" \
+     --control-plane "kubeadm:$CAPI_VERSION" \
+     --infrastructure -
 ```
 
 ### Run Exoscale CAPI
@@ -70,6 +36,11 @@ $> make run
 Keep the manager running and use another terminal for the remaining commands.
 
 ### Deploy a simple cluster
+
+The default sample installs Kubernetes on the stock Ubuntu image. To use an
+image where Kubernetes is already installed, follow the [pre-built image
+sample] instead.
+
 ```bash
 $> export EXOSCALE_API_KEY=<api-key>
 $> export EXOSCALE_API_SECRET=<api-secret>

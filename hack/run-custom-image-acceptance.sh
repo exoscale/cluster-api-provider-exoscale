@@ -1,50 +1,28 @@
 #!/usr/bin/env bash
 
-# The script creates a local Kind management cluster, runs Exoscale CAPI in the
-# background, creates a real Exoscale workload cluster, and waits for
-# confirmation before cleanup. The Exoscale VM, Elastic IP, and security
-# groups are billable until cleanup finishes.
+# Internal acceptance runner for a pre-built Kubernetes image. The Exoscale VM,
+# Elastic IP, and security groups are billable until cleanup finishes.
 
 set -Eeuo pipefail
 umask 077
 
-ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 KIND_CLUSTER=${KIND_CLUSTER:-capi-sample}
 MANAGEMENT_KUBECONFIG=${MANAGEMENT_KUBECONFIG:-/tmp/${KIND_CLUSTER}-management.kubeconfig}
 WORKLOAD_KUBECONFIG=${WORKLOAD_KUBECONFIG:-/tmp/${KIND_CLUSTER}-workload.kubeconfig}
 CAPI_LOG=${CAPI_LOG:-/tmp/${KIND_CLUSTER}-controller.log}
 CAPI_PID_FILE=${CAPI_PID_FILE:-/tmp/${KIND_CLUSTER}-controller.pid}
 RUNNER_PID_FILE=${RUNNER_PID_FILE:-/tmp/${KIND_CLUSTER}-runner.pid}
+ACCEPTANCE_MARKER=${ACCEPTANCE_MARKER:-/tmp/${KIND_CLUSTER}-acceptance}
 EXOSCALE_CONFIG=${EXOSCALE_CONFIG:-${HOME:-}/.config/exoscale/exoscale.toml}
-SAMPLE=${SAMPLE:-traditional}
-AUTO_CLEANUP=${AUTO_CLEANUP:-false}
 CUSTOM_IMAGE_TEMPLATE=${CUSTOM_IMAGE_TEMPLATE:-}
 CUSTOM_IMAGE_KUBERNETES_VERSION=${CUSTOM_IMAGE_KUBERNETES_VERSION:-}
 EXOSCALE_API_KEY_INPUT=${EXOSCALE_API_KEY:-}
 EXOSCALE_API_SECRET_INPUT=${EXOSCALE_API_SECRET:-}
 unset EXOSCALE_API_KEY EXOSCALE_API_SECRET
 
-case "$SAMPLE" in
-traditional) SAMPLE_DIR=config/samples/kubeadm/cluster ;;
-custom-image) SAMPLE_DIR=config/samples/kubeadm/cluster-custom-image ;;
-*)
-	printf 'Unknown sample %q; expected traditional or custom-image.\n' "$SAMPLE" >&2
-	exit 1
-	;;
-esac
-
-if [[ "$SAMPLE" != custom-image && ( -n "$CUSTOM_IMAGE_TEMPLATE" || -n "$CUSTOM_IMAGE_KUBERNETES_VERSION" ) ]]; then
-	printf 'Custom image variables require SAMPLE=custom-image.\n' >&2
-	exit 1
-fi
-if [[ "$SAMPLE" == custom-image &&
-	( -z "$CUSTOM_IMAGE_TEMPLATE" || ! "$CUSTOM_IMAGE_KUBERNETES_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ) ]]; then
+if [[ -z "$CUSTOM_IMAGE_TEMPLATE" || ! "$CUSTOM_IMAGE_KUBERNETES_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 	printf 'CUSTOM_IMAGE_TEMPLATE and an exact v-prefixed CUSTOM_IMAGE_KUBERNETES_VERSION are required together.\n' >&2
-	exit 1
-fi
-
-if [[ "$AUTO_CLEANUP" != true && "$AUTO_CLEANUP" != false ]]; then
-	printf 'AUTO_CLEANUP must be true or false.\n' >&2
 	exit 1
 fi
 
@@ -120,11 +98,11 @@ cleanup() {
 			printf 'Cloud cleanup finished, but Kind cleanup failed. Local state was retained.\n' >&2
 			exit 1
 		fi
-		rm -f -- "$MANAGEMENT_KUBECONFIG" "$WORKLOAD_KUBECONFIG" "$RUNNER_PID_FILE"
+		rm -f -- "$MANAGEMENT_KUBECONFIG" "$WORKLOAD_KUBECONFIG" "$RUNNER_PID_FILE" "$ACCEPTANCE_MARKER"
 		printf 'Cleanup complete. Controller log retained at %s\n' "$CAPI_LOG"
 	else
 		stop_capi
-		rm -f -- "$RUNNER_PID_FILE"
+		rm -f -- "$RUNNER_PID_FILE" "$ACCEPTANCE_MARKER"
 	fi
 	exit "$status"
 }
@@ -157,8 +135,8 @@ if kind get kubeconfig --name "$KIND_CLUSTER" >/dev/null 2>&1; then
 	printf 'A previous sample may still be running; finish its cleanup before retrying.\n' >&2
 	exit 1
 fi
-if [[ -e "$MANAGEMENT_KUBECONFIG" || -e "$WORKLOAD_KUBECONFIG" ]]; then
-	printf 'A sample kubeconfig already exists under /tmp; remove it before retrying.\n' >&2
+if [[ -e "$MANAGEMENT_KUBECONFIG" || -e "$WORKLOAD_KUBECONFIG" || -e "$ACCEPTANCE_MARKER" ]]; then
+	printf 'Acceptance state already exists under /tmp; remove it before retrying.\n' >&2
 	exit 1
 fi
 
@@ -171,12 +149,13 @@ CAPI_VERSION=$(go list -m -f '{{.Version}}' sigs.k8s.io/cluster-api)
 make clusterctl kustomize yq
 
 SAMPLE_MANIFEST=$(mktemp /tmp/exoscale-capi-sample.XXXXXX.yaml)
-bash hack/render-kubeadm-sample.sh "$SAMPLE_DIR" >"$SAMPLE_MANIFEST"
+bash hack/render-kubeadm-sample.sh config/samples/kubeadm/cluster-custom-image >"$SAMPLE_MANIFEST"
 SAMPLE_APPLY_ARGS=(-f "$SAMPLE_MANIFEST")
 
 printf '\nCreating Kind management cluster %s...\n' "$KIND_CLUSTER"
 kind create cluster --name "$KIND_CLUSTER" --kubeconfig "$MANAGEMENT_KUBECONFIG"
 KIND_CREATED=true
+docker inspect --format '{{.Id}}' "${KIND_CLUSTER}-control-plane" >"$ACCEPTANCE_MARKER"
 export KUBECONFIG=$MANAGEMENT_KUBECONFIG
 
 printf '\nInstalling CAPI core and kubeadm providers...\n'
@@ -295,16 +274,14 @@ if [[ -z "$machine_provider_id" || "$machine_provider_id" != "$node_provider_id"
 fi
 printf 'Provider ID verified: %s\n' "$node_provider_id"
 
-if [[ -n "$CUSTOM_IMAGE_KUBERNETES_VERSION" ]]; then
-	node_kubelet_version=$(kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" get nodes \
-		-o jsonpath='{.items[0].status.nodeInfo.kubeletVersion}')
-	if [[ "$node_kubelet_version" != "$CUSTOM_IMAGE_KUBERNETES_VERSION" ]]; then
-		printf 'Kubelet version mismatch: expected=%q actual=%q\n' \
-			"$CUSTOM_IMAGE_KUBERNETES_VERSION" "$node_kubelet_version" >&2
-		exit 1
-	fi
-	printf 'Kubelet version verified: %s\n' "$node_kubelet_version"
+node_kubelet_version=$(kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" get nodes \
+	-o jsonpath='{.items[0].status.nodeInfo.kubeletVersion}')
+if [[ "$node_kubelet_version" != "$CUSTOM_IMAGE_KUBERNETES_VERSION" ]]; then
+	printf 'Kubelet version mismatch: expected=%q actual=%q\n' \
+		"$CUSTOM_IMAGE_KUBERNETES_VERSION" "$node_kubelet_version" >&2
+	exit 1
 fi
+printf 'Kubelet version verified: %s\n' "$node_kubelet_version"
 
 kubectl wait kubeadmcontrolplane/my-control-plane --for=condition=Available --timeout=5m
 kubectl wait cluster/my-cluster --for=condition=RemoteConnectionProbe --timeout=5m
@@ -320,13 +297,4 @@ kubectl get cluster,kubeadmcontrolplane,exoscalecluster,exoscalemachinetemplate,
 printf '\nWorkload-cluster node:\n'
 kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" get nodes -o wide
 
-printf '\nThe sample is ready.\n'
-printf 'Management cluster: kubectl --kubeconfig=%q get cluster,kubeadmcontrolplane,exoscalecluster,exoscalemachinetemplate,machine,exoscalemachine\n' "$MANAGEMENT_KUBECONFIG"
-printf 'Workload cluster:   kubectl --kubeconfig=%q get pods -A\n' "$WORKLOAD_KUBECONFIG"
-printf 'Controller logs:    tail -f %q\n' "$CAPI_LOG"
-if [[ "$AUTO_CLEANUP" == true ]]; then
-	printf '\nAUTO_CLEANUP=true, deleting the workload cluster and Kind.\n'
-else
-	printf '\nPress Enter to delete the workload cluster, stop CAPI, and remove Kind.\n'
-	read -r
-fi
+printf '\nAcceptance checks passed.\n'

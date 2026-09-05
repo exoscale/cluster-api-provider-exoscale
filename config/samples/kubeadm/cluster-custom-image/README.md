@@ -5,23 +5,27 @@ private Exoscale template. It uses the generic Ubuntu 24.04 UEFI QEMU target
 from [Kubernetes image-builder]. No Exoscale-specific image-builder target is
 required.
 
-The commands below were tested with image-builder `v0.1.55`, Ubuntu `24.04.4`,
-Kubernetes `v1.36.4`, and containerd `2.3.2` on amd64.
+The resulting amd64 image was built with image-builder `v0.1.55` and contains
+Ubuntu `24.04.4`, Kubernetes `v1.36.4`, and containerd `2.3.2`.
 
 ## Image requirements
 
 The image must include cloud-init with the Exoscale datasource, containerd,
 kubeadm, kubelet, and kubectl. The Kubernetes version baked into the image must
-match `CUSTOM_IMAGE_KUBERNETES_VERSION` when the sample runs.
+match `KubeadmControlPlane.spec.version` in `kustomization.yaml`.
 
 The provider ID cannot be baked into the image because it contains the new VM's
 UUID. This overlay therefore removes package installation from cloud-init but
 keeps the per-instance provider-ID command.
 
+The overlay replaces the base `preKubeadmCommands` with that provider-ID
+command. It keeps the inherited `postKubeadmCommands`, which installs Flannel
+after kubeadm.
+
 ## Create the image
 
 Requirements: Podman, KVM exposed as `/dev/kvm`, at least 15 GiB of free disk,
-and `qemu-img` for the final check.
+`qemu-img`, `jq`, and the Exoscale CLI.
 
 The tested first build took about 30 minutes and downloaded a 3.4 GiB Ubuntu
 ISO. Keep `packer-cache` between builds so the ISO can be reused.
@@ -42,6 +46,9 @@ $ tee kubernetes.json >/dev/null <<EOF
 }
 EOF
 ```
+
+`-1.1` is the Debian package revision published by the Kubernetes package
+repository. It is not part of the Kubernetes version.
 
 Validate and build the UEFI QCOW2 with the released image-builder container:
 
@@ -99,12 +106,14 @@ $ exo compute instance-template register \
     --username ubuntu \
     --disable-password \
     --version "v${KUBERNETES_VERSION}" \
-    --output-format json
+    --output-format json > template.json
+$ TEMPLATE_ID=$(jq -er '.id' template.json)
+$ rm -f template.json
 $ unset URL
 ```
 
-Record the returned template `id`, then remove the temporary object after
-registration finishes:
+The register command waits for the import to finish before returning. The
+pre-signed URL and temporary object are no longer needed after it succeeds:
 
 ```bash
 $ exo storage rb "sos://${BUCKET}" --recursive --force
@@ -112,24 +121,39 @@ $ exo storage rb "sos://${BUCKET}" --recursive --force
 
 ## Create the cluster
 
-From the Exoscale CAPI repository root, pass the registered template ID and its
-exact Kubernetes version:
+In `kustomization.yaml`:
 
-```console
-$ CUSTOM_IMAGE_TEMPLATE=<template-id> \
-    CUSTOM_IMAGE_KUBERNETES_VERSION=v1.36.4 \
-    SAMPLE=custom-image \
-    ./sample-run.sh
+1. Replace `REPLACE_WITH_TEMPLATE_UUID` with the value stored in `$TEMPLATE_ID`.
+2. Change `v1.36.4` if the image contains another Kubernetes version.
+
+This sample intentionally creates one schedulable control-plane Node and no
+worker Nodes.
+
+From the Exoscale CAPI repository root, [deploy the Cluster API components] and
+[run Exoscale CAPI]. Keep the manager running and use another terminal for the
+remaining commands:
+
+The sample creates one billable control-plane VM and one billable private
+template in `ch-gva-2`.
+
+```bash
+$> export EXOSCALE_API_KEY=<api-key>
+$> export EXOSCALE_API_SECRET=<api-secret>
+$> kubectl create secret generic exoscale --from-literal=apikey=$EXOSCALE_API_KEY --from-literal=apisecret=$EXOSCALE_API_SECRET
+$> kubectl apply -k config/samples/kubeadm/cluster-custom-image/
 ```
 
-The script waits for the kubeadm control plane and its Node to become Ready.
-Press Enter when prompted to delete the workload cluster and its Exoscale
-resources. The private template remains until it is deleted explicitly.
-
-Set `AUTO_CLEANUP=true` for a non-interactive acceptance run.
+Use the standard sample's [wait and smoke-test steps] to verify the cluster.
+Delete the Cluster before deleting its private template so the provider can
+remove the Exoscale resources first:
 
 ```console
+$ kubectl delete cluster/my-cluster
+$ rm -f "$WORKLOAD_KUBECONFIG"
 $ exo compute instance-template delete <template-id> --zone ch-gva-2
 ```
 
 [Kubernetes image-builder]: https://github.com/kubernetes-sigs/image-builder
+[deploy the Cluster API components]: ../../../../README.md#deploy-cluster-api-components
+[run Exoscale CAPI]: ../../../../README.md#run-exoscale-capi
+[wait and smoke-test steps]: ../../../../README.md#wait-for-the-workload-cluster

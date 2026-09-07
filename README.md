@@ -12,14 +12,19 @@ infrastructure.
 
 ## Run locally
 
-Prerequisites: Docker, `kind`, `kubectl`, the Go version declared in `go.mod`,
-and Exoscale API credentials.
+Prerequisites: Docker, `kind`, `kubectl`, `make`, the Go version declared in
+`go.mod`, and Exoscale API credentials.
 
 ### Deploy Cluster API components
 ```bash
 $> make clusterctl
 $> kind create cluster --name capi-test
-$> ./bin/clusterctl init --infrastructure - # installs CAPI core and kubeadm providers
+$> CAPI_VERSION=$(go list -m -f '{{.Version}}' sigs.k8s.io/cluster-api)
+$> ./bin/clusterctl init \
+     --core "cluster-api:$CAPI_VERSION" \
+     --bootstrap "kubeadm:$CAPI_VERSION" \
+     --control-plane "kubeadm:$CAPI_VERSION" \
+     --infrastructure -
 ```
 
 ### Run Exoscale CAPI
@@ -31,11 +36,16 @@ $> make run
 Keep the manager running and use another terminal for the remaining commands.
 
 ### Deploy a simple cluster
+
+The default sample installs Kubernetes on the stock Ubuntu image. To use an
+image where Kubernetes is already installed, follow the [pre-built image
+sample] instead.
+
 ```bash
 $> export EXOSCALE_API_KEY=<api-key>
 $> export EXOSCALE_API_SECRET=<api-secret>
 $> kubectl create secret generic exoscale --from-literal=apikey=$EXOSCALE_API_KEY --from-literal=apisecret=$EXOSCALE_API_SECRET
-$> kubectl apply -k config/samples/cluster/
+$> kubectl apply -k config/samples/kubeadm/cluster/
 ```
 
 #### Wait for the workload cluster
@@ -95,3 +105,4 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 [cluster_api]: https://github.com/kubernetes-sigs/cluster-api
+[pre-built image sample]: config/samples/kubeadm/cluster-custom-image/README.md

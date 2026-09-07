@@ -23,3 +23,9 @@ jobs:
         run: |
           go mod tidy
           make test
+
+      - name: Render kubeadm samples
+        run: |
+          make kustomize
+          bin/kustomize build config/samples/kubeadm/cluster >/dev/null
+          bin/kustomize build config/samples/kubeadm/cluster-custom-image >/dev/null

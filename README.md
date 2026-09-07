@@ -53,14 +53,16 @@ $> kubectl apply -k config/samples/kubeadm/cluster/
 $> kubectl wait cluster/my-cluster --for=condition=ControlPlaneInitialized --timeout=10m
 $> WORKLOAD_KUBECONFIG=$(mktemp /tmp/my-cluster.kubeconfig.XXXXXX)
 $> ./bin/clusterctl get kubeconfig my-cluster > "$WORKLOAD_KUBECONFIG"
-$> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" wait node --all --for=condition=Ready --timeout=10m
 $> kubectl wait cluster/my-cluster --for=condition=RemoteConnectionProbe --timeout=5m
 $> kubectl wait kubeadmcontrolplane/my-control-plane --for=condition=Available --timeout=5m
 $> kubectl wait machine --selector='cluster.x-k8s.io/cluster-name=my-cluster,cluster.x-k8s.io/control-plane' --for=condition=Ready --timeout=5m
 $> kubectl wait machine --selector='cluster.x-k8s.io/cluster-name=my-cluster,cluster.x-k8s.io/control-plane' --for=condition=Available --timeout=5m
+$> kubectl wait machinedeployment/my-workers --for=condition=Available --timeout=15m
+$> kubectl wait machine --selector='cluster.x-k8s.io/cluster-name=my-cluster,pool=workers' --for=condition=Ready --timeout=5m
+$> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" wait node --all --for=condition=Ready --timeout=10m
 $> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" get nodes
 
-$> kubectl get cluster,kubeadmcontrolplane,exoscalecluster,exoscalemachinetemplate,machine,exoscalemachine,kubeadmconfig
+$> kubectl get cluster,kubeadmcontrolplane,machinedeployment,exoscalecluster,exoscalemachinetemplate,machine,exoscalemachine,kubeadmconfig,kubeadmconfigtemplate
 ```
 
 #### Run a workload smoke test
@@ -69,6 +71,26 @@ kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" run smoke --image=busybox:1.36 --res
 ```
 
 This creates a Pod, prints its hostname, and deletes it after completion.
+
+### Scale the cluster
+
+Scale the control plane and worker pool from one to three Nodes, then watch CAPI
+create the Machines:
+
+```bash
+$> kubectl scale kubeadmcontrolplane/my-control-plane --replicas=3
+$> kubectl scale machinedeployment/my-workers --replicas=3
+$> kubectl get machines --watch
+```
+
+After the new Machines become Ready, check the workload Nodes and scale back
+down. Keep at least one control-plane replica:
+
+```bash
+$> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" get nodes
+$> kubectl scale machinedeployment/my-workers --replicas=1
+$> kubectl scale kubeadmcontrolplane/my-control-plane --replicas=1
+```
 
 ### Delete simple cluster
 ```bash

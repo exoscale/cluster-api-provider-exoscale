@@ -5,7 +5,6 @@ resources:
 patches:
 - target:
     kind: ExoscaleMachineTemplate
-    name: my-control-plane
   patch: |-
     - op: replace
       path: /spec/template/spec/template
@@ -21,6 +20,24 @@ patches:
       path: /spec/kubeadmConfigSpec/preKubeadmCommands
       value:
       - |
+         set -eux
+         printf 'KUBELET_EXTRA_ARGS=--provider-id=exoscale://%s\n' \
+           "$(cat /var/lib/cloud/data/instance-id)" >/etc/default/kubelet
+- target:
+    kind: KubeadmConfigTemplate
+    name: my-workers
+  patch: |-
+    - op: replace
+      path: /spec/template/spec/preKubeadmCommands
+      value:
+      - |
         set -eux
         printf 'KUBELET_EXTRA_ARGS=--provider-id=exoscale://%s\n' \
           "$(cat /var/lib/cloud/data/instance-id)" >/etc/default/kubelet
+- target:
+    kind: MachineDeployment
+    name: my-workers
+  patch: |-
+    - op: replace
+      path: /spec/template/spec/version
+      value: v1.36.4

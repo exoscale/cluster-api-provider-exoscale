@@ -82,14 +82,17 @@ setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
 CHAINSAW_VALUES_SUFFIX ?=
 CHAINSAW_VALUES_ZONE ?=
 CHAINSAW_MACHINE_TEMPLATE ?=
-CHAINSAW_MACHINE_INSTANCE_TYPE ?= small
-CHAINSAW_ALL_TEST_DIRS := $(shell ls -d -1 test/chainsaw/*)
-CHAINSAW_MACHINE_TEST_DIR := test/chainsaw/deploy-machine
-CHAINSAW_TEST_DIRS ?= $(if $(CHAINSAW_MACHINE_TEMPLATE),$(CHAINSAW_ALL_TEST_DIRS),$(filter-out $(CHAINSAW_MACHINE_TEST_DIR),$(CHAINSAW_ALL_TEST_DIRS)))
+CHAINSAW_MACHINE_INSTANCE_TYPE ?= standard.medium
+CHAINSAW_TEST_DIRS ?= $(shell ls -d -1 test/chainsaw/*)
+# When set (e.g. CHAINSAW_SKIP_DELETE=1), chainsaw keeps every resource it created
+# so a post-run diagnostics dump can inspect it. The caller is then responsible for
+# tearing the workload clusters down afterwards so the exoscale provider reaps the
+# cloud resources (see the e2e CI workflow).
+CHAINSAW_SKIP_DELETE ?=
 
 .PHONY: chainsaw-test-e2e
 chainsaw-test-e2e: setup-test-e2e-chainsaw chainsaw ## Run the e2e tests. Expected an isolated environment using Kind.
-	$(CHAINSAW) test --set='suffix=$(CHAINSAW_VALUES_SUFFIX),zone=$(CHAINSAW_VALUES_ZONE),template=$(CHAINSAW_MACHINE_TEMPLATE),instanceType=$(CHAINSAW_MACHINE_INSTANCE_TYPE),image=$(IMG)' $(CHAINSAW_TEST_DIRS)
+	$(CHAINSAW) test $(if $(CHAINSAW_SKIP_DELETE),--skip-delete) --set='suffix=$(CHAINSAW_VALUES_SUFFIX),zone=$(CHAINSAW_VALUES_ZONE),template=$(CHAINSAW_MACHINE_TEMPLATE),instanceType=$(CHAINSAW_MACHINE_INSTANCE_TYPE),image=$(IMG)' $(CHAINSAW_TEST_DIRS)
 
 ## Exoscale credentials: use env vars if already set, otherwise read from config file.
 EXOSCALE_CONFIG      ?= $(HOME)/.config/exoscale/exoscale.toml
@@ -104,12 +107,23 @@ check-exoscale-creds: yq ## Check that exoscale creds are setup before running e
 		exit 1; \
 	fi
 
+CAPI_VERSION ?= v1.14.1
+K0SMOTRON_VERSION ?= v2.1.0
+
 setup-test-e2e-chainsaw: check-exoscale-creds setup-test-e2e docker-build manifests generate kustomize clusterctl ## Set up a Kind, CAPI,  cluster for e2e tests if it does not exist
 	## Load docker image into kind cluster.
 	$(KIND) load docker-image --name $(KIND_CLUSTER) $(IMG)
 
-	## Install CAPI.
-	$(CLUSTERCTL) init --infrastructure -
+	## Install CAPI, plus k0smotron's bootstrap/control-plane providers.
+	$(CLUSTERCTL) init \
+		--core cluster-api:$(CAPI_VERSION) \
+		--bootstrap k0sproject-k0smotron:$(K0SMOTRON_VERSION) \
+		--control-plane k0sproject-k0smotron:$(K0SMOTRON_VERSION) \
+		--infrastructure - 
+
+	$(KUBECTL) wait deployment/k0smotron-controller-manager-{bootstrap,control-plane} \
+		--namespace k0smotron \
+		--for=condition=Available
 
 	## Deploy exoscale infrastructure provider.
 	## We need to create a simple temporary kustomize file to set image name and tag

@@ -72,3 +72,13 @@ spec:
                     reason: ReconcileSuccess
                     status: "True"
                 (length(conditions[?type == 'Paused'])): 0
+
+    - name: delete cluster
+      try:
+        - delete:
+            timeout: 10m
+            ref:
+              apiVersion: cluster.x-k8s.io/v1beta2
+              kind: Cluster
+              name: ($clusterName)
+              namespace: ($namespace)

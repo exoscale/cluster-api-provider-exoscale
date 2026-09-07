@@ -1,0 +1,419 @@
+# Full end-to-end deploy of a k0smotron-based cluster (ExoscaleCluster,
+# K0sControlPlane, and a worker MachineDeployment), asserting the same
+# ExoscaleCluster/Cluster invariants as deploy-cluster: provisioning,
+# control-plane endpoint consistency, and security group rule reconciliation
+# between the Exoscale and CAPI cluster resources.
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: full-deployment
+spec:
+  timeouts:
+    delete: 10m
+    cleanup: 10m
+  bindings:
+  - name: zone
+    value: ($values.zone || 'bg-sof-1')
+  - name: clusterName
+    value: (join('-', ['capi-e2e', ($values.suffix || 'local')]))
+  - name: cpName
+    value: (join('-', [$clusterName, 'cp']))
+  - name: workersName
+    value: (join('-', [$clusterName, 'workers']))
+  - name: namespace
+    value: default
+  - name: template
+    value: ($values.template || 'Linux Ubuntu 24.04 LTS 64-bit')
+  - name: instanceType
+    value: ($values.instanceType || 'standard.medium')
+  - name: workerInstanceType
+    value: ($values.workerInstanceType || 'standard.small')
+  - name: k0sVersion
+    value: ($values.k0sVersion || 'v1.36.3+k0s.0')
+  - name: k0sKubeletVersion
+    # Must match Node.status.nodeInfo.kubeletVersion exactly — CAPI >= v1.14
+    # k0s reports "+k0s" while its release tag is "+k0s.0".
+    value: (join('', [split($k0sVersion, '+k0s')[0], '+k0s']))
+  steps:
+    - name: apply cluster
+      try:
+        - apply:
+            file: cluster.yaml
+
+    - name: apply control plane
+      try:
+        - apply:
+            file: controlplane.yaml
+
+    - name: apply workers
+      try:
+        - apply:
+            file: workers.yaml
+
+    - name: assert - exoscalecluster
+      try:
+        - description: assert cluster ready
+          assert:
+            timeout: 10m
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleCluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+              status:
+                initialization:
+                  provisioned: true
+                conditions:
+                  - type: Ready
+                    reason: ReconcileSuccess
+                    status: "True"
+              (spec.controlPlaneEndpoint.host == status.controlPlaneEndpoint.host): true
+              (spec.controlPlaneEndpoint.port == status.controlPlaneEndpoint.port): true
+
+        - description: assert security group rule worker
+          assert:
+            timeout: 10s
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleCluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+              status:
+                securityGroupWorker:
+                  (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
+                  rules:
+                    - description: Kubelet API from control plane
+                      endPort: 10250
+                      flowDirection: ingress
+                      protocol: tcp
+                      securityGroupRef:
+                        (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
+                      startPort: 10250
+                    - description: Kubelet API worker-to-worker
+                      endPort: 10250
+                      flowDirection: ingress
+                      protocol: tcp
+                      securityGroupRef:
+                        (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
+                      startPort: 10250
+                    - description: kube-router BGP peering (control-plane peers)
+                      endPort: 179
+                      flowDirection: ingress
+                      protocol: tcp
+                      securityGroupRef:
+                        (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
+                      startPort: 179
+                    - description: kube-router BGP peering (worker peers)
+                      endPort: 179
+                      flowDirection: ingress
+                      protocol: tcp
+                      securityGroupRef:
+                        (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
+                      startPort: 179
+                    - description: kube-router pod overlay traffic (from control-plane nodes)
+                      flowDirection: ingress
+                      protocol: ipip
+                      securityGroupRef:
+                        (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
+                    - description: kube-router pod overlay traffic (from worker nodes)
+                      flowDirection: ingress
+                      protocol: ipip
+                      securityGroupRef:
+                        (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
+              (length(status.securityGroupWorker.rules)): 6
+
+        - description: assert security group rule control plane
+          assert:
+            timeout: 10s
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleCluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+              status:
+                securityGroupControlPlane:
+                  (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
+                  rules:
+                    - description: kubernetes API server
+                      endPort: 6443
+                      flowDirection: ingress
+                      network: 0.0.0.0/0
+                      protocol: tcp
+                      startPort: 6443
+                    - description: etcd client and peer communication
+                      endPort: 2380
+                      flowDirection: ingress
+                      protocol: tcp
+                      securityGroupRef:
+                        (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
+                      startPort: 2379
+                    - description: kubelet API
+                      endPort: 10250
+                      flowDirection: ingress
+                      protocol: tcp
+                      securityGroupRef:
+                        (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
+                      startPort: 10250
+                    - description: kube-controller-manager
+                      endPort: 10257
+                      flowDirection: ingress
+                      protocol: tcp
+                      securityGroupRef:
+                        (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
+                      startPort: 10257
+                    - description: kube-scheduler
+                      endPort: 10259
+                      flowDirection: ingress
+                      protocol: tcp
+                      securityGroupRef:
+                        (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
+                      startPort: 10259
+                    - description: k0s controller join API
+                      endPort: 9443
+                      flowDirection: ingress
+                      protocol: tcp
+                      securityGroupRef:
+                        (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
+                      startPort: 9443
+                    - description: k0s konnectivity tunnel (from control-plane nodes)
+                      endPort: 8132
+                      flowDirection: ingress
+                      protocol: tcp
+                      securityGroupRef:
+                        (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
+                      startPort: 8132
+                    - description: k0s konnectivity tunnel (from worker nodes)
+                      endPort: 8132
+                      flowDirection: ingress
+                      protocol: tcp
+                      securityGroupRef:
+                        (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
+                      startPort: 8132
+                    - description: kube-router BGP peering (control-plane peers)
+                      endPort: 179
+                      flowDirection: ingress
+                      protocol: tcp
+                      securityGroupRef:
+                        (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
+                      startPort: 179
+                    - description: kube-router BGP peering (worker peers)
+                      endPort: 179
+                      flowDirection: ingress
+                      protocol: tcp
+                      securityGroupRef:
+                        (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
+                      startPort: 179
+                    - description: kube-router pod overlay traffic (from control-plane nodes)
+                      flowDirection: ingress
+                      protocol: ipip
+                      securityGroupRef:
+                        (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
+                    - description: kube-router pod overlay traffic (from worker nodes)
+                      flowDirection: ingress
+                      protocol: ipip
+                      securityGroupRef:
+                        (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', id)): true
+              (length(status.securityGroupControlPlane.rules)): 12
+              (contains(status.securityGroupWorker.rules[?description == 'Kubelet API from control plane'].securityGroupRef.id, status.securityGroupControlPlane.id)): true
+              (contains(status.securityGroupWorker.rules[?description == 'Kubelet API worker-to-worker'].securityGroupRef.id, status.securityGroupWorker.id)): true
+
+    # Gate the machine assertions on the k0s control plane actually being up: the
+    # worker K0sWorkerConfig cannot produce bootstrap data (and therefore the worker
+    # ExoscaleMachine never provisions an instance) until the control plane API is
+    # reachable. Asserting this explicitly keeps a slow control-plane boot from
+    # surfacing as a misleading "worker machine not ready" failure.
+    - name: assert - controlplane ready
+      try:
+        - description: wait for the k0s control plane to be initialized
+          assert:
+            timeout: 15m
+            resource:
+              apiVersion: cluster.x-k8s.io/v1beta2
+              kind: Cluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+              status:
+                initialization:
+                  controlPlaneInitialized: true
+
+    - name: assert - exoscalemachine
+      try:
+        - description: assert control plane machine ready
+          assert:
+            timeout: 5m
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleMachine
+              metadata:
+                namespace: ($namespace)
+                labels:
+                  cluster.x-k8s.io/cluster-name: ($clusterName)
+                  cluster.x-k8s.io/control-plane: "true"
+              status:
+                initialization:
+                  provisioned: true
+                ready: true
+                conditions:
+                  - type: Ready
+                    reason: Ready
+                    status: "True"
+                addresses:
+                  - type: ExternalIP
+                    (address != ''): true
+
+        - description: assert control plane machine providerID
+          assert:
+            timeout: 1m
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleMachine
+              metadata:
+                namespace: ($namespace)
+                labels:
+                  cluster.x-k8s.io/cluster-name: ($clusterName)
+                  cluster.x-k8s.io/control-plane: "true"
+              (spec.providerID == join('', ['exoscale://', status.instanceID])): true
+              status:
+                (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', instanceID)): true
+
+        - description: assert worker machine ready
+          assert:
+            timeout: 10m
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleMachine
+              metadata:
+                namespace: ($namespace)
+                labels:
+                  cluster.x-k8s.io/cluster-name: ($clusterName)
+                  cluster.x-k8s.io/deployment-name: ($workersName)
+              status:
+                initialization:
+                  provisioned: true
+                ready: true
+                conditions:
+                  - type: Ready
+                    reason: Ready
+                    status: "True"
+                addresses:
+                  - type: ExternalIP
+                    (address != ''): true
+
+        - description: assert worker machine providerID
+          assert:
+            timeout: 1m
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleMachine
+              metadata:
+                namespace: ($namespace)
+                labels:
+                  cluster.x-k8s.io/cluster-name: ($clusterName)
+                  cluster.x-k8s.io/deployment-name: ($workersName)
+              (spec.providerID == join('', ['exoscale://', status.instanceID])): true
+              status:
+                (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', instanceID)): true
+
+    - name: assert - machine
+      try:
+        - description: assert control plane machine registered infra machine
+          assert:
+            timeout: 1m
+            resource:
+              apiVersion: cluster.x-k8s.io/v1beta2
+              kind: Machine
+              metadata:
+                namespace: ($namespace)
+                labels:
+                  cluster.x-k8s.io/cluster-name: ($clusterName)
+                  cluster.x-k8s.io/control-plane: "true"
+              (spec.providerID != ''): true
+              status:
+                initialization:
+                  infrastructureProvisioned: true
+                addresses:
+                  - type: ExternalIP
+                    (address != ''): true
+              (length(status.conditions[?type == 'Ready' && status == 'True'])): 1
+              (length(status.conditions[?type == 'Available' && status == 'True'])): 1
+              (length(status.conditions[?type == 'UpToDate' && status == 'True'])): 1
+
+        - description: assert worker machine registered infra machine
+          assert:
+            timeout: 1m
+            resource:
+              apiVersion: cluster.x-k8s.io/v1beta2
+              kind: Machine
+              metadata:
+                namespace: ($namespace)
+                labels:
+                  cluster.x-k8s.io/cluster-name: ($clusterName)
+                  cluster.x-k8s.io/deployment-name: ($workersName)
+              (spec.providerID != ''): true
+              status:
+                initialization:
+                  infrastructureProvisioned: true
+                addresses:
+                  - type: ExternalIP
+                    (address != ''): true
+              (length(status.conditions[?type == 'Ready' && status == 'True'])): 1
+              (length(status.conditions[?type == 'Available' && status == 'True'])): 1
+              (length(status.conditions[?type == 'UpToDate' && status == 'True'])): 1
+
+    - name: assert - cluster
+      try:
+        - description: get control plane endpoint from exoscalecluster
+          script:
+            timeout: 10s
+            env:
+              - name: CLUSTER_NAME
+                value: ($clusterName)
+            content: |
+              kubectl get exoscalecluster "$CLUSTER_NAME" -n default \
+                -o jsonpath='{.spec.controlPlaneEndpoint.host} {.spec.controlPlaneEndpoint.port}'
+            outputs:
+              - name: cpHost
+                value: (split($stdout, ' ')[0])
+              - name: cpPort
+                value: (split($stdout, ' ')[1])
+
+        - description: assert endpoint consistency
+          assert:
+            timeout: 10s
+            resource:
+              apiVersion: cluster.x-k8s.io/v1beta2
+              kind: Cluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+              (spec.controlPlaneEndpoint.host == $cpHost): true
+              (to_string(spec.controlPlaneEndpoint.port) == $cpPort): true
+
+        - description: assert availability and node status
+          assert:
+            timeout: 2m
+            resource:
+              apiVersion: cluster.x-k8s.io/v1beta2
+              kind: Cluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+              (length(status.conditions[?type == 'Available' && status == 'True'])): 1
+              (status.controlPlane.desiredReplicas == status.controlPlane.availableReplicas): true
+              (status.controlPlane.availableReplicas == status.controlPlane.upToDateReplicas): true
+              (status.workers.desiredReplicas == status.workers.availableReplicas): true
+              (status.workers.availableReplicas == status.workers.upToDateReplicas): true
+
+    - name: delete cluster
+      try:
+        - delete:
+            timeout: 10m
+            ref:
+              apiVersion: cluster.x-k8s.io/v1beta2
+              kind: Cluster
+              name: ($clusterName)
+              namespace: ($namespace)

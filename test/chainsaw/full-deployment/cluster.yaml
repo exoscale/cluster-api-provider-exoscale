@@ -1,0 +1,88 @@
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: ExoscaleCluster
+metadata:
+  name: ($clusterName)
+  namespace: ($namespace)
+spec:
+  zone: ($zone)
+  securityGroupControlPlane:
+    rules:
+      - description: k0s controller join API
+        securityGroup: control-plane
+        endPort: 9443
+        startPort: 9443
+        protocol: tcp
+        flowDirection: ingress
+      - description: k0s konnectivity tunnel (from control-plane nodes)
+        securityGroup: control-plane
+        endPort: 8132
+        startPort: 8132
+        protocol: tcp
+        flowDirection: ingress
+      - description: k0s konnectivity tunnel (from worker nodes)
+        securityGroup: worker
+        endPort: 8132
+        startPort: 8132
+        protocol: tcp
+        flowDirection: ingress
+      - description: kube-router BGP peering (control-plane peers)
+        securityGroup: control-plane
+        endPort: 179
+        startPort: 179
+        protocol: tcp
+        flowDirection: ingress
+      - description: kube-router BGP peering (worker peers)
+        securityGroup: worker
+        endPort: 179
+        startPort: 179
+        protocol: tcp
+        flowDirection: ingress
+      - description: kube-router pod overlay traffic (from control-plane nodes)
+        securityGroup: control-plane
+        protocol: ipip
+        flowDirection: ingress
+      - description: kube-router pod overlay traffic (from worker nodes)
+        securityGroup: worker
+        protocol: ipip
+        flowDirection: ingress
+  securityGroupWorker:
+    rules:
+      - description: kube-router BGP peering (control-plane peers)
+        securityGroup: control-plane
+        endPort: 179
+        startPort: 179
+        protocol: tcp
+        flowDirection: ingress
+      - description: kube-router BGP peering (worker peers)
+        securityGroup: worker
+        endPort: 179
+        startPort: 179
+        protocol: tcp
+        flowDirection: ingress
+      - description: kube-router pod overlay traffic (from control-plane nodes)
+        securityGroup: control-plane
+        protocol: ipip
+        flowDirection: ingress
+      - description: kube-router pod overlay traffic (from worker nodes)
+        securityGroup: worker
+        protocol: ipip
+        flowDirection: ingress
+---
+apiVersion: cluster.x-k8s.io/v1beta2
+kind: Cluster
+metadata:
+  name: ($clusterName)
+  namespace: ($namespace)
+spec:
+  clusterNetwork:
+    pods:
+      cidrBlocks:
+        - 10.244.0.0/16
+  controlPlaneRef:
+    apiGroup: controlplane.cluster.x-k8s.io
+    kind: K0sControlPlane
+    name: ($cpName)
+  infrastructureRef:
+    apiGroup: infrastructure.cluster.x-k8s.io
+    kind: ExoscaleCluster
+    name: ($clusterName)

@@ -10,46 +10,7 @@ resources for self-managed Kubernetes clusters. It currently reconciles
 `ExoscaleCluster` and `ExoscaleMachine` resources into the required cloud
 infrastructure.
 
-## Get started
-
-Exoscale CAPI does not publish release assets yet, so both paths below run the
-provider from this checkout. They create a local Kind management cluster and
-one real, billable Exoscale control-plane VM in `ch-gva-2`.
-
-Prerequisites: Docker, `kind`, `kubectl`, `make`, `curl`, `setsid`, the Go
-version declared in `go.mod`, and either `EXOSCALE_API_KEY` plus
-`EXOSCALE_API_SECRET` or an Exoscale CLI account configured in
-`~/.config/exoscale/exoscale.toml`.
-
-### Traditional: official Ubuntu image
-
-This is the default path. It starts from the official
-`Linux Ubuntu 24.04 LTS 64-bit` template and installs containerd, kubeadm,
-kubelet, and kubectl through cloud-init on first boot.
-
-```console
-$ ./sample-run.sh
-```
-
-### Pre-built Kubernetes image
-
-This path starts from a private template where Kubernetes and containerd are
-already installed. First follow the [pre-built image sample] to build and
-register the image, then pass its UUID and matching Kubernetes version:
-
-```console
-$ CUSTOM_IMAGE_TEMPLATE=<template-id> \
-    CUSTOM_IMAGE_KUBERNETES_VERSION=v1.36.4 \
-    SAMPLE=custom-image \
-    ./sample-run.sh
-```
-
-Both commands wait for the kubeadm control plane and its Node to become Ready.
-Press Enter when prompted to delete the workload cluster and its Exoscale
-resources. The pre-built path also creates a billable custom template that must
-be deleted separately when it is no longer needed.
-
-## Development
+## Run locally
 
 Prerequisites: Docker, `kind`, `kubectl`, the Go version declared in `go.mod`,
 and Exoscale API credentials.
@@ -74,7 +35,7 @@ Keep the manager running and use another terminal for the remaining commands.
 $> export EXOSCALE_API_KEY=<api-key>
 $> export EXOSCALE_API_SECRET=<api-secret>
 $> kubectl create secret generic exoscale --from-literal=apikey=$EXOSCALE_API_KEY --from-literal=apisecret=$EXOSCALE_API_SECRET
-$> kubectl apply -k config/samples/kubeadm/cluster/
+$> kubectl apply -k config/samples/cluster/
 ```
 
 #### Wait for the workload cluster
@@ -194,4 +155,3 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 [cluster_api]: https://github.com/kubernetes-sigs/cluster-api
-[pre-built image sample]: config/samples/kubeadm/cluster-custom-image/README.md

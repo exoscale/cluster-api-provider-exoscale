@@ -125,8 +125,8 @@ $> clusterctl generate cluster my-cluster \
 
 Exoscale does not currently build or maintain a pre-built Kubernetes image.
 To use the `custom-image` flavor, follow the [pre-built image sample] to build
-and register your own image. Its Kubernetes version must match
-`--kubernetes-version`.
+an image locally and register it as a private Exoscale template. The image's
+Kubernetes version must match `--kubernetes-version`.
 
 ```bash
 $> export EXOSCALE_ZONE=ch-gva-2

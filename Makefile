@@ -106,12 +106,20 @@ check-exoscale-creds: yq ## Check that exoscale creds are setup before running e
 		exit 1; \
 	fi
 
+CAPI_VERSION ?= v1.14.1
+K0SMOTRON_VERSION ?= v2.1.0
+
 setup-test-e2e-chainsaw: check-exoscale-creds setup-test-e2e docker-build manifests generate kustomize clusterctl ## Set up a Kind, CAPI,  cluster for e2e tests if it does not exist
 	## Load docker image into kind cluster.
 	$(KIND) load docker-image --name $(KIND_CLUSTER) $(IMG)
 
 	## Install CAPI, plus k0smotron's bootstrap/control-plane providers.
-	$(CLUSTERCTL) init --infrastructure - --bootstrap k0sproject-k0smotron --control-plane k0sproject-k0smotron
+	$(CLUSTERCTL) init \
+		--core cluster-api:$(CAPI_VERSION) \
+		--bootstrap k0sproject-k0smotron:$(K0SMOTRON_VERSION) \
+		--control-plane k0sproject-k0smotron:$(K0SMOTRON_VERSION) \
+		--infrastructure - 
+
 	$(KUBECTL) wait deployment/k0smotron-controller-manager-{bootstrap,control-plane} \
 		--namespace k0smotron \
 		--for=condition=Available

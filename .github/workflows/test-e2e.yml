@@ -87,9 +87,8 @@ jobs:
         if: always()
         run: |
           kubectl delete clusters.cluster.x-k8s.io -A --all --ignore-not-found --wait --timeout=20m || true
-          kubectl delete exoscaleclusters.infrastructure.cluster.x-k8s.io \
-                         exoscalemachines.infrastructure.cluster.x-k8s.io \
-                         -A --all --ignore-not-found --wait --timeout=15m || true
+          kubectl delete exoscaleclusters.infrastructure.cluster.x-k8s.io -A --all --ignore-not-found --wait --timeout=20m || true
+          kubectl delete exoscalemachines.infrastructure.cluster.x-k8s.io -A --all --ignore-not-found --wait --timeout=20m || true
 
           leftover=$(kubectl get exoscaleclusters,exoscalemachines -A --no-headers 2>/dev/null | wc -l)
           if [ "$leftover" -ne 0 ]; then

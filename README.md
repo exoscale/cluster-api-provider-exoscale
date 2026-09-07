@@ -78,7 +78,7 @@ $> export EXOSCALE_API_SECRET=<api-secret> # Optional if exocli is not configure
 $> make chainsaw-test-e2e
 
 # run specific tests
-$> make chainsaw-test-e2e CHAINSAW_TEST_DIRS="test/chainsaw/full-deployment test/chainsaw/deploy-cluster"
+$> make chainsaw-test-e2e CHAINSAW_TEST_DIRS="test/chainsaw/full-deployment test/chainsaw/cluster-webhook"
 ```
 
 ## License

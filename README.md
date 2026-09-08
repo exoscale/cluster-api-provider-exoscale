@@ -74,22 +74,27 @@ This creates a Pod, prints its hostname, and deletes it after completion.
 
 ### Scale the cluster
 
-Scale the control plane and worker pool from one to three Nodes, then watch CAPI
-create the Machines:
+Scale the control plane and worker pool from one to three Nodes by patching
+their desired replicas. The cluster's Elastic IP continues to front all
+control-plane instances:
 
 ```bash
-$> kubectl scale kubeadmcontrolplane/my-control-plane --replicas=3
-$> kubectl scale machinedeployment/my-workers --replicas=3
-$> kubectl get machines --watch
+$> kubectl patch kubeadmcontrolplane my-control-plane --type=merge -p '{"spec":{"replicas":3}}'
+$> kubectl wait kubeadmcontrolplane/my-control-plane --for=jsonpath='{.status.readyReplicas}'=3 --timeout=10m
+$> kubectl patch machinedeployment my-workers --type=merge -p '{"spec":{"replicas":3}}'
+$> kubectl wait machinedeployment/my-workers --for=jsonpath='{.status.readyReplicas}'=3 --timeout=10m
+$> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" wait node --all --for=condition=Ready --timeout=10m
 ```
 
-After the new Machines become Ready, check the workload Nodes and scale back
-down. Keep at least one control-plane replica:
+Check the workload Nodes, then patch both resources back to one replica. Keep
+at least one control-plane replica:
 
 ```bash
 $> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" get nodes
-$> kubectl scale machinedeployment/my-workers --replicas=1
-$> kubectl scale kubeadmcontrolplane/my-control-plane --replicas=1
+$> kubectl patch machinedeployment my-workers --type=merge -p '{"spec":{"replicas":1}}'
+$> kubectl wait machinedeployment/my-workers --for=jsonpath='{.status.readyReplicas}'=1 --timeout=10m
+$> kubectl patch kubeadmcontrolplane my-control-plane --type=merge -p '{"spec":{"replicas":1}}'
+$> kubectl wait kubeadmcontrolplane/my-control-plane --for=jsonpath='{.status.readyReplicas}'=1 --timeout=10m
 ```
 
 ### Delete simple cluster

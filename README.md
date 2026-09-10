@@ -89,6 +89,7 @@ $> export EXOSCALE_ZONE=ch-gva-2
 $> ./bin/clusterctl generate cluster my-cluster \
      --from ./templates/cluster-template.yaml \
      --kubernetes-version v1.32.13 \
+     --worker-machine-count 1 \
      | kubectl apply -f -
 
 $> kubectl wait cluster/my-cluster --for=condition=ControlPlaneInitialized --timeout=20m
@@ -119,6 +120,7 @@ $> clusterctl generate cluster my-cluster \
      --config clusterctl.yaml \
      --infrastructure exoscale:v0.1.0 \
      --kubernetes-version v1.32.13 \
+     --worker-machine-count 1 \
      --target-namespace default \
      | kubectl apply -f -
 ```
@@ -136,6 +138,7 @@ $> clusterctl generate cluster my-cluster \
      --infrastructure exoscale:v0.1.0 \
      --flavor custom-image \
      --kubernetes-version v1.36.4 \
+     --worker-machine-count 1 \
      --target-namespace default \
      | kubectl apply -f -
 ```

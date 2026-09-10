@@ -1,0 +1,34 @@
+name: Improvement or feedback
+description: Suggest an improvement or share feedback about the project
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Cluster API Provider Exoscale.
+
+  - type: textarea
+    id: improvement
+    attributes:
+      label: What would you like to improve?
+      description: Describe your idea or feedback and the problem it addresses.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you suggest?
+      description: Describe a possible solution or desired outcome, if you have one.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What alternatives have you considered?
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Anything else?
+      description: Add examples, links, or other context that may help.

@@ -59,12 +59,6 @@ body:
       label: Kubernetes version
       placeholder: v1.35.0
 
-  - type: input
-    id: zone
-    attributes:
-      label: Exoscale zone
-      placeholder: ch-gva-2
-
   - type: textarea
     id: diagnostics
     attributes:

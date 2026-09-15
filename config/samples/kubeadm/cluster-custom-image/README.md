@@ -1,9 +1,9 @@
 # Pre-built Kubernetes image
 
-This overlay runs the kubeadm cluster sample with Kubernetes pre-installed in a
-private Exoscale template. It uses the generic Ubuntu 24.04 UEFI QEMU target
-from [Kubernetes image-builder]. No Exoscale-specific image-builder target is
-required.
+This overlay runs the [kubeadm cluster sample] with Kubernetes pre-installed
+in a private Exoscale template. It uses the generic Ubuntu 24.04 UEFI QEMU
+target from [Kubernetes image-builder]. No Exoscale-specific image-builder
+target is required.
 
 The resulting amd64 image was built with image-builder `v0.1.55` and contains
 Ubuntu `24.04.4`, Kubernetes `v1.36.4`, and containerd `2.3.2`.
@@ -12,7 +12,8 @@ Ubuntu `24.04.4`, Kubernetes `v1.36.4`, and containerd `2.3.2`.
 
 The image must include cloud-init with the Exoscale datasource, containerd,
 kubeadm, kubelet, and kubectl. The Kubernetes version baked into the image must
-match `KubeadmControlPlane.spec.version` in `kustomization.yaml`.
+match the `KubeadmControlPlane` and `MachineDeployment` versions patched in
+`kustomization.yaml`.
 
 The provider ID cannot be baked into the image because it contains the new VM's
 UUID. This overlay therefore removes package installation from cloud-init but
@@ -155,7 +156,8 @@ $ exo compute instance-template delete <template-id> --zone ch-gva-2
 ```
 
 [Kubernetes image-builder]: https://github.com/kubernetes-sigs/image-builder
-[deploy the Cluster API components]: ../../../../README.md#deploy-cluster-api-components
-[run Exoscale CAPI]: ../../../../README.md#run-exoscale-capi
-[scaling steps]: ../../../../README.md#scale-the-cluster
-[wait and smoke-test steps]: ../../../../README.md#wait-for-the-workload-cluster
+[deploy the Cluster API components]: ../cluster/README.md#deploy-cluster-api-components
+[kubeadm cluster sample]: ../cluster/README.md
+[run Exoscale CAPI]: ../cluster/README.md#run-exoscale-capi
+[scaling steps]: ../cluster/README.md#scale-the-cluster
+[wait and smoke-test steps]: ../cluster/README.md#wait-for-the-workload-cluster

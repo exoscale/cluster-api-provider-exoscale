@@ -53,9 +53,6 @@ spec:
         name: my-control-plane
   kubeadmConfigSpec:
     format: cloud-config
-    initConfiguration:
-      nodeRegistration:
-        taints: []
     preKubeadmCommands:
       - |
         set -eux

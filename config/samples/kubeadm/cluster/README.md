@@ -40,6 +40,11 @@ Flannel uses `10.244.0.0/16`, which is why the same cidr is declared in
 `Cluster.spec.clusterNetwork.pods.cidrBlocks`. Without a CNI, pods cannot
 communicate across Nodes and CoreDNS does not become ready.
 
+Flannel's default VXLAN backend sends inter-node traffic over UDP 8472. The
+`ExoscaleCluster` rules allow that port between this cluster's managed
+control-plane and worker security groups. All four source and destination role
+combinations are needed when either pool contains multiple Nodes.
+
 ## Deploy Cluster API components
 
 ```bash
@@ -74,7 +79,7 @@ $> kubectl apply -k config/samples/kubeadm/cluster/
 ### Wait for the workload cluster
 
 ```bash
-$> kubectl wait cluster/my-cluster --for=condition=ControlPlaneInitialized --timeout=10m
+$> kubectl wait cluster/my-cluster --for=condition=ControlPlaneInitialized --timeout=15m
 $> WORKLOAD_KUBECONFIG=$(mktemp /tmp/my-cluster.kubeconfig.XXXXXX)
 $> ./bin/clusterctl get kubeconfig my-cluster > "$WORKLOAD_KUBECONFIG"
 $> kubectl wait cluster/my-cluster --for=condition=RemoteConnectionProbe --timeout=5m
@@ -146,7 +151,7 @@ control-plane instance, so clients continue to use the same address:
 
 ```bash
 $> kubectl patch kubeadmcontrolplane my-control-plane --type=merge -p '{"spec":{"replicas":3}}'
-$> kubectl wait kubeadmcontrolplane/my-control-plane --for=jsonpath='{.status.readyReplicas}'=3 --timeout=10m
+$> kubectl wait kubeadmcontrolplane/my-control-plane --for=jsonpath='{.status.readyReplicas}'=3 --timeout=15m
 $> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" wait node --all --for=condition=Ready --timeout=10m
 ```
 

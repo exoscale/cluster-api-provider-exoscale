@@ -5,6 +5,34 @@ metadata:
   namespace: default
 spec:
   zone: ch-gva-2
+  securityGroupControlPlane:
+    rules:
+      - description: Flannel VXLAN from control-plane nodes
+        securityGroup: control-plane
+        startPort: 8472
+        endPort: 8472
+        protocol: udp
+        flowDirection: ingress
+      - description: Flannel VXLAN from worker nodes
+        securityGroup: worker
+        startPort: 8472
+        endPort: 8472
+        protocol: udp
+        flowDirection: ingress
+  securityGroupWorker:
+    rules:
+      - description: Flannel VXLAN from control-plane nodes
+        securityGroup: control-plane
+        startPort: 8472
+        endPort: 8472
+        protocol: udp
+        flowDirection: ingress
+      - description: Flannel VXLAN from worker nodes
+        securityGroup: worker
+        startPort: 8472
+        endPort: 8472
+        protocol: udp
+        flowDirection: ingress
 ---
 apiVersion: cluster.x-k8s.io/v1beta2
 kind: Cluster

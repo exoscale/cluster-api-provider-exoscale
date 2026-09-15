@@ -24,6 +24,16 @@ jobs:
           go mod tidy
           make test
 
+      - name: Validate clusterctl assets
+        env:
+          IMAGE: exoscale/cluster-api-provider-exoscale-controller:test
+        run: |
+          make build-installer yq IMG="$IMAGE"
+          test "$(bin/yq '.apiVersion' metadata.yaml)" = clusterctl.cluster.x-k8s.io/v1alpha3
+          test "$(bin/yq '.kind' metadata.yaml)" = Metadata
+          test "$(bin/yq '.releaseSeries[0].contract' metadata.yaml)" = v1beta2
+          test "$(bin/yq 'select(.kind == "Deployment") | .spec.template.spec.containers[] | select(.name == "manager") | .image' dist/install.yaml)" = "$IMAGE"
+
       - name: Render kubeadm samples
         run: |
           make kustomize

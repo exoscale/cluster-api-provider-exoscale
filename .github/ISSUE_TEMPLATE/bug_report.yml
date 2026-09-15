@@ -1,0 +1,73 @@
+name: Bug report
+description: Report a problem with Cluster API Provider Exoscale
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include API credentials or other sensitive information.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the problem and its impact.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: How can we reproduce it?
+      description: Include the smallest relevant manifests and commands.
+      placeholder: |
+        1. Apply ...
+        2. Wait for ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: input
+    id: provider-version
+    attributes:
+      label: Provider version
+      description: Release version, image tag, or commit SHA.
+      placeholder: v0.1.0
+    validations:
+      required: true
+
+  - type: input
+    id: capi-version
+    attributes:
+      label: Cluster API version
+      placeholder: v1.14.1
+    validations:
+      required: true
+
+  - type: input
+    id: kubernetes-version
+    attributes:
+      label: Kubernetes version
+      placeholder: v1.35.0
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Relevant logs or other diagnostics
+      description: Redact API credentials, secrets, and other sensitive values.
+      render: shell
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Anything else?
+      description: Add any other context that may help diagnose the problem.

@@ -2,57 +2,95 @@
 
 ## Introduction
 
-The [Cluster API][cluster_api] brings declarative, Kubernetes-style APIs to
-cluster creation, configuration and management.
+The [Cluster API][cluster_api] project brings declarative, Kubernetes-style
+APIs to cluster creation, configuration, and management. The Cluster API
+Provider Exoscale (CAPEX) is the infrastructure provider: it turns its custom
+resources into Exoscale cloud resources. Turning those cloud resources into a
+running Kubernetes cluster is the job of the other kind of
+[Cluster API provider][capi-providers], a bootstrap/control-plane provider —
+see the samples below for two examples.
 
-Exoscale CAPI is an infrastructure provider that provisions and manages Exoscale
-resources for self-managed Kubernetes clusters. It currently reconciles
-`ExoscaleCluster` and `ExoscaleMachine` resources into the required cloud
-infrastructure.
+It reconciles four custom resources:
 
-## Getting started
+| Kind | Purpose |
+| --- | --- |
+| `ExoscaleCluster` | Cluster-wide infrastructure: the Exoscale zone, the control-plane Elastic IP, and the control-plane/worker security groups. |
+| `ExoscaleMachine` | A single Exoscale Compute Instance backing a Cluster API `Machine`. |
+| `ExoscaleClusterTemplate` | A reusable `ExoscaleCluster` template, e.g. for `ClusterClass`. |
+| `ExoscaleMachineTemplate` | A reusable `ExoscaleMachine` template, cloned by control-plane providers and `MachineDeployment`s to create `ExoscaleMachine`s at scale. |
 
-Choose a sample based on the bootstrap and control-plane provider you want to
-use. Each guide covers prerequisites, local setup, deployment, verification,
-scaling, and cleanup.
+## Samples
 
-- [kubeadm cluster]: install Kubernetes on the stock Ubuntu template, deploy a
-  control plane and worker pool, test networking, and scale both pools.
-- [kubeadm cluster with a pre-built image]: build and register a private
-  template with Kubernetes already installed.
-- [k0smotron cluster]: deploy a machine-based k0s control plane and workers.
-- [k0smotron cluster with CSI]: install the Exoscale CSI driver and provision a
-  block storage volume.
+### kubeadm
 
-## Development
+[kubeadm][kubeadm] is the default provider, installed by the Cluster API CLI
+itself. It expects Kubernetes (kubeadm, kubelet, kubectl, containerd) to
+already be installed on the machine before it configures the node.
 
-Install the CRDs in the current Kubernetes context and run the controller from
-your host:
+- [cluster](config/samples/kubeadm/cluster/README.md): a simple cluster whose control
+  plane can be scaled up. Kubernetes is installed at boot time by cloud-init
+  running plain `apt-get`/`systemctl` commands — a quick way to try things
+  out, not a production-grade way to provision nodes.
+- [cluster-custom-image](config/samples/kubeadm/cluster-custom-image/README.md):
+  the same cluster, built from a custom Linux template with Kubernetes
+  pre-baked in — because kubeadm expects every Kubernetes component to
+  already be present on the machines the infrastructure provider spins up.
+
+### k0smotron
+
+[k0smotron][k0smotron] backs the cluster with [k0s][k0s] and needs no pre-baked/custom Linux template: it installs Kubernetes itself.
+
+- [cluster](config/samples/k0smotron/cluster/README.md): a simple cluster
+  that can scale its control plane and worker nodes independently.
+- [cluster-csi](config/samples/k0smotron/cluster-csi/README.md): the same
+  cluster with the [Exoscale CSI driver][exoscale-csi-driver] installed, to
+  create volumes.
+
+## Local development
+
+Prerequisites: `go`, `docker`, `kind`, `kubectl`, `make` and Exoscale API credentials.
+
+### Run the provider locally
+
+Create a kind cluster and install Cluster API with no infrastructure
+provider — the manager started by `make run` below acts as one, reconciling
+`ExoscaleCluster`/`ExoscaleMachine` against this cluster from your host:
+```bash
+$> make clusterctl
+$> kind create cluster --name capi-test
+$> CAPI_VERSION=$(go list -m -f '{{.Version}}' sigs.k8s.io/cluster-api)
+$> ./bin/clusterctl init \
+     --core "cluster-api:$CAPI_VERSION" \
+     --bootstrap "kubeadm:$CAPI_VERSION" \
+     --control-plane "kubeadm:$CAPI_VERSION" \
+     --infrastructure -
+```
 
 ```bash
 $> make generate manifests install
 $> make run
 ```
 
-Run the unit tests and linters:
+### Run the end-to-end tests
 
+Unlike the steps above, `make chainsaw-test-e2e` is self-contained: it builds
+the controller image, creates its own dedicated Kind cluster, installs
+Cluster API with the k0smotron bootstrap/control-plane providers, and deploys
+the built image, then runs the chainsaw tests under `test/chainsaw/`.
 ```bash
-$> make test
-$> make lint-config
-$> make lint
-```
-
-### End-to-End testing
-
-```bash
-$> export EXOSCALE_API_KEY=<api-key>       # Optional if exocli is not configured
-$> export EXOSCALE_API_SECRET=<api-secret> # Optional if exocli is not configured
+$> export EXOSCALE_API_KEY=<api-key>       # Optional if exocli is configured
+$> export EXOSCALE_API_SECRET=<api-secret> # Optional if exocli is configured
 
 # run every e2e tests
 $> make chainsaw-test-e2e
 
 # run specific tests
 $> make chainsaw-test-e2e CHAINSAW_TEST_DIRS="test/chainsaw/full-deployment test/chainsaw/cluster-webhook"
+```
+
+Tear down the dedicated Kind cluster once you're done:
+```bash
+$> make cleanup-test-e2e
 ```
 
 ## License
@@ -72,7 +110,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 [cluster_api]: https://github.com/kubernetes-sigs/cluster-api
-[k0smotron cluster]: config/samples/k0smotron/cluster/README.md
-[k0smotron cluster with CSI]: config/samples/k0smotron/cluster-csi/README.md
-[kubeadm cluster]: config/samples/kubeadm/cluster/README.md
-[kubeadm cluster with a pre-built image]: config/samples/kubeadm/cluster-custom-image/README.md
+[exoscale]: https://www.exoscale.com/
+[capi-providers]: https://cluster-api.sigs.k8s.io/user/concepts#providers
+[kubeadm]: https://cluster-api.sigs.k8s.io/tasks/bootstrap/kubeadm-bootstrap
+[k0smotron]: https://docs.k0smotron.io
+[k0s]: https://k0sproject.io/
+[exoscale-csi-driver]: https://github.com/exoscale/exoscale-csi-driver

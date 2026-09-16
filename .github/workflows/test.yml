@@ -33,3 +33,9 @@ jobs:
           test "$(bin/yq '.kind' metadata.yaml)" = Metadata
           test "$(bin/yq '.releaseSeries[0].contract' metadata.yaml)" = v1beta2
           test "$(bin/yq 'select(.kind == "Deployment") | .spec.template.spec.containers[] | select(.name == "manager") | .image' dist/install.yaml)" = "$IMAGE"
+
+      - name: Render kubeadm samples
+        run: |
+          make kustomize
+          bin/kustomize build config/samples/kubeadm/cluster >/dev/null
+          bin/kustomize build config/samples/kubeadm/cluster-custom-image >/dev/null

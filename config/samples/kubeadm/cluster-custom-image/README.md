@@ -1,9 +1,9 @@
 # Pre-built Kubernetes image
 
-This overlay runs the kubeadm cluster sample with Kubernetes pre-installed in a
-private Exoscale template. It uses the generic Ubuntu 24.04 UEFI QEMU target
-from [Kubernetes image-builder]. No Exoscale-specific image-builder target is
-required.
+This overlay runs the [kubeadm cluster sample] with Kubernetes pre-installed
+in a private Exoscale template. It uses the generic Ubuntu 24.04 UEFI QEMU
+target from [Kubernetes image-builder]. No Exoscale-specific image-builder
+target is required.
 
 The resulting amd64 image was built with image-builder `v0.1.55` and contains
 Ubuntu `24.04.4`, Kubernetes `v1.36.4`, and containerd `2.3.2`.
@@ -12,7 +12,8 @@ Ubuntu `24.04.4`, Kubernetes `v1.36.4`, and containerd `2.3.2`.
 
 The image must include cloud-init with the Exoscale datasource, containerd,
 kubeadm, kubelet, and kubectl. The Kubernetes version baked into the image must
-match `KubeadmControlPlane.spec.version` in `kustomization.yaml`.
+match the `KubeadmControlPlane` and `MachineDeployment` versions patched in
+`kustomization.yaml`.
 
 The provider ID cannot be baked into the image because it contains the new VM's
 UUID. This overlay therefore removes package installation from cloud-init but
@@ -126,15 +127,15 @@ In `kustomization.yaml`:
 1. Replace `REPLACE_WITH_TEMPLATE_UUID` with the value stored in `$TEMPLATE_ID`.
 2. Change `v1.36.4` if the image contains another Kubernetes version.
 
-This sample intentionally creates one schedulable control-plane Node and no
-worker Nodes.
+This sample creates one control-plane Node and one worker Node. Both use the
+private template.
 
 From the Exoscale CAPI repository root, [deploy the Cluster API components] and
 [run Exoscale CAPI]. Keep the manager running and use another terminal for the
 remaining commands:
 
-The sample creates one billable control-plane VM and one billable private
-template in `ch-gva-2`.
+The sample creates two billable VMs and one billable private template in
+`ch-gva-2`.
 
 ```bash
 $> export EXOSCALE_API_KEY=<api-key>
@@ -143,7 +144,8 @@ $> kubectl create secret generic exoscale --from-literal=apikey=$EXOSCALE_API_KE
 $> kubectl apply -k config/samples/kubeadm/cluster-custom-image/
 ```
 
-Use the standard sample's [wait and smoke-test steps] to verify the cluster.
+Use the standard sample's [wait and smoke-test steps] to verify the cluster,
+then follow its [scaling steps].
 Delete the Cluster before deleting its private template so the provider can
 remove the Exoscale resources first:
 
@@ -154,6 +156,8 @@ $ exo compute instance-template delete <template-id> --zone ch-gva-2
 ```
 
 [Kubernetes image-builder]: https://github.com/kubernetes-sigs/image-builder
-[deploy the Cluster API components]: ../../../../README.md#deploy-cluster-api-components
-[run Exoscale CAPI]: ../../../../README.md#run-exoscale-capi
-[wait and smoke-test steps]: ../../../../README.md#wait-for-the-workload-cluster
+[deploy the Cluster API components]: ../cluster/README.md#deploy-cluster-api-components
+[kubeadm cluster sample]: ../cluster/README.md
+[run Exoscale CAPI]: ../cluster/README.md#run-exoscale-capi
+[scaling steps]: ../cluster/README.md#scale-the-cluster
+[wait and smoke-test steps]: ../cluster/README.md#wait-for-the-workload-cluster

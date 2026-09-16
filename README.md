@@ -1,6 +1,6 @@
 # Kubernetes Cluster API Provider Exoscale
 
-## What is the Cluster API Provider Exoscale
+## Introduction
 
 The [Cluster API][cluster_api] brings declarative, Kubernetes-style APIs to
 cluster creation, configuration and management.
@@ -10,76 +10,40 @@ resources for self-managed Kubernetes clusters. It currently reconciles
 `ExoscaleCluster` and `ExoscaleMachine` resources into the required cloud
 infrastructure.
 
-## Run locally
+## Getting started
 
-Prerequisites: Docker, `kind`, `kubectl`, `make`, the Go version declared in
-`go.mod`, and Exoscale API credentials.
+Choose a sample based on the bootstrap and control-plane provider you want to
+use. Each guide covers prerequisites, local setup, deployment, verification,
+scaling, and cleanup.
 
-### Deploy Cluster API components
-```bash
-$> make clusterctl
-$> kind create cluster --name capi-test
-$> CAPI_VERSION=$(go list -m -f '{{.Version}}' sigs.k8s.io/cluster-api)
-$> ./bin/clusterctl init \
-     --core "cluster-api:$CAPI_VERSION" \
-     --bootstrap "kubeadm:$CAPI_VERSION" \
-     --control-plane "kubeadm:$CAPI_VERSION" \
-     --infrastructure -
-```
+- [kubeadm cluster]: install Kubernetes on the stock Ubuntu template, deploy a
+  control plane and worker pool, test networking, and scale both pools.
+- [kubeadm cluster with a pre-built image]: build and register a private
+  template with Kubernetes already installed.
+- [k0smotron cluster]: deploy a machine-based k0s control plane and workers.
+- [k0smotron cluster with CSI]: install the Exoscale CSI driver and provision a
+  block storage volume.
 
-### Run Exoscale CAPI
+## Development
+
+Install the CRDs in the current Kubernetes context and run the controller from
+your host:
+
 ```bash
 $> make generate manifests install
 $> make run
 ```
 
-Keep the manager running and use another terminal for the remaining commands.
-
-### Deploy a simple cluster
-
-The default sample installs Kubernetes on the stock Ubuntu image. To use an
-image where Kubernetes is already installed, follow the [pre-built image
-sample] instead.
+Run the unit tests and linters:
 
 ```bash
-$> export EXOSCALE_API_KEY=<api-key>
-$> export EXOSCALE_API_SECRET=<api-secret>
-$> kubectl create secret generic exoscale --from-literal=apikey=$EXOSCALE_API_KEY --from-literal=apisecret=$EXOSCALE_API_SECRET
-$> kubectl apply -k config/samples/kubeadm/cluster/
+$> make test
+$> make lint-config
+$> make lint
 ```
 
-#### Wait for the workload cluster
-```bash
-$> kubectl wait cluster/my-cluster --for=condition=ControlPlaneInitialized --timeout=10m
-$> WORKLOAD_KUBECONFIG=$(mktemp /tmp/my-cluster.kubeconfig.XXXXXX)
-$> ./bin/clusterctl get kubeconfig my-cluster > "$WORKLOAD_KUBECONFIG"
-$> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" wait node --all --for=condition=Ready --timeout=10m
-$> kubectl wait cluster/my-cluster --for=condition=RemoteConnectionProbe --timeout=5m
-$> kubectl wait kubeadmcontrolplane/my-control-plane --for=condition=Available --timeout=5m
-$> kubectl wait machine --selector='cluster.x-k8s.io/cluster-name=my-cluster,cluster.x-k8s.io/control-plane' --for=condition=Ready --timeout=5m
-$> kubectl wait machine --selector='cluster.x-k8s.io/cluster-name=my-cluster,cluster.x-k8s.io/control-plane' --for=condition=Available --timeout=5m
-$> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" get nodes
+### End-to-End testing
 
-$> kubectl get cluster,kubeadmcontrolplane,exoscalecluster,exoscalemachinetemplate,machine,exoscalemachine,kubeadmconfig
-```
-
-#### Run a workload smoke test
-```bash
-kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" run smoke --image=busybox:1.36 --restart=Never --rm --attach --command -- sh -c 'echo "Hello from $(hostname)"'
-```
-
-This creates a Pod, prints its hostname, and deletes it after completion.
-
-### Delete simple cluster
-```bash
-$> kubectl delete cluster/my-cluster # also deletes its Machine and Exoscale resources
-$> rm -f "$WORKLOAD_KUBECONFIG"
-```
-
-The shared `exoscale` credential Secret is not owned by the Cluster and remains
-after Cluster deletion.
-
-## End-to-End testing
 ```bash
 $> export EXOSCALE_API_KEY=<api-key>       # Optional if exocli is not configured
 $> export EXOSCALE_API_SECRET=<api-secret> # Optional if exocli is not configured
@@ -108,4 +72,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 [cluster_api]: https://github.com/kubernetes-sigs/cluster-api
-[pre-built image sample]: config/samples/kubeadm/cluster-custom-image/README.md
+[k0smotron cluster]: config/samples/k0smotron/cluster/README.md
+[k0smotron cluster with CSI]: config/samples/k0smotron/cluster-csi/README.md
+[kubeadm cluster]: config/samples/kubeadm/cluster/README.md
+[kubeadm cluster with a pre-built image]: config/samples/kubeadm/cluster-custom-image/README.md

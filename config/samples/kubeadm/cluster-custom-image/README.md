@@ -152,10 +152,64 @@ $> kubectl apply -k config/samples/kubeadm/cluster-custom-image/
 ```
 
 Use the standard sample's [wait and smoke-test steps] to verify the cluster,
-then follow its [scaling steps]. To provision Exoscale Block Storage volumes,
-install the [Exoscale CSI driver] and create its credentials Secret as described
-in the [CSI walkthrough]. Use `$WORKLOAD_KUBECONFIG` in place of the
-walkthrough's kubeconfig path.
+then follow its [scaling steps].
+
+## Deploy the Exoscale CSI driver
+
+Create a separate API key with the permissions listed in the [CSI driver
+prerequisites], then store it in the workload cluster:
+
+```bash
+$> export EXOSCALE_CSI_API_KEY=<api-key>
+$> export EXOSCALE_CSI_API_SECRET=<api-secret>
+$> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" \
+    create secret generic exoscale-credentials \
+    --namespace kube-system \
+    --from-literal=EXOSCALE_API_KEY="$EXOSCALE_CSI_API_KEY" \
+    --from-literal=EXOSCALE_API_SECRET="$EXOSCALE_CSI_API_SECRET"
+```
+
+Install the driver and its snapshot CRDs:
+
+```bash
+$> export CSI_VERSION=0.34.3
+$> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" \
+    apply -f "https://raw.githubusercontent.com/exoscale/exoscale-csi-driver/main/deployment/${CSI_VERSION}/crds.yaml"
+$> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" \
+    wait --for=condition=Established --timeout=60s \
+    crd/volumesnapshotclasses.snapshot.storage.k8s.io \
+    crd/volumesnapshotcontents.snapshot.storage.k8s.io \
+    crd/volumesnapshots.snapshot.storage.k8s.io
+$> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" \
+    apply -k "github.com/exoscale/exoscale-csi-driver/deployment/${CSI_VERSION}?ref=main"
+```
+
+## Provision a volume
+
+Deploy the CSI driver's PVC example and wait for its pod:
+
+```bash
+$> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" apply \
+    -f https://raw.githubusercontent.com/exoscale/exoscale-csi-driver/main/doc/examples/namespace.yaml \
+    -f https://raw.githubusercontent.com/exoscale/exoscale-csi-driver/main/doc/examples/pvc.yaml \
+    -f https://raw.githubusercontent.com/exoscale/exoscale-csi-driver/main/doc/examples/deployment.yaml
+$> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" \
+    wait deployment/my-awesome-deployment -n awesome \
+    --for=condition=Available --timeout=5m
+$> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" get pods,pvc -n awesome
+```
+
+Delete the example and wait for the CSI driver to remove its backing volume
+before deleting the cluster:
+
+```bash
+$> PV_NAME=$(kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" \
+    get pvc/my-sbs-pvc -n awesome -o jsonpath='{.spec.volumeName}')
+$> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" delete \
+    -f https://raw.githubusercontent.com/exoscale/exoscale-csi-driver/main/doc/examples/namespace.yaml
+$> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" \
+    wait "pv/$PV_NAME" --for=delete --timeout=5m
+```
 
 Delete the Cluster before deleting its private template so the provider can
 remove the Exoscale resources first:
@@ -168,7 +222,7 @@ $ exo compute instance-template delete <template-id> --zone ch-gva-2
 
 [Kubernetes image-builder]: https://github.com/kubernetes-sigs/image-builder
 [Exoscale CSI driver]: https://github.com/exoscale/exoscale-csi-driver
-[CSI walkthrough]: ../../k0smotron/cluster-csi/README.md#deploy-the-exoscale-csi-driver
+[CSI driver prerequisites]: https://github.com/exoscale/exoscale-csi-driver#prerequisite
 [deploy the Cluster API components]: ../cluster/README.md#deploy-cluster-api-components
 [kubeadm cluster sample]: ../cluster/README.md
 [run Exoscale CAPI]: ../cluster/README.md#run-exoscale-capi

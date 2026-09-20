@@ -17,11 +17,18 @@ match the `KubeadmControlPlane` and `MachineDeployment` versions patched in
 
 The provider ID cannot be baked into the image because it contains the new VM's
 UUID. This overlay therefore removes package installation from cloud-init but
-keeps the per-instance provider-ID command.
+keeps the per-instance provider-ID command. The same command labels every Node
+with its Exoscale zone and region so the [Exoscale CSI driver] can identify it
+without falling back to the metadata server.
 
-The overlay replaces the base `preKubeadmCommands` with that provider-ID
-command. It keeps the inherited `postKubeadmCommands`, which installs Flannel
-after kubeadm.
+The zone and region are hardcoded to `ch-gva-2`, matching
+`ExoscaleCluster.spec.zone` in the base sample. Change all three values together
+when using another zone. Kubeadm already uses the standard `/var/lib/kubelet`
+root directory expected by the CSI driver.
+
+The overlay replaces the base `preKubeadmCommands` with the provider-ID and
+label command. It keeps the inherited `postKubeadmCommands`, which installs
+Flannel after kubeadm.
 
 ## Create the image
 
@@ -145,7 +152,11 @@ $> kubectl apply -k config/samples/kubeadm/cluster-custom-image/
 ```
 
 Use the standard sample's [wait and smoke-test steps] to verify the cluster,
-then follow its [scaling steps].
+then follow its [scaling steps]. To provision Exoscale Block Storage volumes,
+install the [Exoscale CSI driver] and create its credentials Secret as described
+in the [CSI walkthrough]. Use `$WORKLOAD_KUBECONFIG` in place of the
+walkthrough's kubeconfig path.
+
 Delete the Cluster before deleting its private template so the provider can
 remove the Exoscale resources first:
 
@@ -156,6 +167,8 @@ $ exo compute instance-template delete <template-id> --zone ch-gva-2
 ```
 
 [Kubernetes image-builder]: https://github.com/kubernetes-sigs/image-builder
+[Exoscale CSI driver]: https://github.com/exoscale/exoscale-csi-driver
+[CSI walkthrough]: ../../k0smotron/cluster-csi/README.md#deploy-the-exoscale-csi-driver
 [deploy the Cluster API components]: ../cluster/README.md#deploy-cluster-api-components
 [kubeadm cluster sample]: ../cluster/README.md
 [run Exoscale CAPI]: ../cluster/README.md#run-exoscale-capi

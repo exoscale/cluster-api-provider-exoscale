@@ -6,7 +6,7 @@ target from [Kubernetes image-builder]. No Exoscale-specific image-builder
 target is required.
 
 The resulting amd64 image was built with image-builder `v0.1.55` and contains
-Ubuntu `24.04.4`, Kubernetes `v1.36.4`, and containerd `2.3.2`.
+Ubuntu `24.04.4`, Kubernetes `v1.34.11`, and containerd `2.3.2`.
 
 ## Image requirements
 
@@ -43,8 +43,8 @@ Create a working directory and an image-builder version override:
 ```bash
 $ mkdir exoscale-capi-image && cd exoscale-capi-image
 $ mkdir output packer-cache
-$ KUBERNETES_VERSION=1.36.4
-$ KUBERNETES_SERIES=v1.36
+$ KUBERNETES_VERSION=1.34.11
+$ KUBERNETES_SERIES=v1.34
 $ tee kubernetes.json >/dev/null <<EOF
 {
   "kubernetes_deb_version": "${KUBERNETES_VERSION}-1.1",
@@ -132,7 +132,7 @@ $ exo storage rb "sos://${BUCKET}" --recursive --force
 In `kustomization.yaml`:
 
 1. Replace `REPLACE_WITH_TEMPLATE_UUID` with the value stored in `$TEMPLATE_ID`.
-2. Change `v1.36.4` if the image contains another Kubernetes version.
+2. Change `v1.34.11` if the image contains another Kubernetes version.
 
 This sample creates one control-plane Node and one worker Node. Both use the
 private template.
@@ -172,16 +172,20 @@ $> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" \
 Install the driver and its snapshot CRDs:
 
 ```bash
-$> export CSI_VERSION=0.34.3
+$> export CSI_VERSION=0.34.4
 $> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" \
-    apply -f "https://raw.githubusercontent.com/exoscale/exoscale-csi-driver/main/deployment/${CSI_VERSION}/crds.yaml"
+    apply -f "https://raw.githubusercontent.com/exoscale/exoscale-csi-driver/v${CSI_VERSION}/deployment/${CSI_VERSION}/crds.yaml"
 $> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" \
     wait --for=condition=Established --timeout=60s \
     crd/volumesnapshotclasses.snapshot.storage.k8s.io \
     crd/volumesnapshotcontents.snapshot.storage.k8s.io \
     crd/volumesnapshots.snapshot.storage.k8s.io
 $> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" \
-    apply -k "github.com/exoscale/exoscale-csi-driver/deployment/${CSI_VERSION}?ref=main"
+    apply -k "github.com/exoscale/exoscale-csi-driver/deployment/${CSI_VERSION}?ref=v${CSI_VERSION}"
+$> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" --namespace kube-system \
+    rollout status deployment/exoscale-csi-controller --timeout=5m
+$> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" --namespace kube-system \
+    rollout status daemonset/exoscale-csi-node --timeout=5m
 ```
 
 ## Provision a volume
@@ -190,9 +194,9 @@ Deploy the CSI driver's PVC example and wait for its pod:
 
 ```bash
 $> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" apply \
-    -f https://raw.githubusercontent.com/exoscale/exoscale-csi-driver/main/doc/examples/namespace.yaml \
-    -f https://raw.githubusercontent.com/exoscale/exoscale-csi-driver/main/doc/examples/pvc.yaml \
-    -f https://raw.githubusercontent.com/exoscale/exoscale-csi-driver/main/doc/examples/deployment.yaml
+    -f "https://raw.githubusercontent.com/exoscale/exoscale-csi-driver/v${CSI_VERSION}/doc/examples/namespace.yaml" \
+    -f "https://raw.githubusercontent.com/exoscale/exoscale-csi-driver/v${CSI_VERSION}/doc/examples/pvc.yaml" \
+    -f "https://raw.githubusercontent.com/exoscale/exoscale-csi-driver/v${CSI_VERSION}/doc/examples/deployment.yaml"
 $> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" \
     wait deployment/my-awesome-deployment -n awesome \
     --for=condition=Available --timeout=5m
@@ -206,7 +210,7 @@ before deleting the cluster:
 $> PV_NAME=$(kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" \
     get pvc/my-sbs-pvc -n awesome -o jsonpath='{.spec.volumeName}')
 $> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" delete \
-    -f https://raw.githubusercontent.com/exoscale/exoscale-csi-driver/main/doc/examples/namespace.yaml
+    -f "https://raw.githubusercontent.com/exoscale/exoscale-csi-driver/v${CSI_VERSION}/doc/examples/namespace.yaml"
 $> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" \
     wait "pv/$PV_NAME" --for=delete --timeout=5m
 ```

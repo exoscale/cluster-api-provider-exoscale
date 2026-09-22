@@ -74,10 +74,10 @@ func Test_clusterService_ReconcileCluster(t *testing.T) {
 			cluster: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 				Spec: infrav1alpha1.ExoscaleClusterSpec{
+					ClusterID:            clusterID.String(),
 					ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Port: port},
 				},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
-					ID: new(clusterID.String()),
 					ControlPlaneEndpoint: &infrav1alpha1.APIEndpointStatus{
 						APIEndpoint: infrav1alpha1.APIEndpoint{Host: "old-ip", Port: port},
 						ID:          eip.ID.String(),
@@ -114,10 +114,10 @@ func Test_clusterService_ReconcileCluster(t *testing.T) {
 			output: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 				Spec: infrav1alpha1.ExoscaleClusterSpec{
+					ClusterID:            clusterID.String(),
 					ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Host: "1.2.3.4", Port: port},
 				},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
-					ID: new(clusterID.String()),
 					ControlPlaneEndpoint: &infrav1alpha1.APIEndpointStatus{
 						APIEndpoint: infrav1alpha1.APIEndpoint{Host: "1.2.3.4", Port: port},
 						ID:          eip.ID.String(),
@@ -144,11 +144,10 @@ func Test_clusterService_ReconcileCluster(t *testing.T) {
 			cluster: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 				Spec: infrav1alpha1.ExoscaleClusterSpec{
+					ClusterID:            clusterID.String(),
 					ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Port: port},
 				},
-				Status: infrav1alpha1.ExoscaleClusterStatus{
-					ID: new(clusterID.String()),
-				},
+				Status: infrav1alpha1.ExoscaleClusterStatus{},
 			},
 			eipSvc: func(m *mocks.ElasticIPService) {
 				m.EXPECT().
@@ -158,11 +157,10 @@ func Test_clusterService_ReconcileCluster(t *testing.T) {
 			output: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 				Spec: infrav1alpha1.ExoscaleClusterSpec{
+					ClusterID:            clusterID.String(),
 					ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Port: port},
 				},
-				Status: infrav1alpha1.ExoscaleClusterStatus{
-					ID: new(clusterID.String()),
-				},
+				Status: infrav1alpha1.ExoscaleClusterStatus{},
 			},
 			err: assert.AnError,
 		},
@@ -171,11 +169,10 @@ func Test_clusterService_ReconcileCluster(t *testing.T) {
 			cluster: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 				Spec: infrav1alpha1.ExoscaleClusterSpec{
+					ClusterID:            clusterID.String(),
 					ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Port: port},
 				},
-				Status: infrav1alpha1.ExoscaleClusterStatus{
-					ID: new(clusterID.String()),
-				},
+				Status: infrav1alpha1.ExoscaleClusterStatus{},
 			},
 			eipSvc: func(m *mocks.ElasticIPService) {
 				m.EXPECT().
@@ -190,10 +187,10 @@ func Test_clusterService_ReconcileCluster(t *testing.T) {
 			output: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 				Spec: infrav1alpha1.ExoscaleClusterSpec{
+					ClusterID:            clusterID.String(),
 					ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Host: "1.2.3.4", Port: port},
 				},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
-					ID: new(clusterID.String()),
 					ControlPlaneEndpoint: &infrav1alpha1.APIEndpointStatus{
 						APIEndpoint: infrav1alpha1.APIEndpoint{Host: "1.2.3.4", Port: port},
 						ID:          eip.ID.String(),
@@ -208,11 +205,10 @@ func Test_clusterService_ReconcileCluster(t *testing.T) {
 			cluster: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 				Spec: infrav1alpha1.ExoscaleClusterSpec{
+					ClusterID:            clusterID.String(),
 					ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Port: port},
 				},
-				Status: infrav1alpha1.ExoscaleClusterStatus{
-					ID: new(clusterID.String()),
-				},
+				Status: infrav1alpha1.ExoscaleClusterStatus{},
 			},
 			eipSvc: func(m *mocks.ElasticIPService) {
 				m.EXPECT().
@@ -230,10 +226,10 @@ func Test_clusterService_ReconcileCluster(t *testing.T) {
 			output: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 				Spec: infrav1alpha1.ExoscaleClusterSpec{
+					ClusterID:            clusterID.String(),
 					ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Host: "1.2.3.4", Port: port},
 				},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
-					ID: new(clusterID.String()),
 					ControlPlaneEndpoint: &infrav1alpha1.APIEndpointStatus{
 						APIEndpoint: infrav1alpha1.APIEndpoint{Host: "1.2.3.4", Port: port},
 						ID:          eip.ID.String(),
@@ -252,11 +248,10 @@ func Test_clusterService_ReconcileCluster(t *testing.T) {
 			cluster: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 				Spec: infrav1alpha1.ExoscaleClusterSpec{
+					ClusterID:            clusterID.String(),
 					ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Port: port},
 				},
-				Status: infrav1alpha1.ExoscaleClusterStatus{
-					ID: new(clusterID.String()),
-				},
+				Status: infrav1alpha1.ExoscaleClusterStatus{},
 			},
 			eipSvc: func(m *mocks.ElasticIPService) {
 				m.EXPECT().
@@ -277,10 +272,10 @@ func Test_clusterService_ReconcileCluster(t *testing.T) {
 			output: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 				Spec: infrav1alpha1.ExoscaleClusterSpec{
+					ClusterID:            clusterID.String(),
 					ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Host: "1.2.3.4", Port: port},
 				},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
-					ID: new(clusterID.String()),
 					ControlPlaneEndpoint: &infrav1alpha1.APIEndpointStatus{
 						APIEndpoint: infrav1alpha1.APIEndpoint{Host: "1.2.3.4", Port: port},
 						ID:          eip.ID.String(),
@@ -303,11 +298,10 @@ func Test_clusterService_ReconcileCluster(t *testing.T) {
 			cluster: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 				Spec: infrav1alpha1.ExoscaleClusterSpec{
+					ClusterID:            clusterID.String(),
 					ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Port: port},
 				},
-				Status: infrav1alpha1.ExoscaleClusterStatus{
-					ID: new(clusterID.String()),
-				},
+				Status: infrav1alpha1.ExoscaleClusterStatus{},
 			},
 			eipSvc: func(m *mocks.ElasticIPService) {
 				m.EXPECT().
@@ -331,10 +325,10 @@ func Test_clusterService_ReconcileCluster(t *testing.T) {
 			output: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 				Spec: infrav1alpha1.ExoscaleClusterSpec{
+					ClusterID:            clusterID.String(),
 					ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Host: "1.2.3.4", Port: port},
 				},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
-					ID: new(clusterID.String()),
 					ControlPlaneEndpoint: &infrav1alpha1.APIEndpointStatus{
 						APIEndpoint: infrav1alpha1.APIEndpoint{Host: "1.2.3.4", Port: port},
 						ID:          eip.ID.String(),
@@ -415,14 +409,14 @@ func Test_clusterService_ReconcileCluster_invalid_id(t *testing.T) {
 			name: "invalid cluster ID",
 			cluster: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
-				Status: infrav1alpha1.ExoscaleClusterStatus{
-					ID: new("not-a-uuid"),
+				Spec: infrav1alpha1.ExoscaleClusterSpec{
+					ClusterID: "not-a-uuid",
 				},
 			},
 			output: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
-				Status: infrav1alpha1.ExoscaleClusterStatus{
-					ID: new("not-a-uuid"),
+				Spec: infrav1alpha1.ExoscaleClusterSpec{
+					ClusterID: "not-a-uuid",
 				},
 			},
 			err: errInvalidID,
@@ -432,10 +426,10 @@ func Test_clusterService_ReconcileCluster_invalid_id(t *testing.T) {
 			cluster: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 				Spec: infrav1alpha1.ExoscaleClusterSpec{
+					ClusterID:            clusterID.String(),
 					ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Port: port},
 				},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
-					ID: new(clusterID.String()),
 					ControlPlaneEndpoint: &infrav1alpha1.APIEndpointStatus{
 						APIEndpoint: infrav1alpha1.APIEndpoint{Port: port},
 						ID:          "not-a-uuid",
@@ -445,10 +439,10 @@ func Test_clusterService_ReconcileCluster_invalid_id(t *testing.T) {
 			output: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 				Spec: infrav1alpha1.ExoscaleClusterSpec{
+					ClusterID:            clusterID.String(),
 					ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Port: port},
 				},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
-					ID: new(clusterID.String()),
 					ControlPlaneEndpoint: &infrav1alpha1.APIEndpointStatus{
 						APIEndpoint: infrav1alpha1.APIEndpoint{Port: port},
 						ID:          "not-a-uuid",
@@ -462,10 +456,10 @@ func Test_clusterService_ReconcileCluster_invalid_id(t *testing.T) {
 			cluster: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 				Spec: infrav1alpha1.ExoscaleClusterSpec{
+					ClusterID:            clusterID.String(),
 					ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Port: port},
 				},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
-					ID: new(clusterID.String()),
 					SecurityGroupControlPlan: &infrav1alpha1.SecurityGroupStatus{
 						ID:   "not-a-uuid",
 						Name: cpSG.Name,
@@ -480,10 +474,10 @@ func Test_clusterService_ReconcileCluster_invalid_id(t *testing.T) {
 			output: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 				Spec: infrav1alpha1.ExoscaleClusterSpec{
+					ClusterID:            clusterID.String(),
 					ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Host: "1.2.3.4", Port: port},
 				},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
-					ID: new(clusterID.String()),
 					ControlPlaneEndpoint: &infrav1alpha1.APIEndpointStatus{
 						APIEndpoint: infrav1alpha1.APIEndpoint{Host: "1.2.3.4", Port: port},
 						ID:          eip.ID.String(),
@@ -502,10 +496,10 @@ func Test_clusterService_ReconcileCluster_invalid_id(t *testing.T) {
 			cluster: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 				Spec: infrav1alpha1.ExoscaleClusterSpec{
+					ClusterID:            clusterID.String(),
 					ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Port: port},
 				},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
-					ID: new(clusterID.String()),
 					SecurityGroupWorker: &infrav1alpha1.SecurityGroupStatus{
 						ID:   "not-a-uuid",
 						Name: workerSG.Name,
@@ -525,10 +519,10 @@ func Test_clusterService_ReconcileCluster_invalid_id(t *testing.T) {
 			output: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
 				Spec: infrav1alpha1.ExoscaleClusterSpec{
+					ClusterID:            clusterID.String(),
 					ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Host: "1.2.3.4", Port: port},
 				},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
-					ID: new(clusterID.String()),
 					ControlPlaneEndpoint: &infrav1alpha1.APIEndpointStatus{
 						APIEndpoint: infrav1alpha1.APIEndpoint{Host: "1.2.3.4", Port: port},
 						ID:          eip.ID.String(),

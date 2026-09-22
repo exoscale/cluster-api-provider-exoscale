@@ -66,6 +66,20 @@ spec:
           spec:
             description: spec defines the desired state of ExoscaleCluster
             properties:
+              clusterID:
+                description: |-
+                  clusterID is the permanent identity of this cluster. Every Exoscale resource the
+                  controller provisions is named or labelled after it, and is looked up through it on the next
+                  reconciliation.
+
+                  Do not set or edit this field. The controller generates it once, and it is then
+                  immutable.
+                pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+                type: string
+                x-kubernetes-validations:
+                - message: 'clusterID is immutable: it identifies the Exoscale resources
+                    already provisioned for this cluster'
+                  rule: self == oldSelf
               controlPlaneEndpoint:
                 default:
                   port: 6443
@@ -390,9 +404,6 @@ spec:
                     minimum: 1
                     type: integer
                 type: object
-              id:
-                pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
-                type: string
               initialization:
                 description: |-
                   initialization provides observations of the ExoscaleCluster initialization process.

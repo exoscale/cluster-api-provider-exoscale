@@ -38,6 +38,18 @@ const (
 // this resources should meet the required specs described by the clusterAPI: https://cluster-api.sigs.k8s.io/developer/providers/contracts/infra-cluster
 type ExoscaleClusterSpec struct {
 
+	// clusterID is the permanent identity of this cluster. Every Exoscale resource the
+	// controller provisions is named or labelled after it, and is looked up through it on the next
+	// reconciliation.
+	//
+	// Do not set or edit this field. The controller generates it once, and it is then
+	// immutable.
+	//
+	// +optional
+	// +kubebuilder:validation:Pattern=`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="clusterID is immutable: it identifies the Exoscale resources already provisioned for this cluster"
+	ClusterID string `json:"clusterID,omitempty"`
+
 	// controlPlaneEndpoint is the host and port through which the Kubernetes API server is reachable.
 	// You do not need to set this manually — the controller fills it in once the control plane is provisioned.
 	// See: https://cluster-api.sigs.k8s.io/developer/providers/contracts/infra-cluster#infracluster-control-plane-endpoint
@@ -99,10 +111,6 @@ type ExoscaleClusterStatus struct {
 	// see: https://cluster-api.sigs.k8s.io/developer/providers/contracts/infra-cluster#infracluster-initialization-completed
 	// +optional
 	Initialization ExoscaleClusterInitializationStatus `json:"initialization,omitempty,omitzero"`
-
-	// +optional
-	// +kubebuilder:validation:Pattern=`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
-	ID *string `json:"id,omitempty"`
 
 	// +optional
 	SecurityGroupControlPlan *SecurityGroupStatus `json:"securityGroupControlPlane,omitempty,omitzero"`

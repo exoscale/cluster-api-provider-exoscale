@@ -99,20 +99,26 @@ func (r *ExoscaleClusterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			})
 		}
 		if err := patchHelper.Patch(ctx, &exoCluster); err != nil {
-			log.Error(err, "unable to patch cluster", "cluster name", exoCluster.Name, "cluster id", exoCluster.Status.ID)
+			log.Error(err, "unable to patch cluster", "cluster name", exoCluster.Name, "cluster id", exoCluster.Spec.ClusterID)
 			reterr = errors.Join(reterr, fmt.Errorf("patch error: %w", err))
 		}
 	}()
 
-	if exoCluster.Status.ID == nil {
-		exoCluster.Status.ID = func() *string { v := uuid.New().String(); return &v }()
+	// Assign the cluster its identity before anything else.
+	// The admission webhook normally assigns it on create; this covers the case where the
+	// webhooks are not running, as with ENABLE_WEBHOOKS=false.
+	if exoCluster.Spec.ClusterID == "" {
+		exoCluster.Spec.ClusterID = uuid.New().String()
+		if err := patchHelper.Patch(ctx, &exoCluster); err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to persist cluster ID: %w", err)
+		}
 	}
-
-	log = log.WithValues("cluster_id", *exoCluster.Status.ID)
+	log = log.WithValues("cluster_id", exoCluster.Spec.ClusterID)
 
 	// Fetch the Cluster.
 	cluster, err := util.GetOwnerCluster(ctx, r.Client, exoCluster.ObjectMeta)
 	if err != nil {
+		log.Info("Unable to fetch cluster owner", "error", err.Error())
 		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
 	if cluster == nil {

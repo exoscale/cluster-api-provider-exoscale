@@ -81,6 +81,15 @@ func (v *exoscaleClusterValidator) ValidateUpdate(oldspec, newSpec infrav1alpha1
 		allErrs = append(allErrs, field.Forbidden(fldPath.Child("zone"), "zone cannot be changed once set"))
 	}
 
+	// Covers both a change and a removal: the identity names the Exoscale resources already
+	// provisioned for this cluster, so losing it strands every one of them.
+	if oldspec.ClusterID != "" && newSpec.ClusterID != oldspec.ClusterID {
+		allErrs = append(allErrs, field.Forbidden(
+			fldPath.Child("clusterID"),
+			"clusterID cannot be changed or removed once set; it identifies the Exoscale resources provisioned for this cluster",
+		))
+	}
+
 	allErrs = append(allErrs, v.validate(newSpec, fldPath)...)
 
 	return allErrs

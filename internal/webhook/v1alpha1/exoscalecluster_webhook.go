@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	"context"
 
+	"github.com/google/uuid"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -38,7 +39,24 @@ var exoscaleclusterlog = logf.Log.WithName("exoscalecluster-resource")
 func SetupExoscaleClusterWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr, &infrastructurev1alpha1.ExoscaleCluster{}).
 		WithValidator(&ExoscaleClusterCustomValidator{validator: service.NewExoscaleClusterValidator()}).
+		WithDefaulter(&ExoscaleClusterCustomDefaulter{}).
 		Complete()
+}
+
+// +kubebuilder:webhook:path=/mutate-infrastructure-cluster-x-k8s-io-v1alpha1-exoscalecluster,mutating=true,failurePolicy=fail,sideEffects=None,groups=infrastructure.cluster.x-k8s.io,resources=exoscaleclusters,verbs=create,versions=v1alpha1,name=mexoscalecluster-v1alpha1.kb.io,admissionReviewVersions=v1
+
+type ExoscaleClusterCustomDefaulter struct{}
+
+// Default implements webhook.CustomDefaulter so a webhook will be registered for the type ExoscaleCluster.
+func (d *ExoscaleClusterCustomDefaulter) Default(_ context.Context, obj *infrastructurev1alpha1.ExoscaleCluster) error {
+	if obj.Spec.ClusterID != "" {
+		return nil
+	}
+
+	obj.Spec.ClusterID = uuid.New().String()
+	exoscaleclusterlog.Info("Assigned cluster ID", "name", obj.GetName(), "clusterID", obj.Spec.ClusterID)
+
+	return nil
 }
 
 // +kubebuilder:webhook:path=/validate-infrastructure-cluster-x-k8s-io-v1alpha1-exoscalecluster,mutating=false,failurePolicy=fail,sideEffects=None,groups=infrastructure.cluster.x-k8s.io,resources=exoscaleclusters,verbs=create;update,versions=v1alpha1,name=vexoscalecluster-v1alpha1.kb.io,admissionReviewVersions=v1

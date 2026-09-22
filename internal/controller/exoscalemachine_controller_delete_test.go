@@ -93,14 +93,14 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 				&infrav1alpha1.ExoscaleCluster{
 					ObjectMeta: metav1.ObjectMeta{Name: exoscaleClusterName, Namespace: ns},
 					Spec: infrav1alpha1.ExoscaleClusterSpec{
-						Zone: "ch-gva-2",
+						ClusterID: clusterID.String(),
+						Zone:      "ch-gva-2",
 						ExoscaleSecret: infrav1alpha1.ExoscaleSecretRef{
 							Name:      secretName,
 							ApiKey:    "apikey",
 							APISecret: "apisecret",
 						},
 					},
-					Status: infrav1alpha1.ExoscaleClusterStatus{ID: new(clusterID.String())},
 				},
 				&corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: ns},

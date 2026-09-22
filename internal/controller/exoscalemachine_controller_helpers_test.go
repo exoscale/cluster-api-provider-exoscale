@@ -55,9 +55,8 @@ func TestExoscaleClusterID(t *testing.T) {
 	_, err := exoscaleClusterID(&infrav1alpha1.ExoscaleCluster{})
 	assert.ErrorContains(t, err, "cluster ID is not available")
 
-	rawStatusID := statusID.String()
 	id, err := exoscaleClusterID(&infrav1alpha1.ExoscaleCluster{
-		Status: infrav1alpha1.ExoscaleClusterStatus{ID: &rawStatusID},
+		Spec: infrav1alpha1.ExoscaleClusterSpec{ClusterID: statusID.String()},
 	})
 	assert.NoError(t, err)
 	assert.Equal(t, statusID, id)

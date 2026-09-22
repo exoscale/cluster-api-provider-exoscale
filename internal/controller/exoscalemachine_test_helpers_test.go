@@ -154,7 +154,8 @@ func newReadyMachineReconciler(t *testing.T, instance domain.Instance, upsertErr
 			&infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: exoscaleClusterName, Namespace: ns},
 				Spec: infrav1alpha1.ExoscaleClusterSpec{
-					Zone: "ch-gva-2",
+					Zone:      "ch-gva-2",
+					ClusterID: clusterID,
 					ExoscaleSecret: infrav1alpha1.ExoscaleSecretRef{
 						Name:      secretName,
 						ApiKey:    "apikey",
@@ -162,7 +163,6 @@ func newReadyMachineReconciler(t *testing.T, instance domain.Instance, upsertErr
 					},
 				},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
-					ID:                  &clusterID,
 					Initialization:      infrav1alpha1.ExoscaleClusterInitializationStatus{Provisioned: &clusterProvisioned},
 					SecurityGroupWorker: securityGroupWorker,
 				},

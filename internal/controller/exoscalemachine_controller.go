@@ -382,12 +382,12 @@ func getDeletionInstanceIDs(
 }
 
 func exoscaleClusterID(exoCluster *infrastructurev1alpha1.ExoscaleCluster) (uuid.UUID, error) {
-	if exoCluster.Status.ID == nil {
+	if exoCluster.Spec.ClusterID == "" {
 		return uuid.Nil, fmt.Errorf("cluster ID is not available")
 	}
-	id, err := uuid.Parse(*exoCluster.Status.ID)
+	id, err := uuid.Parse(exoCluster.Spec.ClusterID)
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("invalid cluster ID %q: %w", *exoCluster.Status.ID, err)
+		return uuid.Nil, fmt.Errorf("invalid cluster ID %q: %w", exoCluster.Spec.ClusterID, err)
 	}
 	return id, nil
 }

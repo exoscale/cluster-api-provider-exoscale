@@ -52,6 +52,17 @@ spec:
 
     - name: assert - exoscalecluster
       try:
+        - description: assert the defaulting webhook assigned a cluster ID
+          assert:
+            timeout: 30s
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleCluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+              (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', spec.clusterID)): true
+
         - description: assert cluster ready
           assert:
             timeout: 10m

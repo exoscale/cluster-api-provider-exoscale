@@ -20,6 +20,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -127,6 +128,49 @@ func Test_ExoscaleClusterCustomValidator_ValidateUpdate(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 			}
+		})
+	}
+}
+
+func Test_ExoscaleClusterCustomDefaulter_Default(t *testing.T) {
+	t.Parallel()
+
+	const existingID = "3f2a1b4c-5d6e-4f70-8192-a3b4c5d6e7f8"
+
+	tests := []struct {
+		name      string
+		clusterID string
+		expected  string
+	}{
+		{
+			name:     "assigns an identity when the spec carries none",
+			expected: "",
+		},
+		{
+			name:      "keeps the identity the spec already carries",
+			clusterID: existingID,
+			expected:  existingID,
+		},
+	}
+
+	for _, ut := range tests {
+		t.Run(ut.name, func(t *testing.T) {
+			t.Parallel()
+
+			obj := &infrastructurev1alpha1.ExoscaleCluster{
+				ObjectMeta: v1.ObjectMeta{Name: "my-cluster"},
+				Spec:       infrastructurev1alpha1.ExoscaleClusterSpec{ClusterID: ut.clusterID},
+			}
+
+			assert.NoError(t, (&ExoscaleClusterCustomDefaulter{}).Default(context.Background(), obj))
+
+			if ut.expected != "" {
+				assert.Equal(t, ut.expected, obj.Spec.ClusterID)
+				return
+			}
+
+			_, err := uuid.Parse(obj.Spec.ClusterID)
+			assert.NoError(t, err, "defaulter must assign a valid UUID")
 		})
 	}
 }

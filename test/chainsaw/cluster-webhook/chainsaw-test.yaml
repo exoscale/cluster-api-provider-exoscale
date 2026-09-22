@@ -1,5 +1,5 @@
-# Verifies that the ExoscaleCluster validation webhook rejects invalid
-# spec changes on both creation and update.
+# Verifies that the ExoscaleCluster webhooks assign spec.clusterID on creation and
+# rejects invalid spec changes on both creation and update.
 apiVersion: chainsaw.kyverno.io/v1alpha1
 kind: Test
 metadata:
@@ -27,6 +27,15 @@ spec:
                 namespace: ($namespace)
               spec:
                 zone: bg-sof-1
+            # Checked on the object the API server returns, so a clusterID here was assigned
+            # by the defaulting webhook at admission rather than by the controller on a later
+            # reconciliation.
+            expect:
+              - match:
+                  apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+                  kind: ExoscaleCluster
+                check:
+                  (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', spec.clusterID)): true
 
     - name: reject controlPlaneEndpoint host on create
       try:

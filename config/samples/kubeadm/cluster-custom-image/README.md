@@ -6,7 +6,7 @@ target from [Kubernetes image-builder]. No Exoscale-specific image-builder
 target is required.
 
 The resulting amd64 image was built with image-builder `v0.1.55` and contains
-Ubuntu `24.04.4`, Kubernetes `v1.34.11`, and containerd `2.3.2`.
+Ubuntu `24.04.4`, Kubernetes `v1.36.4`, and containerd `2.3.2`.
 
 ## Image requirements
 
@@ -17,18 +17,11 @@ match the `KubeadmControlPlane` and `MachineDeployment` versions patched in
 
 The provider ID cannot be baked into the image because it contains the new VM's
 UUID. This overlay therefore removes package installation from cloud-init but
-keeps the per-instance provider-ID command. The same command labels every Node
-with its Exoscale zone and region so the [Exoscale CSI driver] can identify it
-without falling back to the metadata server.
+keeps the per-instance provider-ID command.
 
-The zone and region are hardcoded to `ch-gva-2`, matching
-`ExoscaleCluster.spec.zone` in the base sample. Change all three values together
-when using another zone. Kubeadm already uses the standard `/var/lib/kubelet`
-root directory expected by the CSI driver.
-
-The overlay replaces the base `preKubeadmCommands` with the provider-ID and
-label command. It keeps the inherited `postKubeadmCommands`, which installs
-Flannel after kubeadm.
+The overlay replaces the base `preKubeadmCommands` with that provider-ID
+command. It keeps the inherited `postKubeadmCommands`, which installs Flannel
+after kubeadm.
 
 ## Create the image
 
@@ -43,8 +36,8 @@ Create a working directory and an image-builder version override:
 ```bash
 $ mkdir exoscale-capi-image && cd exoscale-capi-image
 $ mkdir output packer-cache
-$ KUBERNETES_VERSION=1.34.11
-$ KUBERNETES_SERIES=v1.34
+$ KUBERNETES_VERSION=1.36.4
+$ KUBERNETES_SERIES=v1.36
 $ tee kubernetes.json >/dev/null <<EOF
 {
   "kubernetes_deb_version": "${KUBERNETES_VERSION}-1.1",
@@ -132,15 +125,14 @@ $ exo storage rb "sos://${BUCKET}" --recursive --force
 In `kustomization.yaml`:
 
 1. Replace `REPLACE_WITH_TEMPLATE_UUID` with the value stored in `$TEMPLATE_ID`.
-2. Change `v1.34.11` if the image contains another Kubernetes version.
+2. Change `v1.36.4` if the image contains another Kubernetes version.
 
 This sample creates one control-plane Node and one worker Node. Both use the
 private template.
 
-From the Exoscale CAPI repository root, [install the released provider] as
-shown by the base sample. To develop the provider from this checkout instead,
-follow its [development workflow] and keep the manager running in another
-terminal.
+From the Exoscale CAPI repository root, [deploy the Cluster API components] and
+[run Exoscale CAPI]. Keep the manager running and use another terminal for the
+remaining commands:
 
 The sample creates two billable VMs and one billable private template in
 `ch-gva-2`.
@@ -154,68 +146,6 @@ $> kubectl apply -k config/samples/kubeadm/cluster-custom-image/
 
 Use the standard sample's [wait and smoke-test steps] to verify the cluster,
 then follow its [scaling steps].
-
-## Deploy the Exoscale CSI driver
-
-Create a separate API key with the permissions listed in the [CSI driver
-prerequisites], then store it in the workload cluster:
-
-```bash
-$> export EXOSCALE_CSI_API_KEY=<api-key>
-$> export EXOSCALE_CSI_API_SECRET=<api-secret>
-$> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" \
-    create secret generic exoscale-credentials \
-    --namespace kube-system \
-    --from-literal=EXOSCALE_API_KEY="$EXOSCALE_CSI_API_KEY" \
-    --from-literal=EXOSCALE_API_SECRET="$EXOSCALE_CSI_API_SECRET"
-```
-
-Install the driver and its snapshot CRDs:
-
-```bash
-$> export CSI_VERSION=0.34.4
-$> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" \
-    apply -f "https://raw.githubusercontent.com/exoscale/exoscale-csi-driver/v${CSI_VERSION}/deployment/${CSI_VERSION}/crds.yaml"
-$> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" \
-    wait --for=condition=Established --timeout=60s \
-    crd/volumesnapshotclasses.snapshot.storage.k8s.io \
-    crd/volumesnapshotcontents.snapshot.storage.k8s.io \
-    crd/volumesnapshots.snapshot.storage.k8s.io
-$> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" \
-    apply -k "github.com/exoscale/exoscale-csi-driver/deployment/${CSI_VERSION}?ref=v${CSI_VERSION}"
-$> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" --namespace kube-system \
-    rollout status deployment/exoscale-csi-controller --timeout=5m
-$> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" --namespace kube-system \
-    rollout status daemonset/exoscale-csi-node --timeout=5m
-```
-
-## Provision a volume
-
-Deploy the CSI driver's PVC example and wait for its pod:
-
-```bash
-$> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" apply \
-    -f "https://raw.githubusercontent.com/exoscale/exoscale-csi-driver/v${CSI_VERSION}/doc/examples/namespace.yaml" \
-    -f "https://raw.githubusercontent.com/exoscale/exoscale-csi-driver/v${CSI_VERSION}/doc/examples/pvc.yaml" \
-    -f "https://raw.githubusercontent.com/exoscale/exoscale-csi-driver/v${CSI_VERSION}/doc/examples/deployment.yaml"
-$> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" \
-    wait deployment/my-awesome-deployment -n awesome \
-    --for=condition=Available --timeout=5m
-$> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" get pods,pvc -n awesome
-```
-
-Delete the example and wait for the CSI driver to remove its backing volume
-before deleting the cluster:
-
-```bash
-$> PV_NAME=$(kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" \
-    get pvc/my-sbs-pvc -n awesome -o jsonpath='{.spec.volumeName}')
-$> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" delete \
-    -f "https://raw.githubusercontent.com/exoscale/exoscale-csi-driver/v${CSI_VERSION}/doc/examples/namespace.yaml"
-$> kubectl --kubeconfig="$WORKLOAD_KUBECONFIG" \
-    wait "pv/$PV_NAME" --for=delete --timeout=5m
-```
-
 Delete the Cluster before deleting its private template so the provider can
 remove the Exoscale resources first:
 
@@ -226,10 +156,8 @@ $ exo compute instance-template delete <template-id> --zone ch-gva-2
 ```
 
 [Kubernetes image-builder]: https://github.com/kubernetes-sigs/image-builder
-[Exoscale CSI driver]: https://github.com/exoscale/exoscale-csi-driver
-[CSI driver prerequisites]: https://github.com/exoscale/exoscale-csi-driver#prerequisite
-[install the released provider]: ../cluster/README.md#deploy-cluster-api-components
+[deploy the Cluster API components]: ../cluster/README.md#deploy-cluster-api-components
 [kubeadm cluster sample]: ../cluster/README.md
-[development workflow]: ../cluster/README.md#development-from-source
+[run Exoscale CAPI]: ../cluster/README.md#run-exoscale-capi
 [scaling steps]: ../cluster/README.md#scale-the-cluster
 [wait and smoke-test steps]: ../cluster/README.md#wait-for-the-workload-cluster

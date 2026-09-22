@@ -14,7 +14,10 @@ provider in two ways:
 This tutorial covers the machine-based setup, using the manifests in this
 directory.
 
-Prerequisites: Docker, `kind`, `kubectl` and Exoscale API credentials.
+Prerequisites: Docker, `kind`, `kubectl`, `clusterctl`, Exoscale API
+credentials, and a GitHub token that can read this private repository. The
+development workflow additionally requires `make` and the Go version declared
+in `go.mod`.
 
 > **Run every command below from the root of the repository.**
 
@@ -70,21 +73,40 @@ flowchart TD
 | `K0sWorkerConfigTemplate` | `my-k0s-cluster-workers` | Bootstrap data (installs k0s as a worker) for `MachineDeployment`-created `Machine`s. |
 | `MachineDeployment` | `my-k0s-cluster-workers` | Creates and scales worker `Machine`s. |
 
-## Install the k0smotron providers
+## Install the providers
 
 k0smotron ships as a standard clusterctl provider (bootstrap + control-plane).
-Skip the infrastructure provider as usual since the exoscale provider runs
-locally via `make run`, not through clusterctl:
+Install it with the released Exoscale infrastructure provider:
+
+```bash
+$> kind create cluster --name capi-test
+$> export GITHUB_TOKEN=<github-token>
+$> export GOPROXY=off
+$> export CAPX_VERSION=v0.1.0-alpha.1
+$> cat >/tmp/clusterctl-exoscale.yaml <<EOF
+providers:
+- name: exoscale
+  url: https://github.com/exoscale/cluster-api-provider-exoscale/releases/${CAPX_VERSION}/infrastructure-components.yaml
+  type: InfrastructureProvider
+EOF
+$> clusterctl init \
+     --config /tmp/clusterctl-exoscale.yaml \
+     --bootstrap k0sproject-k0smotron \
+     --control-plane k0sproject-k0smotron \
+     --infrastructure "exoscale:${CAPX_VERSION}"
+```
+
+## Development from source
+
+For provider development, skip the infrastructure provider and run this
+checkout locally instead:
+
 ```bash
 $> make clusterctl
 $> kind create cluster --name capi-test
 $> ./bin/clusterctl init --infrastructure - \
      --bootstrap k0sproject-k0smotron \
      --control-plane k0sproject-k0smotron
-```
-
-## Run CAPI
-```bash
 $> make generate manifests install
 $> make run
 ```

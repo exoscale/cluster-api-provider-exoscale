@@ -6,8 +6,10 @@ uses `KubeadmControlPlane`; the worker pool uses a `MachineDeployment` and
 `KubeadmConfigTemplate`. Both use `ExoscaleMachineTemplate` for the underlying
 VMs.
 
-Prerequisites: Docker, `kind`, `kubectl`, `make`, the Go version declared in
-`go.mod`, and Exoscale API credentials.
+Prerequisites: Docker, `kind`, `kubectl`, `clusterctl`, Exoscale API
+credentials, and a GitHub token that can read this private repository. The
+development workflow additionally requires `make` and the Go version declared
+in `go.mod`.
 
 Run every command below from the root of the repository.
 
@@ -47,6 +49,31 @@ combinations are needed when either pool contains multiple Nodes.
 
 ## Deploy Cluster API components
 
+Install the released provider into a new management cluster:
+
+```bash
+$> kind create cluster --name capi-test
+$> export GITHUB_TOKEN=<github-token>
+$> export GOPROXY=off
+$> export CAPX_VERSION=v0.1.0-alpha.1
+$> cat >/tmp/clusterctl-exoscale.yaml <<EOF
+providers:
+- name: exoscale
+  url: https://github.com/exoscale/cluster-api-provider-exoscale/releases/${CAPX_VERSION}/infrastructure-components.yaml
+  type: InfrastructureProvider
+EOF
+$> clusterctl init \
+     --config /tmp/clusterctl-exoscale.yaml \
+     --bootstrap kubeadm \
+     --control-plane kubeadm \
+     --infrastructure "exoscale:${CAPX_VERSION}"
+```
+
+## Development from source
+
+For provider development, install Cluster API without an infrastructure
+provider and run this checkout locally instead:
+
 ```bash
 $> make clusterctl
 $> kind create cluster --name capi-test
@@ -56,11 +83,6 @@ $> ./bin/clusterctl init \
      --bootstrap "kubeadm:$CAPI_VERSION" \
      --control-plane "kubeadm:$CAPI_VERSION" \
      --infrastructure -
-```
-
-## Run Exoscale CAPI
-
-```bash
 $> make generate manifests install
 $> make run
 ```

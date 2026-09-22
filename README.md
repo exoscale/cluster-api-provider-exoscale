@@ -46,33 +46,6 @@ already be installed on the machine before it configures the node.
   cluster with the [Exoscale CSI driver][exoscale-csi-driver] installed, to
   create volumes.
 
-## Install a released provider
-
-Prerequisites: `clusterctl`, `kubectl`, a management cluster, and a GitHub
-token that can read this private repository. A fine-grained token needs
-`Contents: read`. A classic token needs the `repo` scope.
-
-Pin the release in both the repository URL and the `clusterctl` command:
-
-```bash
-$> export GITHUB_TOKEN=<github-token>
-$> export GOPROXY=off
-$> export CAPX_VERSION=v0.1.0-alpha.1
-$> cat >/tmp/clusterctl-exoscale.yaml <<EOF
-providers:
-- name: exoscale
-  url: https://github.com/exoscale/cluster-api-provider-exoscale/releases/${CAPX_VERSION}/infrastructure-components.yaml
-  type: InfrastructureProvider
-EOF
-$> clusterctl init \
-     --config /tmp/clusterctl-exoscale.yaml \
-     --infrastructure "exoscale:${CAPX_VERSION}"
-```
-
-`GOPROXY=off` makes `clusterctl` download the private release directly from
-GitHub with `GITHUB_TOKEN`. The samples add their required bootstrap and
-control-plane providers to the same command.
-
 ## Local development
 
 Prerequisites: `go`, `docker`, `kind`, `kubectl`, `make` and Exoscale API credentials.

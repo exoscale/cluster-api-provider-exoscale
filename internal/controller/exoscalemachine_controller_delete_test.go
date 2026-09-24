@@ -36,7 +36,7 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 
 	ctx := context.Background()
 	deleteTime := metav1.Now()
-	machineUID := domain.MachineUID("machine-id")
+	machineID := domain.MachineID(uuid.NewString())
 	instanceID := uuid.New()
 	clusterID := uuid.New()
 	controllerOwner := true
@@ -44,7 +44,7 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 	tests := []struct {
 		name             string
 		ownerReference   bool
-		ownerMachine     bool
+		specMachineID    bool
 		paused           bool
 		statusInstanceID string
 		deleteErr        error
@@ -52,12 +52,14 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 		wantErr          error
 		wantFinalizer    bool
 	}{
-		{name: "recovers instance by Machine UID", ownerReference: true, ownerMachine: true, wantService: true},
-		{name: "missing owner without instance removes finalizer", ownerReference: true},
-		{name: "status instance without owner keeps finalizer", statusInstanceID: instanceID.String(), deleteErr: assert.AnError, wantService: true, wantErr: assert.AnError, wantFinalizer: true},
+		{name: "recovers instance by machine ID", ownerReference: true, specMachineID: true, wantService: true},
+		// The owner Machine is irrelevant to cleanup now that the identity is on the spec.
+		{name: "recovers instance without owner Machine", specMachineID: true, wantService: true},
+		{name: "missing identity without instance removes finalizer", ownerReference: true},
+		{name: "status instance without identity keeps finalizer", statusInstanceID: instanceID.String(), deleteErr: assert.AnError, wantService: true, wantErr: assert.AnError, wantFinalizer: true},
 		{name: "without either identifier removes finalizer"},
-		{name: "instance not found removes finalizer", ownerReference: true, ownerMachine: true, statusInstanceID: instanceID.String(), deleteErr: domain.ErrInstanceNotFound, wantService: true},
-		{name: "delete error keeps finalizer", ownerReference: true, ownerMachine: true, statusInstanceID: instanceID.String(), deleteErr: assert.AnError, wantService: true, wantErr: assert.AnError, wantFinalizer: true},
+		{name: "instance not found removes finalizer", ownerReference: true, specMachineID: true, statusInstanceID: instanceID.String(), deleteErr: domain.ErrInstanceNotFound, wantService: true},
+		{name: "delete error keeps finalizer", ownerReference: true, specMachineID: true, statusInstanceID: instanceID.String(), deleteErr: assert.AnError, wantService: true, wantErr: assert.AnError, wantFinalizer: true},
 		{name: "paused deletion keeps finalizer", ownerReference: true, paused: true, statusInstanceID: instanceID.String(), wantFinalizer: true},
 	}
 
@@ -67,16 +69,16 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 
 			scheme := newExoscaleMachineTestScheme(t)
 			instanceSvc := mocks.NewInstanceService(t)
-			var expectedMachineUID domain.MachineUID
+			var expectedMachineID domain.MachineID
 			var expectedInstanceID *uuid.UUID
-			if tc.ownerMachine {
-				expectedMachineUID = machineUID
+			if tc.specMachineID {
+				expectedMachineID = machineID
 			}
 			if tc.statusInstanceID != "" {
 				expectedInstanceID = &instanceID
 			}
 			if tc.wantService {
-				instanceSvc.EXPECT().DeleteInstance(ctx, expectedMachineUID, clusterID, expectedInstanceID).Return(tc.deleteErr)
+				instanceSvc.EXPECT().DeleteInstance(ctx, expectedMachineID, clusterID, expectedInstanceID).Return(tc.deleteErr)
 			}
 
 			objects := []crclient.Object{
@@ -110,12 +112,11 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 					},
 				},
 			}
-			if tc.ownerMachine {
+			if tc.ownerReference {
 				objects = append(objects, &clusterv1.Machine{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      machineName,
 						Namespace: ns,
-						UID:       types.UID(machineUID),
 						Labels:    map[string]string{clusterv1.ClusterNameLabel: clusterName},
 					},
 				})
@@ -131,12 +132,15 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 				},
 				Status: infrav1alpha1.ExoscaleMachineStatus{InstanceID: tc.statusInstanceID},
 			}
+			if tc.specMachineID {
+				exoMachine.Spec.MachineID = machineID.String()
+			}
 			if tc.ownerReference {
 				exoMachine.OwnerReferences = []metav1.OwnerReference{{
 					APIVersion: clusterv1.GroupVersion.String(),
 					Kind:       "Machine",
 					Name:       machineName,
-					UID:        types.UID(machineUID),
+					UID:        types.UID(machineID),
 					Controller: &controllerOwner,
 				}}
 			}
@@ -190,15 +194,14 @@ func Test_deletionInstanceIDs(t *testing.T) {
 	t.Parallel()
 
 	instanceID := uuid.New()
-	machineUID := domain.MachineUID("not-a-uuid")
+	machineID := domain.MachineID(uuid.NewString())
 	providerID := "exoscale://" + instanceID.String()
 	legacyProviderID := "exoscale:///" + instanceID.String()
 	invalidProviderID := "bad-id"
 	tests := []struct {
 		name           string
 		exoMachine     infrav1alpha1.ExoscaleMachine
-		machine        *clusterv1.Machine
-		wantMachineUID domain.MachineUID
+		wantMachineID  domain.MachineID
 		wantInstanceID *uuid.UUID
 		wantErr        string
 	}{
@@ -223,22 +226,22 @@ func Test_deletionInstanceIDs(t *testing.T) {
 			wantErr:    "invalid providerID",
 		},
 		{
-			name:           "accepts non-UUID Machine UID",
-			machine:        &clusterv1.Machine{ObjectMeta: metav1.ObjectMeta{UID: types.UID(machineUID)}},
-			wantMachineUID: machineUID,
+			name:          "takes the identity from the ExoscaleMachine spec",
+			exoMachine:    infrav1alpha1.ExoscaleMachine{Spec: infrav1alpha1.ExoscaleMachineSpec{MachineID: machineID.String()}},
+			wantMachineID: machineID,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			gotMachineUID, gotInstanceID, err := getDeletionInstanceIDs(tc.machine, &tc.exoMachine)
+			gotMachineID, gotInstanceID, err := getDeletionInstanceIDs(&tc.exoMachine)
 
 			if tc.wantErr != "" {
 				assert.ErrorContains(t, err, tc.wantErr)
 				return
 			}
 			assert.NoError(t, err)
-			assert.Equal(t, tc.wantMachineUID, gotMachineUID)
+			assert.Equal(t, tc.wantMachineID, gotMachineID)
 			assert.Equal(t, tc.wantInstanceID, gotInstanceID)
 		})
 	}

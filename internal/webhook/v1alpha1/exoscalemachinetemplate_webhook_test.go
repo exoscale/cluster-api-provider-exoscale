@@ -48,6 +48,15 @@ func Test_ExoscaleMachineTemplateCustomValidator_ValidateCreate(t *testing.T) {
 			},
 			wantErr: "spec.template.metadata.labels",
 		},
+		{
+			// Every ExoscaleMachine stamped out of the template would inherit the identity and
+			// end up claiming a single shared instance.
+			name: "machineID in a template",
+			mutate: func(template *infrastructurev1alpha1.ExoscaleMachineTemplate) {
+				template.Spec.Template.Spec.MachineID = "3f2a1b4c-5d6e-4f70-8192-a3b4c5d6e7f8"
+			},
+			wantErr: "machineID must not be set on a template",
+		},
 	}
 
 	for _, tt := range tests {

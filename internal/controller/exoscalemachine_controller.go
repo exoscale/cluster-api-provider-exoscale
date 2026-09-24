@@ -98,6 +98,17 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	defer func() { reterr = patchExoscaleMachine(ctx, patchHelper, exoMachine, reterr) }()
 
 	deleting := !exoMachine.DeletionTimestamp.IsZero()
+
+	// Assign the machine its identity before anything else.
+	// The admission webhook normally assigns it on create; this covers the case where the
+	// webhooks are not running, as with ENABLE_WEBHOOKS=false
+	if !deleting && exoMachine.Spec.MachineID == "" {
+		exoMachine.Spec.MachineID = uuid.New().String()
+		if err := patchHelper.Patch(ctx, exoMachine); err != nil {
+			return ctrl.Result{}, fmt.Errorf("unable to persist machine ID: %w", err)
+		}
+	}
+	log = log.WithValues("machine_id", exoMachine.Spec.MachineID)
 	var machine *clusterv1.Machine
 	cluster, clusterErr := util.GetClusterFromMetadata(ctx, r.Client, exoMachine.ObjectMeta)
 
@@ -128,18 +139,12 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	if deleting {
 		setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.DeletingReason, "Deleting instance")
-		// Deletion returns before the normal owner lookup below, so fetch the Machine here for its ownership UID.
-		machine, err = util.GetOwnerMachine(ctx, r.Client, exoMachine.ObjectMeta)
-		// The owner Machine may already be gone when garbage collection deletes its infrastructure object.
-		if err := client.IgnoreNotFound(err); err != nil {
-			return ctrl.Result{}, err
-		}
-		machineUID, instanceID, err := getDeletionInstanceIDs(machine, exoMachine)
+		machineID, instanceID, err := getDeletionInstanceIDs(exoMachine)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 		// Without either identifier, there is no cloud resource the controller can safely identify for deletion.
-		if machineUID == "" && instanceID == nil {
+		if machineID == "" && instanceID == nil {
 			controllerutil.RemoveFinalizer(exoMachine, machineFinalizer)
 			return ctrl.Result{}, nil
 		}
@@ -161,7 +166,7 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			return ctrl.Result{}, err
 		}
 
-		return ctrl.Result{}, r.reconcileDelete(ctx, exoMachine, instanceService, machineUID, clusterID, instanceID)
+		return ctrl.Result{}, r.reconcileDelete(ctx, exoMachine, instanceService, machineID, clusterID, instanceID)
 	}
 	if machine == nil {
 		machine, err = util.GetOwnerMachine(ctx, r.Client, exoMachine.ObjectMeta)
@@ -307,14 +312,13 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 		return ctrl.Result{}, err
 	}
 
-	machineUID := domain.MachineUID(machine.GetUID())
-	if machineUID == "" {
-		return ctrl.Result{}, fmt.Errorf("machine UID is empty")
+	machineID := domain.MachineID(exoMachine.Spec.MachineID)
+	if machineID == "" {
+		return ctrl.Result{}, fmt.Errorf("machine ID is empty")
 	}
 
 	spec := domain.InstanceSpec{
-		// Note: using GetUID on the premise that the machine UID is unique across namespaces
-		Name:              string(machineUID),
+		Name:              string(machineID),
 		Template:          exoMachine.Spec.Template,
 		InstanceType:      exoMachine.Spec.InstanceType,
 		SSHKey:            exoMachine.Spec.SSHKey,
@@ -328,7 +332,7 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 		},
 	}
 
-	instance, err := instanceService.UpsertInstance(ctx, machineUID, instanceID, spec)
+	instance, err := instanceService.UpsertInstance(ctx, machineID, instanceID, spec)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("upsert instance: %w", err)
 	}
@@ -353,11 +357,11 @@ func (r *ExoscaleMachineReconciler) reconcileDelete(
 	ctx context.Context,
 	exoMachine *infrastructurev1alpha1.ExoscaleMachine,
 	instanceService domain.InstanceService,
-	machineUID domain.MachineUID,
+	machineID domain.MachineID,
 	clusterID uuid.UUID,
 	instanceID *uuid.UUID,
 ) error {
-	if err := instanceService.DeleteInstance(ctx, machineUID, clusterID, instanceID); err != nil && !errors.Is(err, domain.ErrInstanceNotFound) {
+	if err := instanceService.DeleteInstance(ctx, machineID, clusterID, instanceID); err != nil && !errors.Is(err, domain.ErrInstanceNotFound) {
 		return fmt.Errorf("delete instance: %w", err)
 	}
 
@@ -366,19 +370,17 @@ func (r *ExoscaleMachineReconciler) reconcileDelete(
 }
 
 func getDeletionInstanceIDs(
-	machine *clusterv1.Machine,
 	exoMachine *infrastructurev1alpha1.ExoscaleMachine,
-) (domain.MachineUID, *uuid.UUID, error) {
+) (domain.MachineID, *uuid.UUID, error) {
 	instanceID, err := exoscaleMachineInstanceID(exoMachine)
 	if err != nil {
 		return "", nil, err
 	}
-	if machine == nil {
-		// The instance service rejects deletion by instance ID alone when ownership cannot be verified.
-		return "", instanceID, nil
-	}
 
-	return domain.MachineUID(machine.GetUID()), instanceID, nil
+	// An ExoscaleMachine that never got an identity never reached the point of creating an
+	// instance; the instance service rejects deletion by instance ID alone when ownership
+	// cannot be verified.
+	return domain.MachineID(exoMachine.Spec.MachineID), instanceID, nil
 }
 
 func exoscaleClusterID(exoCluster *infrastructurev1alpha1.ExoscaleCluster) (uuid.UUID, error) {

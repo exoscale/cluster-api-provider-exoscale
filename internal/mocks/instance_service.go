@@ -18,10 +18,19 @@ func NewInstanceService(t interface {
 	mock.TestingT
 	Cleanup(func())
 }) *InstanceService {
+	if helper, ok := t.(interface{ Helper() }); ok {
+		helper.Helper()
+	}
+
 	mock := &InstanceService{}
 	mock.Mock.Test(t)
 
-	t.Cleanup(func() { mock.AssertExpectations(t) })
+	t.Cleanup(func() {
+		if helper, ok := t.(interface{ Helper() }); ok {
+			helper.Helper()
+		}
+		mock.AssertExpectations(t)
+	})
 
 	return mock
 }
@@ -40,16 +49,16 @@ func (_m *InstanceService) EXPECT() *InstanceService_Expecter {
 }
 
 // DeleteInstance provides a mock function for the type InstanceService
-func (_mock *InstanceService) DeleteInstance(ctx context.Context, machineUID domain.MachineUID, clusterID uuid.UUID, instanceID *uuid.UUID) error {
-	ret := _mock.Called(ctx, machineUID, clusterID, instanceID)
+func (_mock *InstanceService) DeleteInstance(ctx context.Context, machineID domain.MachineID, clusterID uuid.UUID, instanceID *uuid.UUID) error {
+	ret := _mock.Called(ctx, machineID, clusterID, instanceID)
 
 	if len(ret) == 0 {
 		panic("no return value specified for DeleteInstance")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, domain.MachineUID, uuid.UUID, *uuid.UUID) error); ok {
-		r0 = returnFunc(ctx, machineUID, clusterID, instanceID)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, domain.MachineID, uuid.UUID, *uuid.UUID) error); ok {
+		r0 = returnFunc(ctx, machineID, clusterID, instanceID)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -63,22 +72,22 @@ type InstanceService_DeleteInstance_Call struct {
 
 // DeleteInstance is a helper method to define mock.On call
 //   - ctx context.Context
-//   - machineUID domain.MachineUID
+//   - machineID domain.MachineID
 //   - clusterID uuid.UUID
 //   - instanceID *uuid.UUID
-func (_e *InstanceService_Expecter) DeleteInstance(ctx any, machineUID any, clusterID any, instanceID any) *InstanceService_DeleteInstance_Call {
-	return &InstanceService_DeleteInstance_Call{Call: _e.mock.On("DeleteInstance", ctx, machineUID, clusterID, instanceID)}
+func (_e *InstanceService_Expecter) DeleteInstance(ctx any, machineID any, clusterID any, instanceID any) *InstanceService_DeleteInstance_Call {
+	return &InstanceService_DeleteInstance_Call{Call: _e.mock.On("DeleteInstance", ctx, machineID, clusterID, instanceID)}
 }
 
-func (_c *InstanceService_DeleteInstance_Call) Run(run func(ctx context.Context, machineUID domain.MachineUID, clusterID uuid.UUID, instanceID *uuid.UUID)) *InstanceService_DeleteInstance_Call {
+func (_c *InstanceService_DeleteInstance_Call) Run(run func(ctx context.Context, machineID domain.MachineID, clusterID uuid.UUID, instanceID *uuid.UUID)) *InstanceService_DeleteInstance_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 domain.MachineUID
+		var arg1 domain.MachineID
 		if args[1] != nil {
-			arg1 = args[1].(domain.MachineUID)
+			arg1 = args[1].(domain.MachineID)
 		}
 		var arg2 uuid.UUID
 		if args[2] != nil {
@@ -103,14 +112,14 @@ func (_c *InstanceService_DeleteInstance_Call) Return(err error) *InstanceServic
 	return _c
 }
 
-func (_c *InstanceService_DeleteInstance_Call) RunAndReturn(run func(ctx context.Context, machineUID domain.MachineUID, clusterID uuid.UUID, instanceID *uuid.UUID) error) *InstanceService_DeleteInstance_Call {
+func (_c *InstanceService_DeleteInstance_Call) RunAndReturn(run func(ctx context.Context, machineID domain.MachineID, clusterID uuid.UUID, instanceID *uuid.UUID) error) *InstanceService_DeleteInstance_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // UpsertInstance provides a mock function for the type InstanceService
-func (_mock *InstanceService) UpsertInstance(ctx context.Context, machineUID domain.MachineUID, instanceID *uuid.UUID, spec domain.InstanceSpec) (domain.Instance, error) {
-	ret := _mock.Called(ctx, machineUID, instanceID, spec)
+func (_mock *InstanceService) UpsertInstance(ctx context.Context, machineID domain.MachineID, instanceID *uuid.UUID, spec domain.InstanceSpec) (domain.Instance, error) {
+	ret := _mock.Called(ctx, machineID, instanceID, spec)
 
 	if len(ret) == 0 {
 		panic("no return value specified for UpsertInstance")
@@ -118,16 +127,16 @@ func (_mock *InstanceService) UpsertInstance(ctx context.Context, machineUID dom
 
 	var r0 domain.Instance
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, domain.MachineUID, *uuid.UUID, domain.InstanceSpec) (domain.Instance, error)); ok {
-		return returnFunc(ctx, machineUID, instanceID, spec)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, domain.MachineID, *uuid.UUID, domain.InstanceSpec) (domain.Instance, error)); ok {
+		return returnFunc(ctx, machineID, instanceID, spec)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, domain.MachineUID, *uuid.UUID, domain.InstanceSpec) domain.Instance); ok {
-		r0 = returnFunc(ctx, machineUID, instanceID, spec)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, domain.MachineID, *uuid.UUID, domain.InstanceSpec) domain.Instance); ok {
+		r0 = returnFunc(ctx, machineID, instanceID, spec)
 	} else {
 		r0 = ret.Get(0).(domain.Instance)
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, domain.MachineUID, *uuid.UUID, domain.InstanceSpec) error); ok {
-		r1 = returnFunc(ctx, machineUID, instanceID, spec)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, domain.MachineID, *uuid.UUID, domain.InstanceSpec) error); ok {
+		r1 = returnFunc(ctx, machineID, instanceID, spec)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -141,22 +150,22 @@ type InstanceService_UpsertInstance_Call struct {
 
 // UpsertInstance is a helper method to define mock.On call
 //   - ctx context.Context
-//   - machineUID domain.MachineUID
+//   - machineID domain.MachineID
 //   - instanceID *uuid.UUID
 //   - spec domain.InstanceSpec
-func (_e *InstanceService_Expecter) UpsertInstance(ctx any, machineUID any, instanceID any, spec any) *InstanceService_UpsertInstance_Call {
-	return &InstanceService_UpsertInstance_Call{Call: _e.mock.On("UpsertInstance", ctx, machineUID, instanceID, spec)}
+func (_e *InstanceService_Expecter) UpsertInstance(ctx any, machineID any, instanceID any, spec any) *InstanceService_UpsertInstance_Call {
+	return &InstanceService_UpsertInstance_Call{Call: _e.mock.On("UpsertInstance", ctx, machineID, instanceID, spec)}
 }
 
-func (_c *InstanceService_UpsertInstance_Call) Run(run func(ctx context.Context, machineUID domain.MachineUID, instanceID *uuid.UUID, spec domain.InstanceSpec)) *InstanceService_UpsertInstance_Call {
+func (_c *InstanceService_UpsertInstance_Call) Run(run func(ctx context.Context, machineID domain.MachineID, instanceID *uuid.UUID, spec domain.InstanceSpec)) *InstanceService_UpsertInstance_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 domain.MachineUID
+		var arg1 domain.MachineID
 		if args[1] != nil {
-			arg1 = args[1].(domain.MachineUID)
+			arg1 = args[1].(domain.MachineID)
 		}
 		var arg2 *uuid.UUID
 		if args[2] != nil {
@@ -181,7 +190,7 @@ func (_c *InstanceService_UpsertInstance_Call) Return(instance domain.Instance, 
 	return _c
 }
 
-func (_c *InstanceService_UpsertInstance_Call) RunAndReturn(run func(ctx context.Context, machineUID domain.MachineUID, instanceID *uuid.UUID, spec domain.InstanceSpec) (domain.Instance, error)) *InstanceService_UpsertInstance_Call {
+func (_c *InstanceService_UpsertInstance_Call) RunAndReturn(run func(ctx context.Context, machineID domain.MachineID, instanceID *uuid.UUID, spec domain.InstanceSpec) (domain.Instance, error)) *InstanceService_UpsertInstance_Call {
 	_c.Call.Return(run)
 	return _c
 }

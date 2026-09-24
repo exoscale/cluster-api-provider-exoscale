@@ -47,6 +47,14 @@ var _ admission.Validator[*infrastructurev1alpha1.ExoscaleMachineTemplate] = &Ex
 // ValidateCreate implements admission.Validator.
 func (*ExoscaleMachineTemplateCustomValidator) ValidateCreate(_ context.Context, obj *infrastructurev1alpha1.ExoscaleMachineTemplate) (admission.Warnings, error) {
 	allErrs := obj.Spec.Template.ObjectMeta.Validate(field.NewPath("spec", "template", "metadata"))
+
+	if obj.Spec.Template.Spec.MachineID != "" {
+		allErrs = append(allErrs, field.Forbidden(
+			field.NewPath("spec", "template", "spec", "machineID"),
+			"machineID must not be set on a template; it is assigned to each ExoscaleMachine individually",
+		))
+	}
+
 	if len(allErrs) == 0 {
 		return nil, nil
 	}

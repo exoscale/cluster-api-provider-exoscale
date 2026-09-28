@@ -97,7 +97,6 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 	defer func() { reterr = patchExoscaleMachine(ctx, patchHelper, exoMachine, reterr) }()
 
-	deleting := !exoMachine.DeletionTimestamp.IsZero()
 	cluster, clusterErr := util.GetClusterFromMetadata(ctx, r.Client, exoMachine.ObjectMeta)
 
 	if clusterErr == nil && annotations.IsPaused(cluster, exoMachine) {
@@ -107,42 +106,11 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 	conditions.Delete(exoMachine, clusterv1.PausedCondition)
 
-	machine, err := util.GetOwnerMachine(ctx, r.Client, exoMachine.ObjectMeta)
-	if deleting {
-		setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.DeletingReason, "Deleting instance")
-		// The owner Machine may already be gone when garbage collection deletes its infrastructure object.
-		if err := client.IgnoreNotFound(err); err != nil {
-			return ctrl.Result{}, err
-		}
-		machineUID, instanceID, err := getDeletionInstanceIDs(machine, exoMachine)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		// Without either identifier, there is no cloud resource the controller can safely identify for deletion.
-		if machineUID == "" && instanceID == nil {
-			controllerutil.RemoveFinalizer(exoMachine, machineFinalizer)
-			return ctrl.Result{}, nil
-		}
-		// Ownership-safe cleanup of an identifiable instance requires its cluster context and credentials.
-		if clusterErr != nil {
-			return ctrl.Result{}, clusterErr
-		}
-		exoCluster, err := r.getExoscaleCluster(ctx, cluster)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		clusterID, err := exoscaleClusterID(exoCluster)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-
-		instanceService, err := r.instanceService(ctx, exoCluster)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-
-		return ctrl.Result{}, r.reconcileDelete(ctx, exoMachine, instanceService, machineUID, clusterID, instanceID)
+	if !exoMachine.DeletionTimestamp.IsZero() {
+		return ctrl.Result{}, r.reconcileDelete(ctx, exoMachine, cluster, clusterErr)
 	}
+
+	machine, err := util.GetOwnerMachine(ctx, r.Client, exoMachine.ObjectMeta)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -337,11 +305,41 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 func (r *ExoscaleMachineReconciler) reconcileDelete(
 	ctx context.Context,
 	exoMachine *infrastructurev1alpha1.ExoscaleMachine,
-	instanceService domain.InstanceService,
-	machineUID domain.MachineUID,
-	clusterID uuid.UUID,
-	instanceID *uuid.UUID,
+	cluster *clusterv1.Cluster,
+	clusterErr error,
 ) error {
+	setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.DeletingReason, "Deleting instance")
+
+	machine, err := util.GetOwnerMachine(ctx, r.Client, exoMachine.ObjectMeta)
+	// The owner Machine may already be gone when garbage collection deletes its infrastructure object.
+	if err := client.IgnoreNotFound(err); err != nil {
+		return err
+	}
+	machineUID, instanceID, err := getDeletionInstanceIDs(machine, exoMachine)
+	if err != nil {
+		return err
+	}
+	// Without either identifier, there is no cloud resource the controller can safely identify for deletion.
+	if machineUID == "" && instanceID == nil {
+		controllerutil.RemoveFinalizer(exoMachine, machineFinalizer)
+		return nil
+	}
+	// Ownership-safe cleanup of an identifiable instance requires its cluster context and credentials.
+	if clusterErr != nil {
+		return clusterErr
+	}
+	exoCluster, err := r.getExoscaleCluster(ctx, cluster)
+	if err != nil {
+		return err
+	}
+	clusterID, err := exoscaleClusterID(exoCluster)
+	if err != nil {
+		return err
+	}
+	instanceService, err := r.instanceService(ctx, exoCluster)
+	if err != nil {
+		return err
+	}
 	if err := instanceService.DeleteInstance(ctx, machineUID, clusterID, instanceID); err != nil && !errors.Is(err, domain.ErrInstanceNotFound) {
 		return fmt.Errorf("delete instance: %w", err)
 	}

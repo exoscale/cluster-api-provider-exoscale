@@ -98,7 +98,6 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	defer func() { reterr = patchExoscaleMachine(ctx, patchHelper, exoMachine, reterr) }()
 
 	deleting := !exoMachine.DeletionTimestamp.IsZero()
-	var machine *clusterv1.Machine
 	cluster, clusterErr := util.GetClusterFromMetadata(ctx, r.Client, exoMachine.ObjectMeta)
 
 	if clusterErr == nil && annotations.IsPaused(cluster, exoMachine) {
@@ -108,28 +107,9 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 	conditions.Delete(exoMachine, clusterv1.PausedCondition)
 
-	if !deleting && clusterErr != nil {
-		machine, err = util.GetOwnerMachine(ctx, r.Client, exoMachine.ObjectMeta)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		if machine == nil {
-			log.Info("owner Machine not yet set, requeueing")
-			setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.NotReadyReason, "Waiting for owner Machine")
-			return ctrl.Result{}, nil
-		}
-		cluster, clusterErr = util.GetClusterFromMetadata(ctx, r.Client, machine.ObjectMeta)
-		if clusterErr != nil {
-			log.Info("Machine missing cluster label or cluster not found")
-			setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.NotReadyReason, "Waiting for Cluster")
-			return ctrl.Result{}, nil
-		}
-	}
-
+	machine, err := util.GetOwnerMachine(ctx, r.Client, exoMachine.ObjectMeta)
 	if deleting {
 		setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.DeletingReason, "Deleting instance")
-		// Deletion returns before the normal owner lookup below, so fetch the Machine here for its ownership UID.
-		machine, err = util.GetOwnerMachine(ctx, r.Client, exoMachine.ObjectMeta)
 		// The owner Machine may already be gone when garbage collection deletes its infrastructure object.
 		if err := client.IgnoreNotFound(err); err != nil {
 			return ctrl.Result{}, err
@@ -163,14 +143,19 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 		return ctrl.Result{}, r.reconcileDelete(ctx, exoMachine, instanceService, machineUID, clusterID, instanceID)
 	}
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 	if machine == nil {
-		machine, err = util.GetOwnerMachine(ctx, r.Client, exoMachine.ObjectMeta)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		if machine == nil {
-			log.Info("owner Machine not yet set, requeueing")
-			setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.NotReadyReason, "Waiting for owner Machine")
+		log.Info("owner Machine not yet set, requeueing")
+		setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.NotReadyReason, "Waiting for owner Machine")
+		return ctrl.Result{}, nil
+	}
+	if clusterErr != nil {
+		cluster, clusterErr = util.GetClusterFromMetadata(ctx, r.Client, machine.ObjectMeta)
+		if clusterErr != nil {
+			log.Info("Machine missing cluster label or cluster not found")
+			setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.NotReadyReason, "Waiting for Cluster")
 			return ctrl.Result{}, nil
 		}
 	}

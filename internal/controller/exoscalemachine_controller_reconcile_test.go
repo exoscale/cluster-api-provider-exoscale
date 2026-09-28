@@ -298,7 +298,7 @@ func TestExoscaleMachineReconciler_Reconcile_waitsForWorkerSecurityGroup(t *test
 	assert.Empty(t, updated.Status.InstanceID)
 }
 
-func TestExoscaleMachineReconciler_reconcileNormal_controlPlaneEndpoint(t *testing.T) {
+func TestExoscaleMachineReconciler_reconcileInstance_controlPlaneEndpoint(t *testing.T) {
 	t.Parallel()
 
 	bootstrapSecretName := "bootstrap-data"
@@ -336,7 +336,7 @@ func TestExoscaleMachineReconciler_reconcileNormal_controlPlaneEndpoint(t *testi
 				ControlPlaneEndpoint:     tc.endpoint,
 			}}
 
-			result, err := r.reconcileNormal(ctx, exoMachine, machine, exoCluster, mocks.NewInstanceService(t), nil)
+			result, err := r.reconcileInstance(ctx, exoMachine, machine, exoCluster, mocks.NewInstanceService(t))
 
 			if tc.wantErr != "" {
 				assert.ErrorContains(t, err, tc.wantErr)

@@ -110,6 +110,18 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, r.reconcileDelete(ctx, exoMachine, cluster, clusterErr)
 	}
 
+	return r.reconcileNormal(ctx, exoMachine, cluster, clusterErr, patchHelper)
+}
+
+func (r *ExoscaleMachineReconciler) reconcileNormal(
+	ctx context.Context,
+	exoMachine *infrastructurev1alpha1.ExoscaleMachine,
+	cluster *clusterv1.Cluster,
+	clusterErr error,
+	patchHelper *capipatch.Helper,
+) (ctrl.Result, error) {
+	log := logf.FromContext(ctx)
+
 	machine, err := util.GetOwnerMachine(ctx, r.Client, exoMachine.ObjectMeta)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -153,7 +165,7 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 
-	return r.reconcileNormal(ctx, exoMachine, machine, exoCluster, instanceService, patchHelper)
+	return r.reconcileInstance(ctx, exoMachine, machine, exoCluster, instanceService)
 }
 
 func setMachinePaused(exoMachine *infrastructurev1alpha1.ExoscaleMachine) {
@@ -199,21 +211,14 @@ func (r *ExoscaleMachineReconciler) instanceService(
 	return r.NewInstanceService(apiKey, apiSecret, exoCluster.Spec.Zone, logf.FromContext(ctx))
 }
 
-func (r *ExoscaleMachineReconciler) reconcileNormal(
+func (r *ExoscaleMachineReconciler) reconcileInstance(
 	ctx context.Context,
 	exoMachine *infrastructurev1alpha1.ExoscaleMachine,
 	machine *clusterv1.Machine,
 	exoCluster *infrastructurev1alpha1.ExoscaleCluster,
 	instanceService domain.InstanceService,
-	patchHelper *capipatch.Helper,
 ) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
-
-	if controllerutil.AddFinalizer(exoMachine, machineFinalizer) {
-		if err := patchHelper.Patch(ctx, exoMachine); err != nil {
-			return ctrl.Result{}, err
-		}
-	}
 
 	userData, err := r.bootstrapData(ctx, machine)
 	if err != nil {

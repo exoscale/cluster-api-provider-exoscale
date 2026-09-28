@@ -168,6 +168,9 @@ func (a *adapter) CreateSecurityGroup(ctx context.Context, name string) (uuid.UU
 		Name: name,
 	})
 	if err != nil {
+		if errors.Is(err, egoscale.ErrConflict) {
+			err = domain.ErrSecurityGroupAlreadyExists
+		}
 		return uuid.Nil, fmt.Errorf("unable to create security group: %w", err)
 	}
 
@@ -198,6 +201,29 @@ func (a *adapter) GetSecurityGroup(ctx context.Context, id uuid.UUID) (domain.Se
 		ID:   id,
 		Name: sg.Name,
 	}, nil
+}
+
+// ListSecurityGroups returns all private Security Groups as domain values.
+func (a *adapter) ListSecurityGroups(ctx context.Context) ([]domain.SecurityGroup, error) {
+	resp, err := a.client.ListSecurityGroups(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to list security groups: %w", err)
+	}
+
+	securityGroups := make([]domain.SecurityGroup, 0, len(resp.SecurityGroups))
+	for _, sg := range resp.SecurityGroups {
+		id, err := uuid.Parse(sg.ID.String())
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse security group ID: %w", err)
+		}
+
+		securityGroups = append(securityGroups, domain.SecurityGroup{
+			ID:   id,
+			Name: sg.Name,
+		})
+	}
+
+	return securityGroups, nil
 }
 
 // DeleteSecurityGroup deletes a Security Group and waits for completion.

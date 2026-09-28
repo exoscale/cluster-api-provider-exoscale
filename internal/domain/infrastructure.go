@@ -28,6 +28,7 @@ type ExoscaleClient interface {
 
 	CreateSecurityGroup(ctx context.Context, req egoscale.CreateSecurityGroupRequest) (*egoscale.Operation, error)
 	GetSecurityGroup(ctx context.Context, id egoscale.UUID) (*egoscale.SecurityGroup, error)
+	ListSecurityGroups(ctx context.Context, opts ...egoscale.ListSecurityGroupsOpt) (*egoscale.ListSecurityGroupsResponse, error)
 	DeleteSecurityGroup(ctx context.Context, id egoscale.UUID) (*egoscale.Operation, error)
 	AddRuleToSecurityGroup(ctx context.Context, id egoscale.UUID, req egoscale.AddRuleToSecurityGroupRequest) (*egoscale.Operation, error)
 	DeleteRuleFromSecurityGroup(ctx context.Context, id egoscale.UUID, ruleID egoscale.UUID) (*egoscale.Operation, error)
@@ -54,6 +55,7 @@ type Cloud interface {
 
 	CreateSecurityGroup(ctx context.Context, name string) (uuid.UUID, error)
 	GetSecurityGroup(ctx context.Context, id uuid.UUID) (SecurityGroup, error)
+	ListSecurityGroups(ctx context.Context) ([]SecurityGroup, error)
 	DeleteSecurityGroup(ctx context.Context, id uuid.UUID) error
 	CreateSecurityGroupRule(ctx context.Context, sgID uuid.UUID, rule SecurityGroupRule) (uuid.UUID, error)
 	DeleteSecurityGroupRule(ctx context.Context, sgID, ruleID uuid.UUID) error

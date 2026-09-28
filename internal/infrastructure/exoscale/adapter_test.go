@@ -248,6 +248,69 @@ func Test_adapter_ListElasticIPs(t *testing.T) {
 	}
 }
 
+func Test_adapter_ListSecurityGroups(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	id1 := uuid.New()
+	id2 := uuid.New()
+
+	tests := []struct {
+		name      string
+		exoClient func(m *mocks.ExoscaleClient)
+		output    []domain.SecurityGroup
+		err       error
+	}{
+		{
+			name: "nominal - empty list",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().ListSecurityGroups(ctx).
+					Return(&egoscale.ListSecurityGroupsResponse{SecurityGroups: []egoscale.SecurityGroup{}}, nil)
+			},
+			output: []domain.SecurityGroup{},
+		},
+		{
+			name: "nominal - maps fields correctly",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().ListSecurityGroups(ctx).
+					Return(&egoscale.ListSecurityGroupsResponse{
+						SecurityGroups: []egoscale.SecurityGroup{
+							{ID: egoscale.UUID(id1.String()), Name: "capi-sg"},
+							{ID: egoscale.UUID(id2.String()), Name: "other"},
+						},
+					}, nil)
+			},
+			output: []domain.SecurityGroup{
+				{ID: id1, Name: "capi-sg"},
+				{ID: id2, Name: "other"},
+			},
+		},
+		{
+			name: "list security groups returned an error",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().ListSecurityGroups(ctx).Return(nil, assert.AnError)
+			},
+			err: assert.AnError,
+		},
+	}
+
+	for _, ut := range tests {
+		t.Run(ut.name, func(t *testing.T) {
+			exoClient := mocks.NewExoscaleClient(t)
+			if ut.exoClient != nil {
+				ut.exoClient(exoClient)
+			}
+
+			client := adapter{client: exoClient}
+
+			output, err := client.ListSecurityGroups(ctx)
+
+			assert.ErrorIs(t, err, ut.err)
+			assert.Equal(t, ut.output, output)
+		})
+	}
+}
+
 func Test_adapter_CreateInstance(t *testing.T) {
 	t.Parallel()
 
@@ -482,6 +545,15 @@ func Test_adapter_CreateSecurityGroup(t *testing.T) {
 				}).Return(&egoscale.Operation{}, assert.AnError)
 			},
 			err: assert.AnError,
+		},
+		{
+			name: "create security group returned a conflict error",
+			exoClient: func(m *mocks.ExoscaleClient) {
+				m.EXPECT().CreateSecurityGroup(ctx, egoscale.CreateSecurityGroupRequest{
+					Name: name,
+				}).Return(&egoscale.Operation{}, egoscale.ErrConflict)
+			},
+			err: domain.ErrSecurityGroupAlreadyExists,
 		},
 		{
 			name: "wait returned an error",

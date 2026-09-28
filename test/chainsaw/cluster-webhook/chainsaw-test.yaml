@@ -60,7 +60,7 @@ spec:
 
     - name: reject zone change on update
       try:
-        - update:
+        - patch:
             resource:
               apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
               kind: ExoscaleCluster

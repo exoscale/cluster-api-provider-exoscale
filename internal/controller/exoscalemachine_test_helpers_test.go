@@ -31,7 +31,7 @@ func newExoscaleMachineTestScheme(t *testing.T) *runtime.Scheme {
 	return scheme
 }
 
-func newMachinePrerequisiteReconciler(t *testing.T, clusterInfrastructureReady, bootstrapDataReady, paused bool) (context.Context, *ExoscaleMachineReconciler, crclient.Client, string, string) {
+func newMachinePrerequisiteReconciler(t *testing.T, clusterInfrastructureReady, bootstrapDataReady, machinePaused, clusterPaused bool) (context.Context, *ExoscaleMachineReconciler, crclient.Client, string, string) {
 	t.Helper()
 
 	const (
@@ -64,7 +64,7 @@ func newMachinePrerequisiteReconciler(t *testing.T, clusterInfrastructureReady, 
 			},
 		},
 	}
-	if paused {
+	if machinePaused {
 		exoMachine.Annotations = map[string]string{clusterv1.PausedAnnotation: ""}
 	}
 
@@ -76,6 +76,7 @@ func newMachinePrerequisiteReconciler(t *testing.T, clusterInfrastructureReady, 
 			&clusterv1.Cluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: ns},
 				Spec: clusterv1.ClusterSpec{
+					Paused: &clusterPaused,
 					InfrastructureRef: clusterv1.ContractVersionedObjectReference{
 						APIGroup: infrav1alpha1.GroupVersion.Group,
 						Kind:     "ExoscaleCluster",
@@ -195,6 +196,7 @@ func newReadyMachineReconciler(t *testing.T, instance domain.Instance, upsertErr
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      exoscaleMachineName,
 					Namespace: ns,
+					Labels:    map[string]string{clusterv1.ClusterNameLabel: clusterName},
 					OwnerReferences: []metav1.OwnerReference{
 						{APIVersion: clusterv1.GroupVersion.String(), Kind: "Machine", Name: machineName},
 					},

@@ -45,20 +45,23 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 		name             string
 		ownerReference   bool
 		ownerMachine     bool
-		paused           bool
+		machinePaused    bool
+		clusterPaused    bool
 		statusInstanceID string
 		deleteErr        error
 		wantService      bool
 		wantErr          error
+		wantErrContains  string
 		wantFinalizer    bool
 	}{
 		{name: "recovers instance by Machine UID", ownerReference: true, ownerMachine: true, wantService: true},
 		{name: "missing owner without instance removes finalizer", ownerReference: true},
-		{name: "status instance without owner keeps finalizer", statusInstanceID: instanceID.String(), deleteErr: assert.AnError, wantService: true, wantErr: assert.AnError, wantFinalizer: true},
+		{name: "status instance without owner keeps finalizer", statusInstanceID: instanceID.String(), wantErrContains: "without a Machine UID", wantFinalizer: true},
 		{name: "without either identifier removes finalizer"},
 		{name: "instance not found removes finalizer", ownerReference: true, ownerMachine: true, statusInstanceID: instanceID.String(), deleteErr: domain.ErrInstanceNotFound, wantService: true},
 		{name: "delete error keeps finalizer", ownerReference: true, ownerMachine: true, statusInstanceID: instanceID.String(), deleteErr: assert.AnError, wantService: true, wantErr: assert.AnError, wantFinalizer: true},
-		{name: "paused deletion keeps finalizer", ownerReference: true, paused: true, statusInstanceID: instanceID.String(), wantFinalizer: true},
+		{name: "ExoscaleMachine paused deletion keeps finalizer", ownerReference: true, machinePaused: true, statusInstanceID: instanceID.String(), wantFinalizer: true},
+		{name: "Cluster paused deletion keeps finalizer", ownerReference: true, ownerMachine: true, clusterPaused: true, statusInstanceID: instanceID.String(), wantFinalizer: true},
 	}
 
 	for _, tc := range tests {
@@ -83,6 +86,7 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 				&clusterv1.Cluster{
 					ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: ns},
 					Spec: clusterv1.ClusterSpec{
+						Paused: &tc.clusterPaused,
 						InfrastructureRef: clusterv1.ContractVersionedObjectReference{
 							APIGroup: infrav1alpha1.GroupVersion.Group,
 							Kind:     "ExoscaleCluster",
@@ -140,7 +144,7 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 					Controller: &controllerOwner,
 				}}
 			}
-			if tc.paused {
+			if tc.machinePaused {
 				exoMachine.Annotations = map[string]string{clusterv1.PausedAnnotation: ""}
 			}
 			objects = append(objects, exoMachine)
@@ -156,7 +160,7 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 				Scheme: scheme,
 				NewInstanceService: func(string, string, egoscale.ZoneName, logr.Logger) (domain.InstanceService, error) {
 					if !tc.wantService {
-						assert.Fail(t, "instance service should not be created without a deletion identifier")
+						assert.Fail(t, "instance service should not be created")
 					}
 					return instanceSvc, nil
 				},
@@ -165,7 +169,13 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 			result, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}})
 
 			assert.Equal(t, reconcile.Result{}, result)
-			assert.ErrorIs(t, err, tc.wantErr)
+			if tc.wantErr != nil {
+				assert.ErrorIs(t, err, tc.wantErr)
+			} else if tc.wantErrContains != "" {
+				assert.ErrorContains(t, err, tc.wantErrContains)
+			} else {
+				assert.NoError(t, err)
+			}
 
 			updated := &infrav1alpha1.ExoscaleMachine{}
 			getErr := client.Get(ctx, types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}, updated)
@@ -178,7 +188,7 @@ func TestExoscaleMachineReconciler_Reconcile_deletesInstance(t *testing.T) {
 			} else {
 				assert.NotContains(t, updated.Finalizers, machineFinalizer)
 			}
-			if tc.paused {
+			if tc.machinePaused || tc.clusterPaused {
 				assert.NotNil(t, apimeta.FindStatusCondition(updated.Status.Conditions, clusterv1.PausedCondition))
 				assert.Nil(t, apimeta.FindStatusCondition(updated.Status.Conditions, clusterv1.ReadyCondition))
 			}

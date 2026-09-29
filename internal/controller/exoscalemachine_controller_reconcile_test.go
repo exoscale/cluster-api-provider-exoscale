@@ -138,6 +138,7 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      exoscaleMachineName,
 					Namespace: ns,
+					Labels:    map[string]string{clusterv1.ClusterNameLabel: clusterName},
 					OwnerReferences: []metav1.OwnerReference{
 						{APIVersion: clusterv1.GroupVersion.String(), Kind: "Machine", Name: machineName},
 					},
@@ -204,7 +205,9 @@ func TestExoscaleMachineReconciler_Reconcile_prerequisites(t *testing.T) {
 		name                       string
 		clusterInfrastructureReady bool
 		bootstrapDataReady         bool
-		paused                     bool
+		machinePaused              bool
+		clusterPaused              bool
+		withoutOwner               bool
 		wantResult                 reconcile.Result
 		conditionType              string
 		conditionStatus            metav1.ConditionStatus
@@ -229,10 +232,20 @@ func TestExoscaleMachineReconciler_Reconcile_prerequisites(t *testing.T) {
 			wantFinalizer:              true,
 		},
 		{
-			name:                       "paused",
+			name:                       "ExoscaleMachine paused",
 			clusterInfrastructureReady: true,
 			bootstrapDataReady:         true,
-			paused:                     true,
+			machinePaused:              true,
+			conditionType:              clusterv1.PausedCondition,
+			conditionStatus:            metav1.ConditionTrue,
+			reason:                     clusterv1.PausedReason,
+		},
+		{
+			name:                       "Cluster paused",
+			clusterInfrastructureReady: true,
+			bootstrapDataReady:         true,
+			clusterPaused:              true,
+			withoutOwner:               true,
 			conditionType:              clusterv1.PausedCondition,
 			conditionStatus:            metav1.ConditionTrue,
 			reason:                     clusterv1.PausedReason,
@@ -245,8 +258,15 @@ func TestExoscaleMachineReconciler_Reconcile_prerequisites(t *testing.T) {
 				t,
 				tc.clusterInfrastructureReady,
 				tc.bootstrapDataReady,
-				tc.paused,
+				tc.machinePaused,
+				tc.clusterPaused,
 			)
+			if tc.withoutOwner {
+				exoMachine := &infrav1alpha1.ExoscaleMachine{}
+				assert.NoError(t, client.Get(ctx, types.NamespacedName{Name: exoscaleMachineName, Namespace: ns}, exoMachine))
+				exoMachine.OwnerReferences = nil
+				assert.NoError(t, client.Update(ctx, exoMachine))
+			}
 			instanceServiceCalled := false
 			r.NewInstanceService = func(string, string, egoscale.ZoneName, logr.Logger) (domain.InstanceService, error) {
 				instanceServiceCalled = true

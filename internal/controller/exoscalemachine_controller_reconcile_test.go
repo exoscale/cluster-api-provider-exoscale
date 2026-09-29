@@ -138,6 +138,7 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      exoscaleMachineName,
 					Namespace: ns,
+					Labels:    map[string]string{clusterv1.ClusterNameLabel: clusterName},
 					OwnerReferences: []metav1.OwnerReference{
 						{APIVersion: clusterv1.GroupVersion.String(), Kind: "Machine", Name: machineName},
 					},

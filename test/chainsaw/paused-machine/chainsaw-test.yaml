@@ -18,7 +18,7 @@ spec:
     - name: namespace
       value: default
   steps:
-    - name: apply paused cluster
+    - name: apply cluster
       try:
         - apply:
             file: cluster.yaml
@@ -27,6 +27,32 @@ spec:
       try:
         - apply:
             file: exoscalemachine.yaml
+        - apply:
+            file: machine.yaml
+        - assert:
+            timeout: 1m
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleMachine
+              metadata:
+                name: ($machineName)
+                namespace: ($namespace)
+                ownerReferences:
+                  - apiVersion: cluster.x-k8s.io/v1beta2
+                    kind: Machine
+                    name: ($machineName)
+
+    - name: pause cluster
+      try:
+        - patch:
+            resource:
+              apiVersion: cluster.x-k8s.io/v1beta2
+              kind: Cluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+              spec:
+                paused: true
 
     - name: assert machine paused
       try:
@@ -81,8 +107,6 @@ spec:
 
     - name: delete cluster
       try:
-        # The ExoscaleMachine is only labelled with the cluster name, not owned by
-        # a Machine, so deleting the Cluster does not garbage-collect it.
         - delete:
             ref:
               apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1

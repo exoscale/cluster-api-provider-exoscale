@@ -3,8 +3,6 @@ kind: ExoscaleMachine
 metadata:
   name: ($machineName)
   namespace: ($namespace)
-  labels:
-    cluster.x-k8s.io/cluster-name: ($clusterName)
 spec:
   template: 11111111-2222-3333-4444-555555555555
   instanceType: small

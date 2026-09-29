@@ -97,30 +97,19 @@ func (r *ExoscaleMachineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 	defer func() { reterr = patchExoscaleMachine(ctx, patchHelper, exoMachine, reterr) }()
 
-	if annotations.HasPaused(exoMachine) {
-		log.Info("ExoscaleMachine is paused")
-		setMachinePaused(exoMachine)
+	machine, err := util.GetOwnerMachine(ctx, r.Client, exoMachine.ObjectMeta)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if machine == nil {
+		log.Info("owner Machine not yet set")
+		setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.NotReadyReason, "Waiting for owner Machine")
 		return ctrl.Result{}, nil
 	}
-	conditions.Delete(exoMachine, clusterv1.PausedCondition)
 
-	if !exoMachine.DeletionTimestamp.IsZero() {
-		return ctrl.Result{}, r.reconcileDelete(ctx, exoMachine)
-	}
-
-	return r.reconcileNormal(ctx, exoMachine, patchHelper)
-}
-
-func (r *ExoscaleMachineReconciler) reconcileNormal(
-	ctx context.Context,
-	exoMachine *infrastructurev1alpha1.ExoscaleMachine,
-	patchHelper *capipatch.Helper,
-) (ctrl.Result, error) {
-	log := logf.FromContext(ctx)
-
-	cluster, err := util.GetClusterFromMetadata(ctx, r.Client, exoMachine.ObjectMeta)
+	cluster, err := util.GetClusterFromMetadata(ctx, r.Client, machine.ObjectMeta)
 	if err != nil {
-		log.Info("ExoscaleMachine missing cluster label or cluster not found")
+		log.Info("Machine missing cluster label or cluster not found")
 		setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.NotReadyReason, "Waiting for Cluster")
 		return ctrl.Result{}, nil
 	}
@@ -129,16 +118,23 @@ func (r *ExoscaleMachineReconciler) reconcileNormal(
 		setMachinePaused(exoMachine)
 		return ctrl.Result{}, nil
 	}
+	conditions.Delete(exoMachine, clusterv1.PausedCondition)
 
-	machine, err := util.GetOwnerMachine(ctx, r.Client, exoMachine.ObjectMeta)
-	if err != nil {
-		return ctrl.Result{}, err
+	if !exoMachine.DeletionTimestamp.IsZero() {
+		return ctrl.Result{}, r.reconcileDelete(ctx, exoMachine, machine, cluster)
 	}
-	if machine == nil {
-		log.Info("owner Machine not yet set, requeueing")
-		setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.NotReadyReason, "Waiting for owner Machine")
-		return ctrl.Result{}, nil
-	}
+
+	return r.reconcileNormal(ctx, exoMachine, machine, cluster, patchHelper)
+}
+
+func (r *ExoscaleMachineReconciler) reconcileNormal(
+	ctx context.Context,
+	exoMachine *infrastructurev1alpha1.ExoscaleMachine,
+	machine *clusterv1.Machine,
+	cluster *clusterv1.Cluster,
+	patchHelper *capipatch.Helper,
+) (ctrl.Result, error) {
+	log := logf.FromContext(ctx)
 
 	exoCluster, err := r.getExoscaleCluster(ctx, cluster)
 	if err != nil {
@@ -310,21 +306,11 @@ func (r *ExoscaleMachineReconciler) reconcileInstance(
 func (r *ExoscaleMachineReconciler) reconcileDelete(
 	ctx context.Context,
 	exoMachine *infrastructurev1alpha1.ExoscaleMachine,
+	machine *clusterv1.Machine,
+	cluster *clusterv1.Cluster,
 ) error {
-	cluster, clusterErr := util.GetClusterFromMetadata(ctx, r.Client, exoMachine.ObjectMeta)
-	if clusterErr == nil && annotations.IsPaused(cluster, exoMachine) {
-		logf.FromContext(ctx).Info("ExoscaleMachine or Cluster is paused")
-		setMachinePaused(exoMachine)
-		return nil
-	}
-
 	setMachineReady(exoMachine, metav1.ConditionFalse, clusterv1.DeletingReason, "Deleting instance")
 
-	machine, err := util.GetOwnerMachine(ctx, r.Client, exoMachine.ObjectMeta)
-	// The owner Machine may already be gone when garbage collection deletes its infrastructure object.
-	if err := client.IgnoreNotFound(err); err != nil {
-		return err
-	}
 	machineUID, instanceID, err := getDeletionInstanceIDs(machine, exoMachine)
 	if err != nil {
 		return err
@@ -333,10 +319,6 @@ func (r *ExoscaleMachineReconciler) reconcileDelete(
 	if machineUID == "" && instanceID == nil {
 		controllerutil.RemoveFinalizer(exoMachine, machineFinalizer)
 		return nil
-	}
-	// Ownership-safe cleanup of an identifiable instance requires its cluster context and credentials.
-	if clusterErr != nil {
-		return clusterErr
 	}
 	if machineUID == "" {
 		return fmt.Errorf("cannot verify status instance %s without a Machine UID", *instanceID)
@@ -369,11 +351,6 @@ func getDeletionInstanceIDs(
 	if err != nil {
 		return "", nil, err
 	}
-	if machine == nil {
-		// Deletion by instance ID alone cannot verify that the instance belongs to this Machine.
-		return "", instanceID, nil
-	}
-
 	return domain.MachineUID(machine.GetUID()), instanceID, nil
 }
 

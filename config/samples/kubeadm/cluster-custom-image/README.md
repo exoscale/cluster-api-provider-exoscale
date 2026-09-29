@@ -138,9 +138,7 @@ This sample creates one control-plane Node and one worker Node. Both use the
 private template.
 
 From the Exoscale CAPI repository root, [install the released provider] as
-shown by the base sample. To develop the provider from this checkout instead,
-follow its [development workflow] and keep the manager running in another
-terminal.
+shown by the base sample.
 
 The sample creates two billable VMs and one billable private template in
 `ch-gva-2`.
@@ -230,6 +228,5 @@ $ exo compute instance-template delete <template-id> --zone ch-gva-2
 [CSI driver prerequisites]: https://github.com/exoscale/exoscale-csi-driver#prerequisite
 [install the released provider]: ../cluster/README.md#deploy-cluster-api-components
 [kubeadm cluster sample]: ../cluster/README.md
-[development workflow]: ../cluster/README.md#development-from-source
 [scaling steps]: ../cluster/README.md#scale-the-cluster
 [wait and smoke-test steps]: ../cluster/README.md#wait-for-the-workload-cluster

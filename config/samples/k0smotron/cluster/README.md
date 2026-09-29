@@ -15,9 +15,7 @@ This tutorial covers the machine-based setup, using the manifests in this
 directory.
 
 Prerequisites: Docker, `kind`, `kubectl`, `clusterctl`, Exoscale API
-credentials, and a GitHub token that can read this private repository. The
-development workflow additionally requires `make` and the Go version declared
-in `go.mod`.
+credentials, and a GitHub token that can read this private repository.
 
 > **Run every command below from the root of the repository.**
 
@@ -95,23 +93,6 @@ $> clusterctl init \
      --control-plane k0sproject-k0smotron \
      --infrastructure "exoscale:${CAPX_VERSION}"
 ```
-
-## Development from source
-
-For provider development, skip the infrastructure provider and run this
-checkout locally instead:
-
-```bash
-$> make clusterctl
-$> kind create cluster --name capi-test
-$> ./bin/clusterctl init --infrastructure - \
-     --bootstrap k0sproject-k0smotron \
-     --control-plane k0sproject-k0smotron
-$> make generate manifests install
-$> make run
-```
-
-Keep the manager running and use another terminal for the remaining commands.
 
 ## Deploy a k0s cluster
 

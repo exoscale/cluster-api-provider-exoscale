@@ -86,8 +86,7 @@ the driver find it.
 ## Deploy the k0s cluster
 
 Create the management cluster and [install the released Exoscale and
-k0smotron providers][install-providers]. To develop the provider from this
-checkout instead, follow the base tutorial's [development workflow].
+k0smotron providers][install-providers].
 
 ```bash
 $> export EXOSCALE_API_KEY=<api-key>
@@ -206,4 +205,3 @@ $> kubectl delete cluster/my-k0s-cluster # also deletes its Machines and Exoscal
 [exoscale-csi-driver-prereq]: https://github.com/exoscale/exoscale-csi-driver#prerequisite
 [exoscale-portal]: https://portal.exoscale.com
 [install-providers]: ../cluster/README.md#install-the-providers
-[development workflow]: ../cluster/README.md#development-from-source

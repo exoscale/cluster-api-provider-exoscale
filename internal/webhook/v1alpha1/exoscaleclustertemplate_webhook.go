@@ -67,6 +67,13 @@ func (v *ExoscaleClusterTemplateCustomValidator) ValidateCreate(_ context.Contex
 		))
 	}
 
+	if obj.Spec.Template.Spec.ControlPlaneEndpoint.Host != "" {
+		allErrs = append(allErrs, field.Forbidden(
+			field.NewPath("spec", "template", "spec", "controlPlaneEndpoint", "host"),
+			"control plane endpoint must not be set on template; it is assigned to each ExoscaleCluster individually",
+		))
+	}
+
 	if len(allErrs) > 0 {
 		return nil, apierrors.NewInvalid(
 			schema.GroupKind{Group: infrastructurev1alpha1.SchemeGroupVersion.Group, Kind: "ExoscaleClusterTemplate"},

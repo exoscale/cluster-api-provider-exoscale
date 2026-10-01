@@ -26,18 +26,6 @@ func Test_exoscaleClusterValidator_ValidateCreate(t *testing.T) {
 			},
 		},
 		{
-			name: "host must be empty",
-			input: infrav1alpha1.ExoscaleClusterSpec{
-				Zone: egoscale.ZoneNameCHGva2,
-				ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{
-					Port: 6443,
-					Host: "10.0.0.1",
-				},
-			},
-
-			err: "must be empty",
-		},
-		{
 			name: "unknown zone",
 			input: infrav1alpha1.ExoscaleClusterSpec{
 				Zone:                 egoscale.ZoneName("xx-xxx-1"),

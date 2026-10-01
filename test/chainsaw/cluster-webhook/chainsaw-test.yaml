@@ -37,27 +37,6 @@ spec:
                 check:
                   (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', spec.clusterID)): true
 
-    - name: reject controlPlaneEndpoint host on create
-      try:
-        - apply:
-            resource:
-              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
-              kind: ExoscaleCluster
-              metadata:
-                name: ($invalidClusterName)
-                namespace: ($namespace)
-              spec:
-                zone: bg-sof-1
-                controlPlaneEndpoint:
-                  host: 10.0.0.1
-            expect:
-              - match:
-                  apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
-                  kind: ExoscaleCluster
-                check:
-                  ($error != null): true
-                  (contains($error, 'must be empty')): true
-
     - name: reject zone change on update
       try:
         - patch:

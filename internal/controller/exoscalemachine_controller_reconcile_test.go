@@ -204,7 +204,8 @@ func TestExoscaleMachineReconciler_Reconcile_prerequisites(t *testing.T) {
 		name                       string
 		clusterInfrastructureReady bool
 		bootstrapDataReady         bool
-		paused                     bool
+		machinePaused              bool
+		clusterPaused              bool
 		wantResult                 reconcile.Result
 		conditionType              string
 		conditionStatus            metav1.ConditionStatus
@@ -229,10 +230,19 @@ func TestExoscaleMachineReconciler_Reconcile_prerequisites(t *testing.T) {
 			wantFinalizer:              true,
 		},
 		{
-			name:                       "paused",
+			name:                       "ExoscaleMachine paused",
 			clusterInfrastructureReady: true,
 			bootstrapDataReady:         true,
-			paused:                     true,
+			machinePaused:              true,
+			conditionType:              clusterv1.PausedCondition,
+			conditionStatus:            metav1.ConditionTrue,
+			reason:                     clusterv1.PausedReason,
+		},
+		{
+			name:                       "Cluster paused",
+			clusterInfrastructureReady: true,
+			bootstrapDataReady:         true,
+			clusterPaused:              true,
 			conditionType:              clusterv1.PausedCondition,
 			conditionStatus:            metav1.ConditionTrue,
 			reason:                     clusterv1.PausedReason,
@@ -245,7 +255,8 @@ func TestExoscaleMachineReconciler_Reconcile_prerequisites(t *testing.T) {
 				t,
 				tc.clusterInfrastructureReady,
 				tc.bootstrapDataReady,
-				tc.paused,
+				tc.machinePaused,
+				tc.clusterPaused,
 			)
 			instanceServiceCalled := false
 			r.NewInstanceService = func(string, string, egoscale.ZoneName, logr.Logger) (domain.InstanceService, error) {
@@ -298,7 +309,7 @@ func TestExoscaleMachineReconciler_Reconcile_waitsForWorkerSecurityGroup(t *test
 	assert.Empty(t, updated.Status.InstanceID)
 }
 
-func TestExoscaleMachineReconciler_reconcileNormal_controlPlaneEndpoint(t *testing.T) {
+func TestExoscaleMachineReconciler_reconcileInstance_controlPlaneEndpoint(t *testing.T) {
 	t.Parallel()
 
 	bootstrapSecretName := "bootstrap-data"
@@ -336,7 +347,7 @@ func TestExoscaleMachineReconciler_reconcileNormal_controlPlaneEndpoint(t *testi
 				ControlPlaneEndpoint:     tc.endpoint,
 			}}
 
-			result, err := r.reconcileNormal(ctx, exoMachine, machine, exoCluster, mocks.NewInstanceService(t), nil)
+			result, err := r.reconcileInstance(ctx, exoMachine, machine, exoCluster, mocks.NewInstanceService(t))
 
 			if tc.wantErr != "" {
 				assert.ErrorContains(t, err, tc.wantErr)

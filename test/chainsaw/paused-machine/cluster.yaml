@@ -14,7 +14,7 @@ metadata:
   name: ($clusterName)
   namespace: ($namespace)
 spec:
-  paused: true
+  paused: false
   infrastructureRef:
     apiGroup: infrastructure.cluster.x-k8s.io
     kind: ExoscaleCluster

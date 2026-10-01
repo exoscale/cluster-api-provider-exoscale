@@ -39,7 +39,7 @@ const (
 type ExoscaleClusterSpec struct {
 
 	// controlPlaneEndpoint is the host and port through which the Kubernetes API server is reachable.
-	// You do not need to set this manually — the controller fills it in once the control plane is provisioned. will trigger an error on the generate github workflow
+	// You do not need to set this manually — the controller fills it in once the control plane is provisioned.
 	// See: https://cluster-api.sigs.k8s.io/developer/providers/contracts/infra-cluster#infracluster-control-plane-endpoint
 	// +optional
 	// +kubebuilder:default={port: 6443}

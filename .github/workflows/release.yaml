@@ -32,6 +32,12 @@ jobs:
           make build-installer IMG="$IMAGE"
           mv dist/install.yaml infrastructure-components.yaml
 
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
 

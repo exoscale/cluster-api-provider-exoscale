@@ -19,6 +19,28 @@ It reconciles four custom resources:
 | `ExoscaleClusterTemplate` | A reusable `ExoscaleCluster` template, e.g. for `ClusterClass`. |
 | `ExoscaleMachineTemplate` | A reusable `ExoscaleMachine` template, cloned by control-plane providers and `MachineDeployment`s to create `ExoscaleMachine`s at scale. |
 
+## Installation
+
+CAPEX is not yet listed among the built-in `clusterctl` providers yet, so
+`clusterctl` has to be told where to find it. Declare it in the
+[clusterctl configuration file][clusterctl-config]
+(`~/.config/cluster-api/clusterctl.yaml`):
+```yaml
+providers:
+  - name: exoscale
+    url: https://github.com/exoscale/cluster-api-provider-exoscale/releases/latest/infrastructure-components.yaml
+    type: InfrastructureProvider
+```
+
+Then install it into the management cluster alongside the bootstrap and
+control-plane providers of your choice (kubeadm by default):
+```bash
+$> clusterctl init --infrastructure exoscale
+```
+
+Exoscale API credentials are not configured at install time: each
+`ExoscaleCluster` references a Secret holding them, see the samples below.
+
 ## Samples
 
 ### kubeadm
@@ -116,6 +138,7 @@ limitations under the License.
 [cluster_api]: https://github.com/kubernetes-sigs/cluster-api
 [exoscale]: https://www.exoscale.com/
 [capi-providers]: https://cluster-api.sigs.k8s.io/user/concepts#providers
+[clusterctl-config]: https://cluster-api.sigs.k8s.io/clusterctl/configuration#provider-repositories
 [kubeadm]: https://cluster-api.sigs.k8s.io/tasks/bootstrap/kubeadm-bootstrap
 [k0smotron]: https://docs.k0smotron.io
 [k0s]: https://k0sproject.io/

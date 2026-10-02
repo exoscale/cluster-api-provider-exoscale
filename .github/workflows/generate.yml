@@ -1,0 +1,32 @@
+name: Generate
+
+on:
+  push:
+    branches:
+      - main
+  pull_request: {}
+
+jobs:
+  check-generated:
+    name: Run on Ubuntu
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Run code generation
+        run: make manifests generate
+
+      - name: Check for uncommitted changes
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::Generated files are out of date, run 'make manifests generate' and commit the result"
+            git status --porcelain
+            git diff
+            exit 1
+          fi

@@ -1,3 +1,5 @@
+# Verifies that the ExoscaleMachine webhooks assign spec.machineID on creation and
+# reject invalid spec changes on update.
 apiVersion: chainsaw.kyverno.io/v1alpha1
 kind: Test
 metadata:
@@ -14,10 +16,22 @@ spec:
       try:
         - apply:
             file: exoscalemachine.yaml
+            # Checked on the object the API server returns, so a machineID here was assigned by
+            # the defaulting webhook at admission rather than by the controller on a later
+            # reconciliation. The identity must live in the spec: it names and labels the
+            # Exoscale instance, and `clusterctl move` never restores the status.
+            expect:
+              - match:
+                  apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+                  kind: ExoscaleMachine
+                check:
+                  (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', spec.machineID)): true
 
     - name: allow provider ID update
       try:
-        - update:
+        # patch, not update: chainsaw's update replaces the whole object, so a payload that omits
+        # spec.machineID reads as a removal and the validating webhook rejects it.
+        - patch:
             resource:
               apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
               kind: ExoscaleMachine
@@ -40,7 +54,7 @@ spec:
 
     - name: reject instance type update
       try:
-        - update:
+        - patch:
             resource:
               apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
               kind: ExoscaleMachine

@@ -109,7 +109,7 @@ func newReadyMachineReconciler(t *testing.T, instance domain.Instance, upsertErr
 	)
 
 	ctx := context.Background()
-	machineUID := uuid.New()
+	machineID := uuid.New()
 	templateID := uuid.New()
 	clusterID := uuid.NewString()
 	dataSecretName := bootstrapSecretName
@@ -120,8 +120,8 @@ func newReadyMachineReconciler(t *testing.T, instance domain.Instance, upsertErr
 	var securityGroupWorker *infrav1alpha1.SecurityGroupStatus
 	if workerSecurityGroupID != nil {
 		securityGroupWorker = &infrav1alpha1.SecurityGroupStatus{ID: workerSecurityGroupID.String()}
-		instanceSvc.EXPECT().UpsertInstance(ctx, domain.MachineUID(machineUID.String()), (*uuid.UUID)(nil), domain.InstanceSpec{
-			Name:             machineUID.String(),
+		instanceSvc.EXPECT().UpsertInstance(ctx, domain.MachineID(machineID.String()), (*uuid.UUID)(nil), domain.InstanceSpec{
+			Name:             machineID.String(),
 			Template:         templateID.String(),
 			InstanceType:     "standard.small",
 			SSHKey:           "ssh-key",
@@ -154,7 +154,8 @@ func newReadyMachineReconciler(t *testing.T, instance domain.Instance, upsertErr
 			&infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: exoscaleClusterName, Namespace: ns},
 				Spec: infrav1alpha1.ExoscaleClusterSpec{
-					Zone: "ch-gva-2",
+					Zone:      "ch-gva-2",
+					ClusterID: clusterID,
 					ExoscaleSecret: infrav1alpha1.ExoscaleSecretRef{
 						Name:      secretName,
 						ApiKey:    "apikey",
@@ -162,7 +163,6 @@ func newReadyMachineReconciler(t *testing.T, instance domain.Instance, upsertErr
 					},
 				},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
-					ID:                  &clusterID,
 					Initialization:      infrav1alpha1.ExoscaleClusterInitializationStatus{Provisioned: &clusterProvisioned},
 					SecurityGroupWorker: securityGroupWorker,
 				},
@@ -182,7 +182,7 @@ func newReadyMachineReconciler(t *testing.T, instance domain.Instance, upsertErr
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      machineName,
 					Namespace: ns,
-					UID:       types.UID(machineUID.String()),
+					UID:       types.UID(machineID.String()),
 					Labels: map[string]string{
 						clusterv1.ClusterNameLabel: clusterName,
 					},
@@ -195,11 +195,13 @@ func newReadyMachineReconciler(t *testing.T, instance domain.Instance, upsertErr
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      exoscaleMachineName,
 					Namespace: ns,
+					Labels:    map[string]string{clusterv1.ClusterNameLabel: clusterName},
 					OwnerReferences: []metav1.OwnerReference{
 						{APIVersion: clusterv1.GroupVersion.String(), Kind: "Machine", Name: machineName},
 					},
 				},
 				Spec: infrav1alpha1.ExoscaleMachineSpec{
+					MachineID:    machineID.String(),
 					Template:     templateID.String(),
 					InstanceType: "standard.small",
 					SSHKey:       "ssh-key",

@@ -38,12 +38,12 @@ func NewClusterService(apiKey, apisecret string, zone egoscale.ZoneName, logger 
 
 func (s *clusterService) ReconcileCluster(ctx context.Context, cluster infrav1alpha1.ExoscaleCluster) (infrav1alpha1.ExoscaleCluster, error) {
 	var clusterID uuid.UUID
-	if cluster.Status.ID == nil {
+	if cluster.Spec.ClusterID == "" {
 		return cluster, fmt.Errorf("cluster: %q has no id", cluster.Name)
 	} else {
-		id, err := uuid.Parse(*cluster.Status.ID)
+		id, err := uuid.Parse(cluster.Spec.ClusterID)
 		if err != nil {
-			return cluster, fmt.Errorf("unable to parse \".status.ClusterID\": %w: %w", errInvalidID, err)
+			return cluster, fmt.Errorf("unable to parse %q: %w: %w", ".spec.clusterID", errInvalidID, err)
 		}
 		clusterID = id
 	}

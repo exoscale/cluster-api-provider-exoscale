@@ -45,6 +45,10 @@ already be installed on the machine before it configures the node.
 - [cluster-csi](config/samples/k0smotron/cluster-csi/README.md): the same
   cluster with the [Exoscale CSI driver][exoscale-csi-driver] installed, to
   create volumes.
+- [move](config/samples/k0smotron/move/README.md): the same cluster, handed
+  over from one management cluster to another with `clusterctl move` — how you
+  migrate off a temporary bootstrap cluster onto a permanent one, without
+  touching the running workload cluster.
 
 ## Local development
 

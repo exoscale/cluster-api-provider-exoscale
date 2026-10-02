@@ -54,16 +54,16 @@ func NewInstanceService(apiKey, apiSecret string, zone egoscale.ZoneName, logger
 }
 
 // UpsertInstance creates, recovers, or updates the instance owned by a Machine.
-func (s *instanceService) UpsertInstance(ctx context.Context, machineUID domain.MachineUID, instanceID *uuid.UUID, spec domain.InstanceSpec) (domain.Instance, error) {
-	if machineUID == "" {
-		return domain.Instance{}, fmt.Errorf("machine UID is required")
+func (s *instanceService) UpsertInstance(ctx context.Context, machineID domain.MachineID, instanceID *uuid.UUID, spec domain.InstanceSpec) (domain.Instance, error) {
+	if machineID == "" {
+		return domain.Instance{}, fmt.Errorf("machine ID is required")
 	}
 	clusterID := spec.Labels[domain.ClusterIDKey]
 	if clusterID == "" {
 		return domain.Instance{}, fmt.Errorf("cluster ID label is required")
 	}
-	spec.Labels = labelsWithMachineUID(spec.Labels, machineUID)
-	matches, err := s.findInstances(ctx, machineUID, clusterID)
+	spec.Labels = labelsWithMachineID(spec.Labels, machineID)
+	matches, err := s.findInstances(ctx, machineID, clusterID)
 	if err != nil {
 		return domain.Instance{}, fmt.Errorf("error while searching for existing instance: %w", err)
 	}
@@ -84,11 +84,11 @@ func (s *instanceService) UpsertInstance(ctx context.Context, machineUID domain.
 
 	if instance.ID == uuid.Nil && len(matches) > 0 {
 		instance = oldestInstance(matches)
-		s.logger.Info("Found an existing instance by Machine UID, reusing it", "instanceID", instance.ID.String())
+		s.logger.Info("Found an existing instance by machine ID, reusing it", "instanceID", instance.ID.String())
 	}
 
 	if instance.ID == uuid.Nil {
-		s.logger.Info("Create instance", "machineUID", machineUID.String())
+		s.logger.Info("Create instance", "machineID", machineID.String())
 		resolvedSpec, err := s.resolveInstanceSpec(ctx, spec)
 		if err != nil {
 			return domain.Instance{}, err
@@ -103,7 +103,7 @@ func (s *instanceService) UpsertInstance(ctx context.Context, machineUID domain.
 			return domain.Instance{}, fmt.Errorf("error while fetching new instance: %w", err)
 		}
 	}
-	if err := instanceOwnershipError(instance, machineUID, clusterID); err != nil {
+	if err := instanceOwnershipError(instance, machineID, clusterID); err != nil {
 		return domain.Instance{}, err
 	}
 
@@ -111,7 +111,7 @@ func (s *instanceService) UpsertInstance(ctx context.Context, machineUID domain.
 		if duplicate.ID == instance.ID {
 			continue
 		}
-		s.logger.Info("Delete duplicate instance", "instanceID", duplicate.ID.String(), "machineUID", machineUID.String())
+		s.logger.Info("Delete duplicate instance", "instanceID", duplicate.ID.String(), "machineID", machineID.String())
 		if err := s.client.DeleteInstance(ctx, duplicate.ID); err != nil && !errors.Is(err, domain.ErrInstanceNotFound) {
 			return domain.Instance{}, fmt.Errorf("delete duplicate instance: %w", err)
 		}
@@ -275,12 +275,12 @@ func templateDiskSizeGiB(size int64) int64 {
 }
 
 // DeleteInstance deletes all instances matching the Machine and cluster ownership markers.
-func (s *instanceService) DeleteInstance(ctx context.Context, machineUID domain.MachineUID, clusterID uuid.UUID, instanceID *uuid.UUID) error {
-	if machineUID == "" {
+func (s *instanceService) DeleteInstance(ctx context.Context, machineID domain.MachineID, clusterID uuid.UUID, instanceID *uuid.UUID) error {
+	if machineID == "" {
 		if instanceID == nil {
 			return nil
 		}
-		return fmt.Errorf("cannot verify status instance %s without a Machine UID", *instanceID)
+		return fmt.Errorf("cannot verify status instance %s without a machine ID", *instanceID)
 	}
 	if clusterID == uuid.Nil {
 		return fmt.Errorf("cannot delete instances without a cluster ID")
@@ -294,13 +294,13 @@ func (s *instanceService) DeleteInstance(ctx context.Context, machineUID domain.
 			return err
 		}
 		if err == nil {
-			if err := instanceOwnershipError(statusInstance, machineUID, clusterID.String()); err != nil {
+			if err := instanceOwnershipError(statusInstance, machineID, clusterID.String()); err != nil {
 				return fmt.Errorf("status %w", err)
 			}
 		}
 	}
 
-	instances, err := s.findInstances(ctx, machineUID, clusterID.String())
+	instances, err := s.findInstances(ctx, machineID, clusterID.String())
 	if err != nil {
 		return err
 	}
@@ -320,24 +320,24 @@ func (s *instanceService) DeleteInstance(ctx context.Context, machineUID domain.
 	return nil
 }
 
-func (s *instanceService) findInstances(ctx context.Context, machineUID domain.MachineUID, clusterID string) ([]domain.Instance, error) {
-	instances, err := s.client.ListInstances(ctx, domain.MachineUIDKey+"="+machineUID.String())
+func (s *instanceService) findInstances(ctx context.Context, machineID domain.MachineID, clusterID string) ([]domain.Instance, error) {
+	instances, err := s.client.ListInstances(ctx, domain.MachineIDKey+"="+machineID.String())
 	if err != nil {
 		return nil, err
 	}
 
 	var matches []domain.Instance
 	for _, instance := range instances {
-		if instanceOwnershipError(instance, machineUID, clusterID) == nil {
+		if instanceOwnershipError(instance, machineID, clusterID) == nil {
 			matches = append(matches, instance)
 		}
 	}
 	return matches, nil
 }
 
-func instanceOwnershipError(instance domain.Instance, machineUID domain.MachineUID, clusterID string) error {
-	if instance.Labels[domain.MachineUIDKey] != machineUID.String() {
-		return fmt.Errorf("instance %s is not owned by Machine UID %s", instance.ID, machineUID)
+func instanceOwnershipError(instance domain.Instance, machineID domain.MachineID, clusterID string) error {
+	if instance.Labels[domain.MachineIDKey] != machineID.String() {
+		return fmt.Errorf("instance %s is not owned by machine %s", instance.ID, machineID)
 	}
 	if ownerClusterID := instance.Labels[domain.ClusterIDKey]; ownerClusterID != "" && ownerClusterID != clusterID {
 		return fmt.Errorf("instance %s is not owned by cluster %s", instance.ID, clusterID)
@@ -355,9 +355,9 @@ func oldestInstance(instances []domain.Instance) domain.Instance {
 	return oldest
 }
 
-func labelsWithMachineUID(labels map[string]string, machineUID domain.MachineUID) map[string]string {
+func labelsWithMachineID(labels map[string]string, machineID domain.MachineID) map[string]string {
 	out := make(map[string]string, len(labels)+1)
 	maps.Copy(out, labels)
-	out[domain.MachineUIDKey] = machineUID.String()
+	out[domain.MachineIDKey] = machineID.String()
 	return out
 }

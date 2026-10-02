@@ -19,6 +19,7 @@ resources:
   path: github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1
   version: v1alpha1
   webhooks:
+    defaulting: true
     validation: true
     webhookVersion: v1
 - api:
@@ -31,6 +32,7 @@ resources:
   path: github.com/exoscale/cluster-api-provider-exoscale/api/v1alpha1
   version: v1alpha1
   webhooks:
+    defaulting: true
     validation: true
     webhookVersion: v1
 - api:

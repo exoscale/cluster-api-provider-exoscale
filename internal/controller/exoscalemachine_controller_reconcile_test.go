@@ -41,7 +41,7 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 	// TODO: rename templateID en template e.g., Ubuntu LTS
 	// TODO: annotations have been banjaxed, to adjust accordingly
 	ctx := context.Background()
-	machineUID := uuid.New()
+	machineID := uuid.New()
 	instanceID := uuid.New()
 	elasticIPID := uuid.New()
 	controlPlaneSecurityGroupID := uuid.New()
@@ -57,8 +57,8 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 	_ = infrav1alpha1.AddToScheme(scheme)
 
 	instanceSvc := mocks.NewInstanceService(t)
-	instanceSvc.EXPECT().UpsertInstance(ctx, domain.MachineUID(machineUID.String()), (*uuid.UUID)(nil), domain.InstanceSpec{
-		Name:              machineUID.String(),
+	instanceSvc.EXPECT().UpsertInstance(ctx, domain.MachineID(machineID.String()), (*uuid.UUID)(nil), domain.InstanceSpec{
+		Name:              machineID.String(),
 		Template:          template,
 		InstanceType:      "standard.small",
 		SSHKey:            "ssh-key",
@@ -92,7 +92,8 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 			&infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: exoscaleClusterName, Namespace: ns},
 				Spec: infrav1alpha1.ExoscaleClusterSpec{
-					Zone: "ch-gva-2",
+					ClusterID: clusterID,
+					Zone:      "ch-gva-2",
 					ExoscaleSecret: infrav1alpha1.ExoscaleSecretRef{
 						Name:      secretName,
 						ApiKey:    "apikey",
@@ -100,7 +101,6 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 					},
 				},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
-					ID:                       &clusterID,
 					Initialization:           infrav1alpha1.ExoscaleClusterInitializationStatus{Provisioned: &clusterProvisioned},
 					ControlPlaneEndpoint:     &infrav1alpha1.APIEndpointStatus{ID: elasticIPID.String()},
 					SecurityGroupControlPlan: &infrav1alpha1.SecurityGroupStatus{ID: controlPlaneSecurityGroupID.String()},
@@ -122,7 +122,7 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      machineName,
 					Namespace: ns,
-					UID:       types.UID(machineUID.String()),
+					UID:       types.UID(machineID.String()),
 					Labels: map[string]string{
 						clusterv1.ClusterNameLabel:         clusterName,
 						clusterv1.MachineControlPlaneLabel: "",
@@ -138,11 +138,13 @@ func TestExoscaleMachineReconciler_Reconcile_wiresInstanceService(t *testing.T) 
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      exoscaleMachineName,
 					Namespace: ns,
+					Labels:    map[string]string{clusterv1.ClusterNameLabel: clusterName},
 					OwnerReferences: []metav1.OwnerReference{
 						{APIVersion: clusterv1.GroupVersion.String(), Kind: "Machine", Name: machineName},
 					},
 				},
 				Spec: infrav1alpha1.ExoscaleMachineSpec{
+					MachineID:         machineID.String(),
 					Template:          template,
 					InstanceType:      "standard.small",
 					SSHKey:            "ssh-key",

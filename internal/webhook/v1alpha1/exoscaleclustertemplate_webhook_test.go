@@ -48,6 +48,30 @@ func Test_ExoscaleClusterTemplateCustomValidator_ValidateCreate(t *testing.T) {
 		},
 	}
 
+	clusterIDObj := &infrastructurev1alpha1.ExoscaleClusterTemplate{
+		ObjectMeta: v1.ObjectMeta{Name: "my-template"},
+		Spec: infrastructurev1alpha1.ExoscaleClusterTemplateSpec{
+			Template: infrastructurev1alpha1.ExoscaleClusterTemplateResource{
+				Spec: infrastructurev1alpha1.ExoscaleClusterSpec{
+					ClusterID: "3f2a1b4c-5d6e-4f70-8192-a3b4c5d6e7f8",
+				},
+			},
+		},
+	}
+
+	cpEndpointObj := &infrastructurev1alpha1.ExoscaleClusterTemplate{
+		ObjectMeta: v1.ObjectMeta{Name: "my-template"},
+		Spec: infrastructurev1alpha1.ExoscaleClusterTemplateSpec{
+			Template: infrastructurev1alpha1.ExoscaleClusterTemplateResource{
+				Spec: infrastructurev1alpha1.ExoscaleClusterSpec{
+					ControlPlaneEndpoint: infrastructurev1alpha1.APIEndpoint{
+						Host: "anything",
+					},
+				},
+			},
+		},
+	}
+
 	tests := []struct {
 		name      string
 		obj       *infrastructurev1alpha1.ExoscaleClusterTemplate
@@ -82,6 +106,26 @@ func Test_ExoscaleClusterTemplateCustomValidator_ValidateCreate(t *testing.T) {
 					Return(nil)
 			},
 			err: errors.New("invalid label key"),
+		},
+		{
+			name: "controle plane endpoint host is rejected",
+			obj:  cpEndpointObj,
+			validator: func(m *mocks.ClusterValidator) {
+				m.EXPECT().
+					ValidateCreate(cpEndpointObj.Spec.Template.Spec, field.NewPath("spec", "template", "spec")).
+					Return(nil)
+			},
+			err: errors.New("control plane endpoint must not be set on template"),
+		},
+		{
+			name: "clusterID in a template is rejected",
+			obj:  clusterIDObj,
+			validator: func(m *mocks.ClusterValidator) {
+				m.EXPECT().
+					ValidateCreate(clusterIDObj.Spec.Template.Spec, field.NewPath("spec", "template", "spec")).
+					Return(nil)
+			},
+			err: errors.New("clusterID must not be set on a template"),
 		},
 	}
 

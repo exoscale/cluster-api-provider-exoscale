@@ -26,18 +26,6 @@ func Test_exoscaleClusterValidator_ValidateCreate(t *testing.T) {
 			},
 		},
 		{
-			name: "host must be empty",
-			input: infrav1alpha1.ExoscaleClusterSpec{
-				Zone: egoscale.ZoneNameCHGva2,
-				ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{
-					Port: 6443,
-					Host: "10.0.0.1",
-				},
-			},
-
-			err: "must be empty",
-		},
-		{
 			name: "unknown zone",
 			input: infrav1alpha1.ExoscaleClusterSpec{
 				Zone:                 egoscale.ZoneName("xx-xxx-1"),
@@ -94,6 +82,45 @@ func Test_exoscaleClusterValidator_ValidateUpdate(t *testing.T) {
 				ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Port: 6443},
 			},
 			err: "zone cannot be changed once set",
+		},
+		{
+			name: "clusterID changed is forbidden",
+			oldSpec: infrav1alpha1.ExoscaleClusterSpec{
+				ClusterID:            "3f2a1b4c-5d6e-4f70-8192-a3b4c5d6e7f8",
+				Zone:                 egoscale.ZoneNameCHGva2,
+				ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Port: 6443},
+			},
+			newSpec: infrav1alpha1.ExoscaleClusterSpec{
+				ClusterID:            "0a1b2c3d-4e5f-4061-8273-8495a6b7c8d9",
+				Zone:                 egoscale.ZoneNameCHGva2,
+				ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Port: 6443},
+			},
+			err: "clusterID cannot be changed or removed once set",
+		},
+		{
+			name: "clusterID removed is forbidden",
+			oldSpec: infrav1alpha1.ExoscaleClusterSpec{
+				ClusterID:            "3f2a1b4c-5d6e-4f70-8192-a3b4c5d6e7f8",
+				Zone:                 egoscale.ZoneNameCHGva2,
+				ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Port: 6443},
+			},
+			newSpec: infrav1alpha1.ExoscaleClusterSpec{
+				Zone:                 egoscale.ZoneNameCHGva2,
+				ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Port: 6443},
+			},
+			err: "clusterID cannot be changed or removed once set",
+		},
+		{
+			name: "clusterID assigned on an object that had none is allowed",
+			oldSpec: infrav1alpha1.ExoscaleClusterSpec{
+				Zone:                 egoscale.ZoneNameCHGva2,
+				ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Port: 6443},
+			},
+			newSpec: infrav1alpha1.ExoscaleClusterSpec{
+				ClusterID:            "3f2a1b4c-5d6e-4f70-8192-a3b4c5d6e7f8",
+				Zone:                 egoscale.ZoneNameCHGva2,
+				ControlPlaneEndpoint: infrav1alpha1.APIEndpoint{Port: 6443},
+			},
 		},
 	}
 

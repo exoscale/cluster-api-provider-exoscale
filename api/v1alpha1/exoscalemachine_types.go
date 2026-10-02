@@ -27,6 +27,18 @@ import (
 // added later, use CAPI Machine.spec.failureDomain to pick the target zone
 // instead of duplicating zone here.
 type ExoscaleMachineSpec struct {
+	// machineID is the permanent identity of this machine. It names the Exoscale instance
+	// and labels it for ownership, so the controller can find the instance it already
+	// created instead of building a second one.
+	//
+	// Do not set or edit this field. The controller generates it once, and it is then
+	// immutable.
+	//
+	// +optional
+	// +kubebuilder:validation:Pattern=`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="machineID is immutable: it identifies the Exoscale instance already provisioned for this machine"
+	MachineID string `json:"machineID,omitempty"`
+
 	// template is an Exoscale instance template UUID or exact template name.
 	// UUIDs pin an exact template; names are resolved at create time.
 	// +required

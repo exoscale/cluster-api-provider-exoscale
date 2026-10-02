@@ -58,18 +58,7 @@ func NewExoscaleClusterValidator() domain.ClusterValidator {
 
 // ValidateCreate validates an ExoscaleClusterSpec on creation.
 func (v *exoscaleClusterValidator) ValidateCreate(spec infrav1alpha1.ExoscaleClusterSpec, fldPath *field.Path) field.ErrorList {
-	var allErrs field.ErrorList
-
-	if spec.ControlPlaneEndpoint.Host != "" {
-		allErrs = append(allErrs, field.Forbidden(
-			fldPath.Child("controlPlaneEndpoint", "host"),
-			"must be empty; it is set automatically by the controller once the control plane is provisioned",
-		))
-	}
-
-	allErrs = append(allErrs, v.validate(spec, fldPath)...)
-
-	return allErrs
+	return v.validate(spec, fldPath)
 }
 
 // ValidateUpdate validates an ExoscaleClusterSpec on update.
@@ -79,6 +68,15 @@ func (v *exoscaleClusterValidator) ValidateUpdate(oldspec, newSpec infrav1alpha1
 
 	if oldspec.Zone != newSpec.Zone {
 		allErrs = append(allErrs, field.Forbidden(fldPath.Child("zone"), "zone cannot be changed once set"))
+	}
+
+	// Covers both a change and a removal: the identity names the Exoscale resources already
+	// provisioned for this cluster, so losing it strands every one of them.
+	if oldspec.ClusterID != "" && newSpec.ClusterID != oldspec.ClusterID {
+		allErrs = append(allErrs, field.Forbidden(
+			fldPath.Child("clusterID"),
+			"clusterID cannot be changed or removed once set; it identifies the Exoscale resources provisioned for this cluster",
+		))
 	}
 
 	allErrs = append(allErrs, v.validate(newSpec, fldPath)...)

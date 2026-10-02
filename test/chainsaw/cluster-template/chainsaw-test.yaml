@@ -52,7 +52,7 @@ spec:
                   kind: ExoscaleClusterTemplate
                 check:
                   ($error != null): true
-                  (contains($error, 'must be empty')): true
+                  (contains($error, 'control plane endpoint must not be set on template')): true
 
     - name: reject any update
       try:

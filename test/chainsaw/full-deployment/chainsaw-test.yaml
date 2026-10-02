@@ -52,6 +52,17 @@ spec:
 
     - name: assert - exoscalecluster
       try:
+        - description: assert the defaulting webhook assigned a cluster ID
+          assert:
+            timeout: 30s
+            resource:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+              kind: ExoscaleCluster
+              metadata:
+                name: ($clusterName)
+                namespace: ($namespace)
+              (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', spec.clusterID)): true
+
         - description: assert cluster ready
           assert:
             timeout: 10m
@@ -264,8 +275,7 @@ spec:
                 addresses:
                   - type: ExternalIP
                     (address != ''): true
-
-        - description: assert control plane machine providerID
+        - description: assert control plane machine providerID and machine ID
           assert:
             timeout: 1m
             resource:
@@ -277,6 +287,7 @@ spec:
                   cluster.x-k8s.io/cluster-name: ($clusterName)
                   cluster.x-k8s.io/control-plane: "true"
               (spec.providerID == join('', ['exoscale://', status.instanceID])): true
+              (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', spec.machineID)): true
               status:
                 (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', instanceID)): true
 
@@ -303,7 +314,7 @@ spec:
                   - type: ExternalIP
                     (address != ''): true
 
-        - description: assert worker machine providerID
+        - description: assert worker machine providerID and machine ID
           assert:
             timeout: 1m
             resource:
@@ -315,6 +326,7 @@ spec:
                   cluster.x-k8s.io/cluster-name: ($clusterName)
                   cluster.x-k8s.io/deployment-name: ($workersName)
               (spec.providerID == join('', ['exoscale://', status.instanceID])): true
+              (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', spec.machineID)): true
               status:
                 (regex_match('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', instanceID)): true
 

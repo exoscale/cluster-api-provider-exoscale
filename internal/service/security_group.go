@@ -44,7 +44,18 @@ func (s securityGroupService) UpsertSecurityGroup(ctx context.Context, clusterID
 		s.logger.Info("Create security group")
 
 		id, err := s.cloud.CreateSecurityGroup(ctx, name)
-		if err != nil {
+		if errors.Is(err, domain.ErrSecurityGroupAlreadyExists) {
+			s.logger.Info("Security group already exists")
+			securityGroupList, err := s.cloud.ListSecurityGroups(ctx)
+			if err != nil {
+				return domain.SecurityGroup{}, fmt.Errorf("error while listing security group: %w", err)
+			}
+			for _, sg := range securityGroupList {
+				if sg.Name == name {
+					return sg, nil
+				}
+			}
+		} else if err != nil {
 			return domain.SecurityGroup{}, fmt.Errorf("error while creating security group: %w", err)
 		}
 		sc, err := s.cloud.GetSecurityGroup(ctx, id)

@@ -109,7 +109,7 @@ func Test_ExoscaleClusterReconciler_Reconcile_nominal(t *testing.T) {
 				assert.NoError(t, c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: ns}, updated))
 
 				assert.Contains(t, updated.Finalizers, infrav1alpha1.ExoscaleClusterFinalizer)
-				assert.NotNil(t, updated.Status.ID)
+				assert.NotEmpty(t, updated.Spec.ClusterID)
 
 				ready := apimeta.FindStatusCondition(updated.Status.Conditions, infrav1alpha1.ReadyCondition)
 				if assert.NotNil(t, ready) {
@@ -154,7 +154,7 @@ func Test_ExoscaleClusterReconciler_Reconcile_nominal(t *testing.T) {
 				updated := &infrav1alpha1.ExoscaleCluster{}
 				assert.NoError(t, c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: ns}, updated))
 
-				assert.NotNil(t, updated.Status.ID)
+				assert.NotEmpty(t, updated.Spec.ClusterID)
 			},
 			output: reconcile.Result{},
 		},
@@ -202,7 +202,7 @@ func Test_ExoscaleClusterReconciler_Reconcile_nominal(t *testing.T) {
 				updated := &infrav1alpha1.ExoscaleCluster{}
 				assert.NoError(t, c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: ns}, updated))
 
-				assert.NotNil(t, updated.Status.ID)
+				assert.NotEmpty(t, updated.Spec.ClusterID)
 			},
 			output: reconcile.Result{},
 		},
@@ -250,7 +250,7 @@ func Test_ExoscaleClusterReconciler_Reconcile_nominal(t *testing.T) {
 				updated := &infrav1alpha1.ExoscaleCluster{}
 				assert.NoError(t, c.Get(ctx, types.NamespacedName{Name: clusterName, Namespace: ns}, updated))
 
-				assert.NotNil(t, updated.Status.ID)
+				assert.NotEmpty(t, updated.Spec.ClusterID)
 
 				paused := apimeta.FindStatusCondition(updated.Status.Conditions, clusterv1.PausedCondition)
 				if assert.NotNil(t, paused) {

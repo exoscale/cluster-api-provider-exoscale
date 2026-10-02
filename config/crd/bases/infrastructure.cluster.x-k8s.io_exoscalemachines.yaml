@@ -69,6 +69,20 @@ spec:
                   Run `exo compute instance-type list -v` to list available values.
                 minLength: 1
                 type: string
+              machineID:
+                description: |-
+                  machineID is the permanent identity of this machine. It names the Exoscale instance
+                  and labels it for ownership, so the controller can find the instance it already
+                  created instead of building a second one.
+
+                  Do not set or edit this field. The controller generates it once, and it is then
+                  immutable.
+                pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+                type: string
+                x-kubernetes-validations:
+                - message: 'machineID is immutable: it identifies the Exoscale instance
+                    already provisioned for this machine'
+                  rule: self == oldSelf
               providerID:
                 description: |-
                   providerID is the cloud-provider identifier for this instance in the form

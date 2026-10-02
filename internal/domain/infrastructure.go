@@ -12,8 +12,8 @@ import (
 const (
 	// ClusterIDKey identifies the annotation and cloud label used for cluster ownership.
 	ClusterIDKey = "cluster-api-provider-exoscale/cluster-id"
-	// MachineUIDKey identifies the annotation and cloud label used for Machine ownership.
-	MachineUIDKey = "cluster-api-provider-exoscale/machine-uid"
+	// MachineIDKey identifies the annotation and cloud label used for Machine ownership.
+	MachineIDKey = "cluster-api-provider-exoscale/machine-id"
 )
 
 // ExoscaleClient is the subset of the Exoscale SDK used by the infrastructure adapter.
@@ -28,6 +28,7 @@ type ExoscaleClient interface {
 
 	CreateSecurityGroup(ctx context.Context, req egoscale.CreateSecurityGroupRequest) (*egoscale.Operation, error)
 	GetSecurityGroup(ctx context.Context, id egoscale.UUID) (*egoscale.SecurityGroup, error)
+	ListSecurityGroups(ctx context.Context, opts ...egoscale.ListSecurityGroupsOpt) (*egoscale.ListSecurityGroupsResponse, error)
 	DeleteSecurityGroup(ctx context.Context, id egoscale.UUID) (*egoscale.Operation, error)
 	AddRuleToSecurityGroup(ctx context.Context, id egoscale.UUID, req egoscale.AddRuleToSecurityGroupRequest) (*egoscale.Operation, error)
 	DeleteRuleFromSecurityGroup(ctx context.Context, id egoscale.UUID, ruleID egoscale.UUID) (*egoscale.Operation, error)
@@ -54,6 +55,7 @@ type Cloud interface {
 
 	CreateSecurityGroup(ctx context.Context, name string) (uuid.UUID, error)
 	GetSecurityGroup(ctx context.Context, id uuid.UUID) (SecurityGroup, error)
+	ListSecurityGroups(ctx context.Context) ([]SecurityGroup, error)
 	DeleteSecurityGroup(ctx context.Context, id uuid.UUID) error
 	CreateSecurityGroupRule(ctx context.Context, sgID uuid.UUID, rule SecurityGroupRule) (uuid.UUID, error)
 	DeleteSecurityGroupRule(ctx context.Context, sgID, ruleID uuid.UUID) error
@@ -151,15 +153,15 @@ type ClusterService interface {
 
 // InstanceService reconciles the Exoscale instance owned by a CAPI Machine.
 type InstanceService interface {
-	UpsertInstance(ctx context.Context, machineUID MachineUID, instanceID *uuid.UUID, spec InstanceSpec) (Instance, error)
-	DeleteInstance(ctx context.Context, machineUID MachineUID, clusterID uuid.UUID, instanceID *uuid.UUID) error
+	UpsertInstance(ctx context.Context, machineID MachineID, instanceID *uuid.UUID, spec InstanceSpec) (Instance, error)
+	DeleteInstance(ctx context.Context, machineID MachineID, clusterID uuid.UUID, instanceID *uuid.UUID) error
 }
 
-// MachineUID is the stable ownership value derived from a Kubernetes Machine UID.
-type MachineUID string
+// MachineID is the stable ownership value carried by ExoscaleMachine.spec.machineID.
+type MachineID string
 
-// String returns the Machine UID as a string.
-func (uid MachineUID) String() string { return string(uid) }
+// String returns the machine ID as a string.
+func (id MachineID) String() string { return string(id) }
 
 // InstanceSpec contains the user-facing values required to resolve an instance request.
 type InstanceSpec struct {

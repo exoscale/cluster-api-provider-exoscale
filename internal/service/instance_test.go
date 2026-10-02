@@ -16,9 +16,9 @@ func Test_instanceService_UpsertInstance(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	machineUID := domain.MachineUID(uuid.NewString())
+	machineID := domain.MachineID(uuid.NewString())
 	clusterID := uuid.NewString()
-	query := domain.MachineUIDKey + "=" + machineUID.String()
+	query := domain.MachineIDKey + "=" + machineID.String()
 	instanceID := uuid.New()
 	templateID := uuid.New()
 	elasticIPID := uuid.New()
@@ -29,9 +29,9 @@ func Test_instanceService_UpsertInstance(t *testing.T) {
 		Name: "machine-0", Template: "ubuntu", InstanceType: "standard.small",
 		Labels: map[string]string{domain.ClusterIDKey: clusterID},
 	}
-	labels := map[string]string{domain.MachineUIDKey: machineUID.String(), domain.ClusterIDKey: clusterID}
+	labels := map[string]string{domain.MachineIDKey: machineID.String(), domain.ClusterIDKey: clusterID}
 	instance := domain.Instance{ID: instanceID, Labels: labels}
-	legacyInstance := domain.Instance{ID: instanceID, Labels: map[string]string{domain.MachineUIDKey: machineUID.String()}}
+	legacyInstance := domain.Instance{ID: instanceID, Labels: map[string]string{domain.MachineIDKey: machineID.String()}}
 
 	tests := []struct {
 		name        string
@@ -62,7 +62,7 @@ func Test_instanceService_UpsertInstance(t *testing.T) {
 			output: legacyInstance,
 		},
 		{
-			name: "recovers legacy instance by Machine UID",
+			name: "recovers legacy instance by machine ID",
 			client: func(m *mocks.Cloud) {
 				m.EXPECT().ListInstances(ctx, query).Return([]domain.Instance{legacyInstance}, nil)
 			},
@@ -73,7 +73,7 @@ func Test_instanceService_UpsertInstance(t *testing.T) {
 			client: func(m *mocks.Cloud) {
 				foreign := instance
 				foreign.ID = uuid.New()
-				foreign.Labels = map[string]string{domain.MachineUIDKey: machineUID.String(), domain.ClusterIDKey: uuid.NewString()}
+				foreign.Labels = map[string]string{domain.MachineIDKey: machineID.String(), domain.ClusterIDKey: uuid.NewString()}
 				m.EXPECT().ListInstances(ctx, query).Return([]domain.Instance{foreign, instance}, nil)
 			},
 			output: instance,
@@ -130,10 +130,10 @@ func Test_instanceService_UpsertInstance(t *testing.T) {
 			client: func(m *mocks.Cloud) {
 				m.EXPECT().ListInstances(ctx, query).Return(nil, nil)
 				m.EXPECT().GetInstance(ctx, instanceID).Return(domain.Instance{ID: instanceID, Labels: map[string]string{
-					domain.MachineUIDKey: uuid.NewString(), domain.ClusterIDKey: clusterID,
+					domain.MachineIDKey: uuid.NewString(), domain.ClusterIDKey: clusterID,
 				}}, nil)
 			},
-			errContains: "is not owned by Machine UID",
+			errContains: "is not owned by machine",
 		},
 		{
 			name:       "rejects status instance owned by another cluster",
@@ -141,7 +141,7 @@ func Test_instanceService_UpsertInstance(t *testing.T) {
 			client: func(m *mocks.Cloud) {
 				m.EXPECT().ListInstances(ctx, query).Return(nil, nil)
 				m.EXPECT().GetInstance(ctx, instanceID).Return(domain.Instance{ID: instanceID, Labels: map[string]string{
-					domain.MachineUIDKey: machineUID.String(), domain.ClusterIDKey: uuid.NewString(),
+					domain.MachineIDKey: machineID.String(), domain.ClusterIDKey: uuid.NewString(),
 				}}, nil)
 			},
 			errContains: "is not owned by cluster",
@@ -165,7 +165,7 @@ func Test_instanceService_UpsertInstance(t *testing.T) {
 				testSpec.Labels = nil
 			}
 
-			output, err := (&instanceService{client: client, logger: logr.Discard()}).UpsertInstance(ctx, machineUID, tc.instanceID, testSpec)
+			output, err := (&instanceService{client: client, logger: logr.Discard()}).UpsertInstance(ctx, machineID, tc.instanceID, testSpec)
 
 			if tc.errContains != "" {
 				assert.ErrorContains(t, err, tc.errContains)
@@ -183,7 +183,7 @@ func Test_instanceService_UpsertInstance(t *testing.T) {
 		client.EXPECT().ListInstances(ctx, query).Return([]domain.Instance{newest, oldest}, nil)
 		client.EXPECT().DeleteInstance(ctx, newest.ID).Return(nil)
 
-		output, err := (&instanceService{client: client, logger: logr.Discard()}).UpsertInstance(ctx, machineUID, nil, spec)
+		output, err := (&instanceService{client: client, logger: logr.Discard()}).UpsertInstance(ctx, machineID, nil, spec)
 
 		assert.NoError(t, err)
 		assert.Equal(t, oldest, output)
@@ -197,7 +197,7 @@ func Test_instanceService_UpsertInstance(t *testing.T) {
 		client.EXPECT().GetInstance(ctx, statusInstance.ID).Return(statusInstance, nil)
 		client.EXPECT().DeleteInstance(ctx, oldest.ID).Return(nil)
 
-		output, err := (&instanceService{client: client, logger: logr.Discard()}).UpsertInstance(ctx, machineUID, &statusInstance.ID, spec)
+		output, err := (&instanceService{client: client, logger: logr.Discard()}).UpsertInstance(ctx, machineID, &statusInstance.ID, spec)
 
 		assert.NoError(t, err)
 		assert.Equal(t, statusInstance, output)
@@ -212,7 +212,7 @@ func Test_instanceService_UpsertInstance(t *testing.T) {
 		}, nil)
 		client.EXPECT().GetInstance(ctx, staleID).Return(domain.Instance{}, domain.ErrInstanceNotFound)
 
-		output, err := (&instanceService{client: client, logger: logr.Discard()}).UpsertInstance(ctx, machineUID, &staleID, spec)
+		output, err := (&instanceService{client: client, logger: logr.Discard()}).UpsertInstance(ctx, machineID, &staleID, spec)
 
 		assert.NoError(t, err)
 		assert.Equal(t, healthy, output)
@@ -229,7 +229,7 @@ func Test_instanceService_UpsertInstance(t *testing.T) {
 		testSpec := spec
 		testSpec.SecurityGroupIDs = []uuid.UUID{keepID, attachID, attachID}
 
-		_, err := (&instanceService{client: client, logger: logr.Discard()}).UpsertInstance(ctx, machineUID, nil, testSpec)
+		_, err := (&instanceService{client: client, logger: logr.Discard()}).UpsertInstance(ctx, machineID, nil, testSpec)
 
 		assert.NoError(t, err)
 	})
@@ -391,18 +391,18 @@ func Test_instanceService_DeleteInstance(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	machineUID := domain.MachineUID(uuid.NewString())
+	machineID := domain.MachineID(uuid.NewString())
 	clusterID := uuid.New()
-	query := domain.MachineUIDKey + "=" + machineUID.String()
+	query := domain.MachineIDKey + "=" + machineID.String()
 	id := uuid.New()
 	staleID := uuid.New()
-	labels := map[string]string{domain.MachineUIDKey: machineUID.String(), domain.ClusterIDKey: clusterID.String()}
+	labels := map[string]string{domain.MachineIDKey: machineID.String(), domain.ClusterIDKey: clusterID.String()}
 	instance := domain.Instance{ID: id, Labels: labels}
-	legacyInstance := domain.Instance{ID: id, Labels: map[string]string{domain.MachineUIDKey: machineUID.String()}}
+	legacyInstance := domain.Instance{ID: id, Labels: map[string]string{domain.MachineIDKey: machineID.String()}}
 
 	tests := []struct {
 		name        string
-		machineUID  domain.MachineUID
+		machineID   domain.MachineID
 		clusterID   uuid.UUID
 		instanceID  *uuid.UUID
 		client      func(*mocks.Cloud)
@@ -410,7 +410,7 @@ func Test_instanceService_DeleteInstance(t *testing.T) {
 		errContains string
 	}{
 		{
-			name: "deletes instance from status ID", machineUID: machineUID, clusterID: clusterID, instanceID: &id,
+			name: "deletes instance from status ID", machineID: machineID, clusterID: clusterID, instanceID: &id,
 			client: func(m *mocks.Cloud) {
 				m.EXPECT().GetInstance(ctx, id).Return(instance, nil)
 				m.EXPECT().ListInstances(ctx, query).Return([]domain.Instance{instance}, nil)
@@ -418,7 +418,7 @@ func Test_instanceService_DeleteInstance(t *testing.T) {
 			},
 		},
 		{
-			name: "deletes legacy instance from status ID", machineUID: machineUID, clusterID: clusterID, instanceID: &id,
+			name: "deletes legacy instance from status ID", machineID: machineID, clusterID: clusterID, instanceID: &id,
 			client: func(m *mocks.Cloud) {
 				m.EXPECT().GetInstance(ctx, id).Return(legacyInstance, nil)
 				m.EXPECT().ListInstances(ctx, query).Return([]domain.Instance{legacyInstance}, nil)
@@ -426,21 +426,21 @@ func Test_instanceService_DeleteInstance(t *testing.T) {
 			},
 		},
 		{
-			name: "recovers legacy instance from ownership label", machineUID: machineUID, clusterID: clusterID,
+			name: "recovers legacy instance from ownership label", machineID: machineID, clusterID: clusterID,
 			client: func(m *mocks.Cloud) {
 				m.EXPECT().ListInstances(ctx, query).Return([]domain.Instance{legacyInstance}, nil)
 				m.EXPECT().DeleteInstance(ctx, id).Return(nil)
 			},
 		},
 		{
-			name: "recovers instance from ownership labels", machineUID: machineUID, clusterID: clusterID,
+			name: "recovers instance from ownership labels", machineID: machineID, clusterID: clusterID,
 			client: func(m *mocks.Cloud) {
 				m.EXPECT().ListInstances(ctx, query).Return([]domain.Instance{instance}, nil)
 				m.EXPECT().DeleteInstance(ctx, id).Return(nil)
 			},
 		},
 		{
-			name: "falls back from stale status ID", machineUID: machineUID, clusterID: clusterID, instanceID: &staleID,
+			name: "falls back from stale status ID", machineID: machineID, clusterID: clusterID, instanceID: &staleID,
 			client: func(m *mocks.Cloud) {
 				m.EXPECT().GetInstance(ctx, staleID).Return(domain.Instance{}, domain.ErrInstanceNotFound)
 				m.EXPECT().ListInstances(ctx, query).Return([]domain.Instance{instance}, nil)
@@ -448,7 +448,7 @@ func Test_instanceService_DeleteInstance(t *testing.T) {
 			},
 		},
 		{
-			name: "delete not found is already deleted", machineUID: machineUID, clusterID: clusterID, instanceID: &id,
+			name: "delete not found is already deleted", machineID: machineID, clusterID: clusterID, instanceID: &id,
 			client: func(m *mocks.Cloud) {
 				m.EXPECT().GetInstance(ctx, id).Return(instance, nil)
 				m.EXPECT().ListInstances(ctx, query).Return([]domain.Instance{instance}, nil)
@@ -456,25 +456,25 @@ func Test_instanceService_DeleteInstance(t *testing.T) {
 			},
 		},
 		{
-			name: "returns get error", machineUID: machineUID, clusterID: clusterID, instanceID: &id,
+			name: "returns get error", machineID: machineID, clusterID: clusterID, instanceID: &id,
 			client: func(m *mocks.Cloud) {
 				m.EXPECT().GetInstance(ctx, id).Return(domain.Instance{}, assert.AnError)
 			},
 			err: assert.AnError,
 		},
 		{
-			name: "missing machine instance is already deleted", machineUID: machineUID, clusterID: clusterID,
+			name: "missing machine instance is already deleted", machineID: machineID, clusterID: clusterID,
 			client: func(m *mocks.Cloud) {
 				m.EXPECT().ListInstances(ctx, query).Return(nil, nil)
 			},
 		},
 		{name: "no identifiers is already deleted"},
 		{
-			name: "rejects status ID without Machine UID", clusterID: clusterID, instanceID: &id,
-			errContains: "without a Machine UID",
+			name: "rejects status ID without machine ID", clusterID: clusterID, instanceID: &id,
+			errContains: "without a machine ID",
 		},
 		{
-			name: "requires cluster ID", machineUID: machineUID,
+			name: "requires cluster ID", machineID: machineID,
 			errContains: "without a cluster ID",
 		},
 	}
@@ -486,7 +486,7 @@ func Test_instanceService_DeleteInstance(t *testing.T) {
 				tc.client(client)
 			}
 
-			err := (&instanceService{client: client, logger: logr.Discard()}).DeleteInstance(ctx, tc.machineUID, tc.clusterID, tc.instanceID)
+			err := (&instanceService{client: client, logger: logr.Discard()}).DeleteInstance(ctx, tc.machineID, tc.clusterID, tc.instanceID)
 
 			if tc.errContains != "" {
 				assert.ErrorContains(t, err, tc.errContains)
@@ -498,13 +498,13 @@ func Test_instanceService_DeleteInstance(t *testing.T) {
 
 	t.Run("filters cross-cluster instances before deletion", func(t *testing.T) {
 		foreign := domain.Instance{ID: uuid.New(), Labels: map[string]string{
-			domain.MachineUIDKey: machineUID.String(), domain.ClusterIDKey: uuid.NewString(),
+			domain.MachineIDKey: machineID.String(), domain.ClusterIDKey: uuid.NewString(),
 		}}
 		client := mocks.NewCloud(t)
 		client.EXPECT().ListInstances(ctx, query).Return([]domain.Instance{foreign, instance}, nil)
 		client.EXPECT().DeleteInstance(ctx, id).Return(nil)
 
-		err := (&instanceService{client: client}).DeleteInstance(ctx, machineUID, clusterID, nil)
+		err := (&instanceService{client: client}).DeleteInstance(ctx, machineID, clusterID, nil)
 
 		assert.NoError(t, err)
 	})
@@ -517,7 +517,7 @@ func Test_instanceService_DeleteInstance(t *testing.T) {
 		client.EXPECT().DeleteInstance(ctx, id).Return(nil)
 		client.EXPECT().DeleteInstance(ctx, duplicate.ID).Return(nil)
 
-		err := (&instanceService{client: client}).DeleteInstance(ctx, machineUID, clusterID, &id)
+		err := (&instanceService{client: client}).DeleteInstance(ctx, machineID, clusterID, &id)
 
 		assert.NoError(t, err)
 	})
@@ -525,21 +525,21 @@ func Test_instanceService_DeleteInstance(t *testing.T) {
 	t.Run("rejects status instance owned by another machine", func(t *testing.T) {
 		client := mocks.NewCloud(t)
 		client.EXPECT().GetInstance(ctx, id).Return(domain.Instance{ID: id, Labels: map[string]string{
-			domain.MachineUIDKey: uuid.NewString(), domain.ClusterIDKey: clusterID.String(),
+			domain.MachineIDKey: uuid.NewString(), domain.ClusterIDKey: clusterID.String(),
 		}}, nil)
 
-		err := (&instanceService{client: client}).DeleteInstance(ctx, machineUID, clusterID, &id)
+		err := (&instanceService{client: client}).DeleteInstance(ctx, machineID, clusterID, &id)
 
-		assert.ErrorContains(t, err, "is not owned by Machine UID")
+		assert.ErrorContains(t, err, "is not owned by machine")
 	})
 
 	t.Run("rejects status instance owned by another cluster", func(t *testing.T) {
 		client := mocks.NewCloud(t)
 		client.EXPECT().GetInstance(ctx, id).Return(domain.Instance{ID: id, Labels: map[string]string{
-			domain.MachineUIDKey: machineUID.String(), domain.ClusterIDKey: uuid.NewString(),
+			domain.MachineIDKey: machineID.String(), domain.ClusterIDKey: uuid.NewString(),
 		}}, nil)
 
-		err := (&instanceService{client: client}).DeleteInstance(ctx, machineUID, clusterID, &id)
+		err := (&instanceService{client: client}).DeleteInstance(ctx, machineID, clusterID, &id)
 
 		assert.ErrorContains(t, err, "is not owned by cluster")
 	})

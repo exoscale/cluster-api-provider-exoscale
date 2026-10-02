@@ -166,11 +166,6 @@ func (in *ExoscaleClusterStatus) DeepCopyInto(out *ExoscaleClusterStatus) {
 		}
 	}
 	in.Initialization.DeepCopyInto(&out.Initialization)
-	if in.ID != nil {
-		in, out := &in.ID, &out.ID
-		*out = new(string)
-		**out = **in
-	}
 	if in.SecurityGroupControlPlan != nil {
 		in, out := &in.SecurityGroupControlPlan, &out.SecurityGroupControlPlan
 		*out = new(SecurityGroupStatus)

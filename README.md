@@ -34,7 +34,7 @@ CAPEX is one of the built-in `clusterctl` providers since
 
 Declare the provider in the
 [clusterctl configuration file][clusterctl-config]
-(`~/.config/cluster-api/clusterctl.yaml`):
+(`$XDG_CONFIG_HOME/cluster-api/clusterctl.yaml`):
 ```yaml
 providers:
   - name: exoscale

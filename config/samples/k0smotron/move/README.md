@@ -10,7 +10,7 @@ This guide uses two local `kind` clusters, `capi-source` and `capi-target`. It
 deploys one k0s workload cluster on the source with the manifests in
 [../cluster](../cluster), then moves it to the target.
 
-Prerequisites: Docker, `kind`, `kubectl` and Exoscale API credentials.
+Prerequisites: Docker, `kind`, `kubectl`, `curl`, `jq` and Exoscale API credentials.
 
 > **Run every command below from the root of the repository.**
 
@@ -26,21 +26,19 @@ $> kind create cluster --name capi-source
 $> kind get kubeconfig --name capi-source > /tmp/source.kubeconfig
 ```
 
-Install CAPI and the k0smotron providers on it:
+Install CAPI, the Exoscale infrastructure provider and the k0smotron providers
+on it. Check [Installation](../../../../README.md#installation) to configure
+`clusterctl`. The Exoscale provider is pinned to its latest release, so the
+target can be installed at the exact same version in Part 2:
 
 ```bash
-$> ./bin/clusterctl init --kubeconfig /tmp/source.kubeconfig --infrastructure - \
+$> export EXOSCALE_PROVIDER_VERSION=$(curl -s https://api.github.com/repos/exoscale/cluster-api-provider-exoscale/releases/latest | jq -r .tag_name)
+$> ./bin/clusterctl init \
+     --kubeconfig /tmp/source.kubeconfig \
      --core cluster-api:v1.14.2 \
+     --infrastructure exoscale:$EXOSCALE_PROVIDER_VERSION \
      --bootstrap k0sproject-k0smotron:v2.1.1 \
      --control-plane k0sproject-k0smotron:v2.1.1
-```
-
-Install the provider CRDs and start the manager, which keeps running in its own
-terminal:
-
-```bash
-$> KUBECONFIG=/tmp/source.kubeconfig make generate manifests install
-$> KUBECONFIG=/tmp/source.kubeconfig make run   # keep running, use another terminal below
 ```
 
 Create the credentials Secret and deploy the cluster:
@@ -66,8 +64,8 @@ problem from a provisioning problem, so don't skip this wait.
 
 ## Part 2 — Target management cluster
 
-The target needs the same providers at the same versions, the same CRDs, its own
-credentials Secret, and its own running manager.
+The target needs the same providers at the same versions and its own
+credentials Secret.
 
 ### 1. Create it and export its kubeconfig
 
@@ -89,40 +87,23 @@ $> kubectl --kubeconfig /tmp/source.kubeconfig get providers -A
 Install the same set on the target — the same versions as Part 1:
 
 ```bash
-$> ./bin/clusterctl init --kubeconfig /tmp/target.kubeconfig --infrastructure - \
+$> ./bin/clusterctl init \
+     --kubeconfig /tmp/target.kubeconfig \
      --core cluster-api:v1.14.2 \
+     --infrastructure exoscale:$EXOSCALE_PROVIDER_VERSION \
      --bootstrap k0sproject-k0smotron:v2.1.1 \
      --control-plane k0sproject-k0smotron:v2.1.1
 ```
 
-### 3. Install the CRDs and recreate the Secret
+### 3. Recreate the Secret
 
 ```bash
-$> KUBECONFIG=/tmp/target.kubeconfig make install
 $> kubectl --kubeconfig /tmp/target.kubeconfig create secret generic exoscale \
      --from-literal=apikey=$EXOSCALE_API_KEY --from-literal=apisecret=$EXOSCALE_API_SECRET
 ```
 
 The Secret has to be recreated by hand because it is shared, not owned by the
 `Cluster`, and `move` only carries objects belonging to the cluster being moved.
-It says so explicitly:
-
-### 4. Run a second manager against the target
-
-Keep the source manager running and start a second one in a new terminal. It
-needs different bind addresses, otherwise it collides with the first on
-`:8080`/`:8081`:
-
-```bash
-$> KUBECONFIG=/tmp/target.kubeconfig ENABLE_WEBHOOKS=false go run ./cmd/main.go \
-     --metrics-bind-address=:8090 \
-     --health-probe-bind-address=:8091
-```
-
-Both managers must stay up for the whole move: the source one honours the pause
-and clears finalizers as objects are deleted there, the target one takes over
-reconciliation as they arrive. `ENABLE_WEBHOOKS=false` matches what `make run`
-does by default.
 
 ## Part 3 — The move
 
@@ -159,7 +140,8 @@ $> ./bin/clusterctl move --kubeconfig /tmp/source.kubeconfig \
 
 It pauses the source `Cluster` (`Set Cluster.Spec.Paused paused=true`), creates
 every object on the target, deletes them from the source, and finally unpauses
-on the target (`paused=false`). While paused, both managers log
+on the target (`paused=false`). While paused, the Exoscale provider on both
+management clusters logs
 `InfraCluster is paused, skipping reconciliation` — that is the pause doing its
 job, not an error.
 

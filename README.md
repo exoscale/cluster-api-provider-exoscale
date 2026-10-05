@@ -1,4 +1,4 @@
-# Kubernetes Cluster API Provider Exoscale
+# Kubernetes Cluster API Provider Exoscale (CAPEX)
 
 ## Introduction
 
@@ -21,8 +21,18 @@ It reconciles four custom resources:
 
 ## Installation
 
-CAPEX is not yet listed among the built-in `clusterctl` providers yet, so
-`clusterctl` has to be told where to find it. Declare it in the
+CAPEX is installed with `clusterctl`, which first has to know where to find
+it. There are two ways to do that, depending on your `clusterctl` version.
+
+### clusterctl v1.15.0 and later
+
+CAPEX is one of the built-in `clusterctl` providers since
+[this commit][capi-exoscale-commit], first released in `v1.15.0-beta.0`
+(expected November 2026). No configuration is needed.
+
+### Older clusterctl versions
+
+Declare the provider in the
 [clusterctl configuration file][clusterctl-config]
 (`~/.config/cluster-api/clusterctl.yaml`):
 ```yaml
@@ -32,7 +42,9 @@ providers:
     type: InfrastructureProvider
 ```
 
-Then install it into the management cluster alongside the bootstrap and
+### Install the provider
+
+Install CAPEX into the management cluster alongside the bootstrap and
 control-plane providers of your choice (kubeadm by default):
 ```bash
 $> clusterctl init --infrastructure exoscale
@@ -139,6 +151,7 @@ limitations under the License.
 [exoscale]: https://www.exoscale.com/
 [capi-providers]: https://cluster-api.sigs.k8s.io/user/concepts#providers
 [clusterctl-config]: https://cluster-api.sigs.k8s.io/clusterctl/configuration#provider-repositories
+[capi-exoscale-commit]: https://github.com/kubernetes-sigs/cluster-api/commit/0b285acef8a781db84df6e4b9199162febc5f97f
 [kubeadm]: https://cluster-api.sigs.k8s.io/tasks/bootstrap/kubeadm-bootstrap
 [k0smotron]: https://docs.k0smotron.io
 [k0s]: https://k0sproject.io/

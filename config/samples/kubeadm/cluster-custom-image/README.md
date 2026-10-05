@@ -15,10 +15,14 @@ kubeadm, kubelet, and kubectl. The Kubernetes version baked into the image must
 match the `KubeadmControlPlane` and `MachineDeployment` versions patched in
 `kustomization.yaml`.
 
-The [Exoscale CSI driver] identifies each VM from `Node.spec.providerID` and its
-zone from the Node's `topology.kubernetes.io/zone` label. Neither value can be
-baked into the image: the provider ID contains the new VM's UUID, and the zone
-must match `ExoscaleCluster.spec.zone`.
+This sample does not install the Exoscale CCM. For the [Exoscale CSI driver] to
+identify each VM and determine its zone correctly from Kubernetes, every Node
+must expose its instance UUID through `Node.spec.providerID` and its zone through
+the `topology.kubernetes.io/zone` label. Without that label, CSI cannot get the
+Node's topology from Kubernetes and must fall back to VM metadata.
+
+Neither value can be baked into the image: the provider ID contains the new
+VM's UUID, and the zone must match `ExoscaleCluster.spec.zone`.
 
 This overlay therefore replaces the base `preKubeadmCommands` with a command
 that passes both values to kubelet before the Node registers:

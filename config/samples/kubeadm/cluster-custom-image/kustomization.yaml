@@ -15,13 +15,13 @@ patches:
   patch: |-
     - op: replace
       path: /spec/version
-      value: v1.34.11
+      value: v1.36.4
     - op: replace
       path: /spec/kubeadmConfigSpec/preKubeadmCommands
       value:
       - |
          set -eux
-         printf 'KUBELET_EXTRA_ARGS=--provider-id=exoscale://%s --node-labels=topology.kubernetes.io/zone=ch-gva-2,topology.kubernetes.io/region=ch-gva-2\n' \
+         printf 'KUBELET_EXTRA_ARGS=--provider-id=exoscale://%s --node-labels=topology.kubernetes.io/zone=ch-gva-2\n' \
            "$(cat /var/lib/cloud/data/instance-id)" >/etc/default/kubelet
 - target:
     kind: KubeadmConfigTemplate
@@ -32,7 +32,7 @@ patches:
       value:
       - |
         set -eux
-        printf 'KUBELET_EXTRA_ARGS=--provider-id=exoscale://%s --node-labels=topology.kubernetes.io/zone=ch-gva-2,topology.kubernetes.io/region=ch-gva-2\n' \
+        printf 'KUBELET_EXTRA_ARGS=--provider-id=exoscale://%s --node-labels=topology.kubernetes.io/zone=ch-gva-2\n' \
           "$(cat /var/lib/cloud/data/instance-id)" >/etc/default/kubelet
 - target:
     kind: MachineDeployment
@@ -40,4 +40,4 @@ patches:
   patch: |-
     - op: replace
       path: /spec/template/spec/version
-      value: v1.34.11
+      value: v1.36.4

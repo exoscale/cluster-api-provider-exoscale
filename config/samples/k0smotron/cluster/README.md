@@ -70,26 +70,19 @@ flowchart TD
 | `K0sWorkerConfigTemplate` | `my-k0s-cluster-workers` | Bootstrap data (installs k0s as a worker) for `MachineDeployment`-created `Machine`s. |
 | `MachineDeployment` | `my-k0s-cluster-workers` | Creates and scales worker `Machine`s. |
 
-## Install the k0smotron providers
+## Install the providers
 
-k0smotron ships as a standard clusterctl provider (bootstrap + control-plane).
-Skip the infrastructure provider as usual since the exoscale provider runs
-locally via `make run`, not through clusterctl:
+Install the Exoscale infrastructure provider and k0smotron, which ships as a
+standard clusterctl provider (bootstrap + control-plane). Check
+[Installation](../../../../README.md#installation) to configure `clusterctl`:
 ```bash
 $> make clusterctl
 $> kind create cluster --name capi-test
-$> ./bin/clusterctl init --infrastructure - \
+$> ./bin/clusterctl init \
+     --infrastructure exoscale \
      --bootstrap k0sproject-k0smotron \
      --control-plane k0sproject-k0smotron
 ```
-
-## Run CAPI
-```bash
-$> make generate manifests install
-$> make run
-```
-
-Keep the manager running and use another terminal for the remaining commands.
 
 ## Deploy a k0s cluster
 
@@ -99,6 +92,7 @@ Later sections scale each up independently.
 $> export EXOSCALE_API_KEY=<api-key>
 $> export EXOSCALE_API_SECRET=<api-secret>
 $> kubectl create secret generic exoscale --from-literal=apikey=$EXOSCALE_API_KEY --from-literal=apisecret=$EXOSCALE_API_SECRET
+
 $> kubectl apply -k config/samples/k0smotron/cluster
 ```
 

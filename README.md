@@ -1,4 +1,4 @@
-# Kubernetes Cluster API Provider Exoscale
+# Kubernetes Cluster API Provider Exoscale (CAPEX)
 
 ## Introduction
 
@@ -18,6 +18,40 @@ It reconciles four custom resources:
 | `ExoscaleMachine` | A single Exoscale Compute Instance backing a Cluster API `Machine`. |
 | `ExoscaleClusterTemplate` | A reusable `ExoscaleCluster` template, e.g. for `ClusterClass`. |
 | `ExoscaleMachineTemplate` | A reusable `ExoscaleMachine` template, cloned by control-plane providers and `MachineDeployment`s to create `ExoscaleMachine`s at scale. |
+
+## Installation
+
+CAPEX is installed with `clusterctl`, which first has to know where to find
+it. There are two ways to do that, depending on your `clusterctl` version.
+
+### clusterctl v1.15.0 and later
+
+CAPEX is one of the built-in `clusterctl` providers since
+[this commit][capi-exoscale-commit], first released in `v1.15.0-beta.0`
+(expected November 2026). No configuration is needed.
+
+### Older clusterctl versions
+
+Declare the provider in the
+[clusterctl configuration file][clusterctl-config]
+(`$XDG_CONFIG_HOME/cluster-api/clusterctl.yaml`):
+```yaml
+providers:
+  - name: exoscale
+    url: https://github.com/exoscale/cluster-api-provider-exoscale/releases/latest/infrastructure-components.yaml
+    type: InfrastructureProvider
+```
+
+### Install the provider
+
+Install CAPEX into the management cluster alongside the bootstrap and
+control-plane providers of your choice (kubeadm by default):
+```bash
+$> clusterctl init --infrastructure exoscale
+```
+
+Exoscale API credentials are not configured at install time: each
+`ExoscaleCluster` references a Secret holding them, see the samples below.
 
 ## Samples
 
@@ -116,6 +150,8 @@ limitations under the License.
 [cluster_api]: https://github.com/kubernetes-sigs/cluster-api
 [exoscale]: https://www.exoscale.com/
 [capi-providers]: https://cluster-api.sigs.k8s.io/user/concepts#providers
+[clusterctl-config]: https://cluster-api.sigs.k8s.io/clusterctl/configuration#provider-repositories
+[capi-exoscale-commit]: https://github.com/kubernetes-sigs/cluster-api/commit/0b285acef8a781db84df6e4b9199162febc5f97f
 [kubeadm]: https://cluster-api.sigs.k8s.io/tasks/bootstrap/kubeadm-bootstrap
 [k0smotron]: https://docs.k0smotron.io
 [k0s]: https://k0sproject.io/

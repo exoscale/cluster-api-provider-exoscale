@@ -47,6 +47,10 @@ combinations are needed when either pool contains multiple Nodes.
 
 ## Deploy Cluster API components
 
+Install Cluster API, the kubeadm providers and the Exoscale infrastructure
+provider. Check [Installation](../../../../README.md#installation) to configure
+`clusterctl`:
+
 ```bash
 $> make clusterctl
 $> kind create cluster --name capi-test
@@ -55,17 +59,8 @@ $> ./bin/clusterctl init \
      --core "cluster-api:$CAPI_VERSION" \
      --bootstrap "kubeadm:$CAPI_VERSION" \
      --control-plane "kubeadm:$CAPI_VERSION" \
-     --infrastructure -
+     --infrastructure exoscale
 ```
-
-## Run Exoscale CAPI
-
-```bash
-$> make generate manifests install
-$> make run
-```
-
-Keep the manager running and use another terminal for the remaining commands.
 
 ## Deploy the workload cluster
 

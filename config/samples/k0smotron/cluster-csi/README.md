@@ -86,21 +86,22 @@ the driver find it.
 ## Deploy the k0s cluster
 
 Same steps as the [cluster](../cluster) tutorial — see its README for what
-each command does:
+each command does. Check [Installation](../../../../README.md#installation) to
+configure `clusterctl`:
 ```bash
 $> make clusterctl
 $> kind create cluster --name capi-test
-$> ./bin/clusterctl init --infrastructure - \
+$> ./bin/clusterctl init \
+     --infrastructure exoscale \
      --bootstrap k0sproject-k0smotron \
      --control-plane k0sproject-k0smotron
-$> make generate manifests install
-$> make run # keep the manager running, use another terminal below
-```
-```bash
+
 $> export EXOSCALE_API_KEY=<api-key>
 $> export EXOSCALE_API_SECRET=<api-secret>
 $> kubectl create secret generic exoscale --from-literal=apikey=$EXOSCALE_API_KEY --from-literal=apisecret=$EXOSCALE_API_SECRET
+
 $> kubectl apply -k config/samples/k0smotron/cluster-csi
+
 $> kubectl wait cluster/my-k0s-cluster --for=condition=ControlPlaneInitialized --timeout=10m
 $> kubectl get secret my-k0s-cluster-kubeconfig -o jsonpath='{.data.value}' | base64 -d > /tmp/my-k0s-cluster.kubeconfig
 $> kubectl --kubeconfig=/tmp/my-k0s-cluster.kubeconfig wait node --all --for=condition=Ready --timeout=10m

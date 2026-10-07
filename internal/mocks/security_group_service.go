@@ -105,6 +105,72 @@ func (_c *SecurityGroupService_DeleteSecurityGroup_Call) RunAndReturn(run func(c
 	return _c
 }
 
+// GetSecurityGroupByName provides a mock function for the type SecurityGroupService
+func (_mock *SecurityGroupService) GetSecurityGroupByName(ctx context.Context, name string) (domain.SecurityGroup, error) {
+	ret := _mock.Called(ctx, name)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetSecurityGroupByName")
+	}
+
+	var r0 domain.SecurityGroup
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (domain.SecurityGroup, error)); ok {
+		return returnFunc(ctx, name)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) domain.SecurityGroup); ok {
+		r0 = returnFunc(ctx, name)
+	} else {
+		r0 = ret.Get(0).(domain.SecurityGroup)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, name)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// SecurityGroupService_GetSecurityGroupByName_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetSecurityGroupByName'
+type SecurityGroupService_GetSecurityGroupByName_Call struct {
+	*mock.Call
+}
+
+// GetSecurityGroupByName is a helper method to define mock.On call
+//   - ctx context.Context
+//   - name string
+func (_e *SecurityGroupService_Expecter) GetSecurityGroupByName(ctx any, name any) *SecurityGroupService_GetSecurityGroupByName_Call {
+	return &SecurityGroupService_GetSecurityGroupByName_Call{Call: _e.mock.On("GetSecurityGroupByName", ctx, name)}
+}
+
+func (_c *SecurityGroupService_GetSecurityGroupByName_Call) Run(run func(ctx context.Context, name string)) *SecurityGroupService_GetSecurityGroupByName_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *SecurityGroupService_GetSecurityGroupByName_Call) Return(securityGroup domain.SecurityGroup, err error) *SecurityGroupService_GetSecurityGroupByName_Call {
+	_c.Call.Return(securityGroup, err)
+	return _c
+}
+
+func (_c *SecurityGroupService_GetSecurityGroupByName_Call) RunAndReturn(run func(ctx context.Context, name string) (domain.SecurityGroup, error)) *SecurityGroupService_GetSecurityGroupByName_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // PurgeSecurityGroup provides a mock function for the type SecurityGroupService
 func (_mock *SecurityGroupService) PurgeSecurityGroup(ctx context.Context, sgID uuid.UUID) error {
 	ret := _mock.Called(ctx, sgID)

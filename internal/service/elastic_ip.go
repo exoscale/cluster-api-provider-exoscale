@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 )
 
-var _ domain.ElasticIPService = (*elasticIPService)(nil)
+// var _ domain.ElasticIPService = (*elasticIPService)(nil)
 
 type elasticIPService struct {
 	cloud  domain.Cloud
@@ -90,17 +90,38 @@ func (s *elasticIPService) findElasticIPByClusterID(ctx context.Context, cluster
 	return domain.ElasticIP{}, domain.ErrElasticIPNotFound
 }
 
-func (s elasticIPService) DeleteElasticIP(ctx context.Context, id uuid.UUID) error {
-	if _, err := s.cloud.GetElasticIP(ctx, id); err != nil {
-		if errors.Is(err, domain.ErrElasticIPNotFound) {
-			return nil
+// Delete the elasticIP deployed for a cluster
+// if the elastic IP ID is not given the function will search the
+// the elastic ip by description.
+func (s elasticIPService) DeleteElasticIP(ctx context.Context, eipID *uuid.UUID, clusterID uuid.UUID) error {
+	var id = eipID
+	if id != nil {
+		if _, err := s.cloud.GetElasticIP(ctx, *id); err != nil {
+			if errors.Is(err, domain.ErrElasticIPNotFound) {
+				return nil
+			} else {
+				return err
+			}
 		}
-		return err
 	}
 
-	s.logger.Info("Delete elastic IP")
-	if err := s.cloud.DeleteElasticIP(ctx, id); err != nil {
-		return err
+	if id == nil {
+		s.logger.Info("delete elastic IP: eipID not given, list all EIP")
+		eip, err := s.findElasticIPByClusterID(ctx, clusterID)
+		if errors.Is(err, domain.ErrElasticIPNotFound) {
+			return nil
+		} else if err != nil {
+			return fmt.Errorf("unable to list elasticIP: %w", err)
+		} else {
+			id = &eip.ID
+		}
+	}
+
+	if id != nil {
+		s.logger.Info("Delete elastic IP", "id", *id)
+		if err := s.cloud.DeleteElasticIP(ctx, *id); err != nil {
+			return err
+		}
 	}
 
 	return nil

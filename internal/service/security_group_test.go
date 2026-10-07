@@ -224,6 +224,72 @@ func Test_securityGroupService_DeleteSecurityGroup(t *testing.T) {
 	}
 }
 
+func Test_securityGroupService_GetSecurityGroupByName(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	securityGroups := []domain.SecurityGroup{
+		{ID: uuid.New(), Name: "sg-1"},
+		{ID: uuid.New(), Name: "sg-2"},
+	}
+
+	tests := []struct {
+		name   string
+		cloud  func(m *mocks.Cloud)
+		sgName string
+		output domain.SecurityGroup
+		err    error
+	}{
+		{
+			name: "nominal - sg found",
+			cloud: func(m *mocks.Cloud) {
+				m.EXPECT().
+					ListSecurityGroups(ctx).
+					Return(securityGroups, nil)
+			},
+			sgName: "sg-2",
+			output: securityGroups[1],
+		},
+		{
+			name: "sg not found",
+			cloud: func(m *mocks.Cloud) {
+				m.EXPECT().
+					ListSecurityGroups(ctx).
+					Return(securityGroups, nil)
+			},
+			sgName: "sg-3",
+			err:    domain.ErrSecurityGroupNotFound,
+		},
+		{
+			name: "list security groups returned an error",
+			cloud: func(m *mocks.Cloud) {
+				m.EXPECT().
+					ListSecurityGroups(ctx).
+					Return(nil, assert.AnError)
+			},
+			sgName: "sg-1",
+			err:    assert.AnError,
+		},
+	}
+
+	for _, ut := range tests {
+		t.Run(ut.name, func(t *testing.T) {
+			cloud := mocks.NewCloud(t)
+			if ut.cloud != nil {
+				ut.cloud(cloud)
+			}
+
+			svc := securityGroupService{cloud: cloud, logger: logr.Discard()}
+
+			output, err := svc.GetSecurityGroupByName(ctx, ut.sgName)
+
+			assert.ErrorIs(t, err, ut.err)
+			assert.Equal(t, ut.output, output)
+		})
+	}
+}
+
 func Test_securityGroupService_PurgeSecurityGroup(t *testing.T) {
 	t.Parallel()
 

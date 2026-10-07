@@ -15,13 +15,26 @@ kubeadm, kubelet, and kubectl. The Kubernetes version baked into the image must
 match the `KubeadmControlPlane` and `MachineDeployment` versions patched in
 `kustomization.yaml`.
 
-The provider ID cannot be baked into the image because it contains the new VM's
-UUID. This overlay therefore removes package installation from cloud-init but
-keeps the per-instance provider-ID command.
+This sample does not install the Exoscale CCM. For the [Exoscale CSI driver] to
+identify each VM and determine its zone correctly from Kubernetes, every Node
+must expose its instance UUID through `Node.spec.providerID` and its zone through
+the `topology.kubernetes.io/zone` label. Without that label, CSI cannot get the
+Node's topology from Kubernetes and must fall back to VM metadata.
 
-The overlay replaces the base `preKubeadmCommands` with that provider-ID
-command. It keeps the inherited `postKubeadmCommands`, which installs Flannel
-after kubeadm.
+Neither value can be baked into the image: the provider ID contains the new
+VM's UUID, and the zone must match `ExoscaleCluster.spec.zone`.
+
+This overlay therefore replaces the base `preKubeadmCommands` with a command
+that passes both values to kubelet before the Node registers:
+
+```text
+--provider-id=exoscale://<instance-UUID>
+--node-labels=topology.kubernetes.io/zone=ch-gva-2
+```
+
+The label is hardcoded to the base sample's `ch-gva-2` zone. Change both values
+together when using another zone. The inherited `postKubeadmCommands` still
+installs Flannel after kubeadm.
 
 ## Create the image
 
@@ -154,6 +167,7 @@ $ exo compute instance-template delete <template-id> --zone ch-gva-2
 ```
 
 [Kubernetes image-builder]: https://github.com/kubernetes-sigs/image-builder
+[Exoscale CSI driver]: https://github.com/exoscale/exoscale-csi-driver
 [deploy the Cluster API components]: ../cluster/README.md#deploy-cluster-api-components
 [kubeadm cluster sample]: ../cluster/README.md
 [scaling steps]: ../cluster/README.md#scale-the-cluster

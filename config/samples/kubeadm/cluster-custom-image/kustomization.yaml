@@ -21,7 +21,7 @@ patches:
       value:
       - |
          set -eux
-         printf 'KUBELET_EXTRA_ARGS=--provider-id=exoscale://%s\n' \
+         printf 'KUBELET_EXTRA_ARGS=--provider-id=exoscale://%s --node-labels=topology.kubernetes.io/zone=ch-gva-2\n' \
            "$(cat /var/lib/cloud/data/instance-id)" >/etc/default/kubelet
 - target:
     kind: KubeadmConfigTemplate
@@ -32,7 +32,7 @@ patches:
       value:
       - |
         set -eux
-        printf 'KUBELET_EXTRA_ARGS=--provider-id=exoscale://%s\n' \
+        printf 'KUBELET_EXTRA_ARGS=--provider-id=exoscale://%s --node-labels=topology.kubernetes.io/zone=ch-gva-2\n' \
           "$(cat /var/lib/cloud/data/instance-id)" >/etc/default/kubelet
 - target:
     kind: MachineDeployment

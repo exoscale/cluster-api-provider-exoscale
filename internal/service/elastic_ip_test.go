@@ -237,35 +237,61 @@ func Test_elasticIPService_DeleteElasticIP(t *testing.T) {
 
 	ctx := context.Background()
 	id := uuid.New()
+	clusterID := uuid.New()
 
 	tests := []struct {
 		name  string
+		eipID *uuid.UUID
 		cloud func(m *mocks.Cloud)
 		err   error
 	}{
 		{
-			name: "nominal - eip found",
+			name:  "nominal - with eip",
+			eipID: &id,
 			cloud: func(m *mocks.Cloud) {
 				m.EXPECT().GetElasticIP(ctx, id).Return(domain.ElasticIP{}, nil)
 				m.EXPECT().DeleteElasticIP(ctx, id).Return(nil)
 			},
 		},
 		{
-			name: "nominal - eip not found",
+			name: "nominal - without eip id",
+			cloud: func(m *mocks.Cloud) {
+				m.EXPECT().ListElasticIPs(ctx).Return([]domain.ElasticIP{{ID: id, Description: clusterID.String()}}, nil)
+				m.EXPECT().DeleteElasticIP(ctx, id).Return(nil)
+			},
+		},
+		{
+			name:  "get eip by id not found",
+			eipID: &id,
 			cloud: func(m *mocks.Cloud) {
 				m.EXPECT().GetElasticIP(ctx, id).Return(domain.ElasticIP{}, domain.ErrElasticIPNotFound)
 			},
 		},
+		{
+			name: "list eip by id not found",
+			cloud: func(m *mocks.Cloud) {
+				m.EXPECT().ListElasticIPs(ctx).Return([]domain.ElasticIP{}, nil)
+			},
+		},
 
 		{
-			name: "get eip returned an error",
+			name:  "get eip returned an error",
+			eipID: &id,
 			cloud: func(m *mocks.Cloud) {
 				m.EXPECT().GetElasticIP(ctx, id).Return(domain.ElasticIP{}, assert.AnError)
 			},
 			err: assert.AnError,
 		},
 		{
-			name: "delete eip returned an error",
+			name: "list eip returned an error",
+			cloud: func(m *mocks.Cloud) {
+				m.EXPECT().ListElasticIPs(ctx).Return([]domain.ElasticIP{}, assert.AnError)
+			},
+			err: assert.AnError,
+		},
+		{
+			name:  "delete eip returned an error",
+			eipID: &id,
 			cloud: func(m *mocks.Cloud) {
 				m.EXPECT().GetElasticIP(ctx, id).Return(domain.ElasticIP{}, nil)
 				m.EXPECT().DeleteElasticIP(ctx, id).Return(assert.AnError)
@@ -283,7 +309,7 @@ func Test_elasticIPService_DeleteElasticIP(t *testing.T) {
 
 			svc := elasticIPService{cloud: cloud, logger: logr.Discard()}
 
-			err := svc.DeleteElasticIP(ctx, id)
+			err := svc.DeleteElasticIP(ctx, ut.eipID, clusterID)
 
 			assert.ErrorIs(t, err, ut.err)
 		})

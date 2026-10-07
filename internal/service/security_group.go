@@ -83,6 +83,20 @@ func (s *securityGroupService) DeleteSecurityGroup(ctx context.Context, id uuid.
 	return nil
 }
 
+func (s *securityGroupService) GetSecurityGroupByName(ctx context.Context, name string) (domain.SecurityGroup, error) {
+	securityGroups, err := s.cloud.ListSecurityGroups(ctx)
+	if err != nil {
+		return domain.SecurityGroup{}, fmt.Errorf("unable to list security groups: %w", err)
+	}
+	for _, sg := range securityGroups {
+		if sg.Name == name {
+			return sg, nil
+		}
+	}
+
+	return domain.SecurityGroup{}, domain.ErrSecurityGroupNotFound
+}
+
 func (s *securityGroupService) UpsertSecurityGroupRules(ctx context.Context, sgID uuid.UUID, desiredRules []domain.SecurityGroupRule) ([]domain.SecurityGroupRule, error) {
 	existingRules, err := s.cloud.ListSecurityGroupRules(ctx, sgID)
 	if err != nil {

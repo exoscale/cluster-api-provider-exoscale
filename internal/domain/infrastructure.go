@@ -76,13 +76,14 @@ type Cloud interface {
 // ElasticIPService reconciles the Elastic IP owned by a cluster.
 type ElasticIPService interface {
 	UpsertElasticIP(ctx context.Context, clusterID uuid.UUID, eipID *uuid.UUID, port int32) (ElasticIP, error)
-	DeleteElasticIP(ctx context.Context, id uuid.UUID) error
+	DeleteElasticIP(ctx context.Context, id *uuid.UUID, clusterID uuid.UUID) error
 }
 
 // SecurityGroupService reconciles cluster Security Groups and their rules.
 type SecurityGroupService interface {
 	UpsertSecurityGroup(ctx context.Context, clusterID uuid.UUID, scID *uuid.UUID, name string) (SecurityGroup, error)
 	DeleteSecurityGroup(ctx context.Context, id uuid.UUID) error
+	GetSecurityGroupByName(ctx context.Context, name string) (SecurityGroup, error)
 	UpsertSecurityGroupRules(ctx context.Context, sgID uuid.UUID, desiredRules []SecurityGroupRule) ([]SecurityGroupRule, error)
 	PurgeSecurityGroup(ctx context.Context, sgID uuid.UUID) error
 }

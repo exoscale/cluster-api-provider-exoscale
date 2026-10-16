@@ -140,14 +140,27 @@ func (s *clusterService) ReconcileCluster(ctx context.Context, cluster infrav1al
 }
 
 func (s *clusterService) DeleteCluster(ctx context.Context, cluster infrav1alpha1.ExoscaleCluster) (infrav1alpha1.ExoscaleCluster, error) {
+	var clusterID uuid.UUID
+	if cluster.Spec.ClusterID == "" {
+		return cluster, fmt.Errorf("cluster: %q has no id", cluster.Name)
+	} else {
+		id, err := uuid.Parse(cluster.Spec.ClusterID)
+		if err != nil {
+			return cluster, fmt.Errorf("unable to parse %q: %w: %w", ".spec.clusterID", errInvalidID, err)
+		}
+		clusterID = id
+	}
+
+	var eipID *uuid.UUID
 	if cluster.Status.ControlPlaneEndpoint != nil {
 		id, err := uuid.Parse(cluster.Status.ControlPlaneEndpoint.ID)
 		if err != nil {
 			return cluster, fmt.Errorf("unable to parse %q: %w: %w", ".status.controlPlaneEndpoint.id", errInvalidID, err)
 		}
-		if err := s.elasticIPSvc.DeleteElasticIP(ctx, id); err != nil {
-			return cluster, err
-		}
+		eipID = &id
+	}
+	if err := s.elasticIPSvc.DeleteElasticIP(ctx, eipID, clusterID); err != nil {
+		return cluster, err
 	}
 
 	// Rules must be purged from all security groups before deleting them. Security groups can
@@ -161,10 +174,21 @@ func (s *clusterService) DeleteCluster(ctx context.Context, cluster infrav1alpha
 			return cluster, fmt.Errorf("unable to parse %q: %w: %w", ".status.securityGroupControlPlane.id", errInvalidID, err)
 		}
 		securityGroupControlPlaneID = &id
-		if err := s.securityGroupSvc.PurgeSecurityGroup(ctx, id); err != nil {
+	} else {
+		sg, err := s.securityGroupSvc.GetSecurityGroupByName(ctx, fmt.Sprintf("capi - %s - control plane", clusterID.String()))
+		if err != nil && !errors.Is(err, domain.ErrSecurityGroupNotFound) {
+			return cluster, fmt.Errorf("unable to get security group for control plane: %w", err)
+		}
+		if err == nil {
+			securityGroupControlPlaneID = &sg.ID
+		}
+	}
+	if securityGroupControlPlaneID != nil {
+		if err := s.securityGroupSvc.PurgeSecurityGroup(ctx, *securityGroupControlPlaneID); err != nil {
 			return cluster, err
 		}
 	}
+
 	var securityGroupWorkerID *uuid.UUID
 	if cluster.Status.SecurityGroupWorker != nil {
 		id, err := uuid.Parse(cluster.Status.SecurityGroupWorker.ID)
@@ -172,7 +196,17 @@ func (s *clusterService) DeleteCluster(ctx context.Context, cluster infrav1alpha
 			return cluster, fmt.Errorf("unable to parse %q: %w: %w", ".status.securityGroupWorker.id", errInvalidID, err)
 		}
 		securityGroupWorkerID = &id
-		if err := s.securityGroupSvc.PurgeSecurityGroup(ctx, id); err != nil {
+	} else {
+		sg, err := s.securityGroupSvc.GetSecurityGroupByName(ctx, fmt.Sprintf("capi - %s - worker", clusterID.String()))
+		if err != nil && !errors.Is(err, domain.ErrSecurityGroupNotFound) {
+			return cluster, fmt.Errorf("unable to get security group for worker: %w", err)
+		}
+		if err == nil {
+			securityGroupWorkerID = &sg.ID
+		}
+	}
+	if securityGroupWorkerID != nil {
+		if err := s.securityGroupSvc.PurgeSecurityGroup(ctx, *securityGroupWorkerID); err != nil {
 			return cluster, err
 		}
 	}

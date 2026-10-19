@@ -576,6 +576,9 @@ func Test_clusterService_DeleteCluster(t *testing.T) {
 	eipID := uuid.New()
 	cpSGID := uuid.New()
 	workerSGID := uuid.New()
+	clusterID := uuid.New()
+	cpSGName := fmt.Sprintf("capi - %s - control plane", clusterID.String())
+	workerSGName := fmt.Sprintf("capi - %s - worker", clusterID.String())
 
 	tests := []struct {
 		name    string
@@ -589,6 +592,7 @@ func Test_clusterService_DeleteCluster(t *testing.T) {
 			name: "nominal",
 			cluster: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec:       infrav1alpha1.ExoscaleClusterSpec{ClusterID: clusterID.String()},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
 					ControlPlaneEndpoint: &infrav1alpha1.APIEndpointStatus{
 						ID: eipID.String(),
@@ -603,7 +607,7 @@ func Test_clusterService_DeleteCluster(t *testing.T) {
 			},
 			eipSvc: func(m *mocks.ElasticIPService) {
 				m.EXPECT().
-					DeleteElasticIP(ctx, eipID).
+					DeleteElasticIP(ctx, &eipID, clusterID).
 					Return(nil)
 			},
 			sgSvc: func(m *mocks.SecurityGroupService) {
@@ -622,6 +626,7 @@ func Test_clusterService_DeleteCluster(t *testing.T) {
 			},
 			output: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec:       infrav1alpha1.ExoscaleClusterSpec{ClusterID: clusterID.String()},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
 					ControlPlaneEndpoint: &infrav1alpha1.APIEndpointStatus{
 						ID: eipID.String(),
@@ -639,15 +644,67 @@ func Test_clusterService_DeleteCluster(t *testing.T) {
 			name: "nominal no status",
 			cluster: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec:       infrav1alpha1.ExoscaleClusterSpec{ClusterID: clusterID.String()},
+			},
+			eipSvc: func(m *mocks.ElasticIPService) {
+				m.EXPECT().
+					DeleteElasticIP(ctx, (*uuid.UUID)(nil), clusterID).
+					Return(nil)
+			},
+			sgSvc: func(m *mocks.SecurityGroupService) {
+				m.EXPECT().
+					GetSecurityGroupByName(ctx, cpSGName).
+					Return(domain.SecurityGroup{}, domain.ErrSecurityGroupNotFound)
+				m.EXPECT().
+					GetSecurityGroupByName(ctx, workerSGName).
+					Return(domain.SecurityGroup{}, domain.ErrSecurityGroupNotFound)
 			},
 			output: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec:       infrav1alpha1.ExoscaleClusterSpec{ClusterID: clusterID.String()},
+			},
+		},
+		{
+			name: "nominal SGs found by name",
+			cluster: infrav1alpha1.ExoscaleCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec:       infrav1alpha1.ExoscaleClusterSpec{ClusterID: clusterID.String()},
+			},
+			eipSvc: func(m *mocks.ElasticIPService) {
+				m.EXPECT().
+					DeleteElasticIP(ctx, (*uuid.UUID)(nil), clusterID).
+					Return(nil)
+			},
+			sgSvc: func(m *mocks.SecurityGroupService) {
+				m.EXPECT().
+					GetSecurityGroupByName(ctx, cpSGName).
+					Return(domain.SecurityGroup{ID: cpSGID, Name: cpSGName}, nil)
+				m.EXPECT().
+					GetSecurityGroupByName(ctx, workerSGName).
+					Return(domain.SecurityGroup{ID: workerSGID, Name: workerSGName}, nil)
+				m.EXPECT().
+					PurgeSecurityGroup(ctx, cpSGID).
+					Return(nil)
+				m.EXPECT().
+					PurgeSecurityGroup(ctx, workerSGID).
+					Return(nil)
+				m.EXPECT().
+					DeleteSecurityGroup(ctx, cpSGID).
+					Return(nil)
+				m.EXPECT().
+					DeleteSecurityGroup(ctx, workerSGID).
+					Return(nil)
+			},
+			output: infrav1alpha1.ExoscaleCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec:       infrav1alpha1.ExoscaleClusterSpec{ClusterID: clusterID.String()},
 			},
 		},
 		{
 			name: "invalid EIP ID",
 			cluster: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec:       infrav1alpha1.ExoscaleClusterSpec{ClusterID: clusterID.String()},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
 					ControlPlaneEndpoint: &infrav1alpha1.APIEndpointStatus{
 						ID: "not-a-uuid",
@@ -656,6 +713,7 @@ func Test_clusterService_DeleteCluster(t *testing.T) {
 			},
 			output: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec:       infrav1alpha1.ExoscaleClusterSpec{ClusterID: clusterID.String()},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
 					ControlPlaneEndpoint: &infrav1alpha1.APIEndpointStatus{
 						ID: "not-a-uuid",
@@ -668,6 +726,7 @@ func Test_clusterService_DeleteCluster(t *testing.T) {
 			name: "DeleteElasticIP error",
 			cluster: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec:       infrav1alpha1.ExoscaleClusterSpec{ClusterID: clusterID.String()},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
 					ControlPlaneEndpoint: &infrav1alpha1.APIEndpointStatus{
 						ID: eipID.String(),
@@ -676,11 +735,12 @@ func Test_clusterService_DeleteCluster(t *testing.T) {
 			},
 			eipSvc: func(m *mocks.ElasticIPService) {
 				m.EXPECT().
-					DeleteElasticIP(ctx, eipID).
+					DeleteElasticIP(ctx, &eipID, clusterID).
 					Return(assert.AnError)
 			},
 			output: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec:       infrav1alpha1.ExoscaleClusterSpec{ClusterID: clusterID.String()},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
 					ControlPlaneEndpoint: &infrav1alpha1.APIEndpointStatus{
 						ID: eipID.String(),
@@ -693,14 +753,21 @@ func Test_clusterService_DeleteCluster(t *testing.T) {
 			name: "invalid CP SG ID",
 			cluster: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec:       infrav1alpha1.ExoscaleClusterSpec{ClusterID: clusterID.String()},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
 					SecurityGroupControlPlan: &infrav1alpha1.SecurityGroupStatus{
 						ID: "not-a-uuid",
 					},
 				},
 			},
+			eipSvc: func(m *mocks.ElasticIPService) {
+				m.EXPECT().
+					DeleteElasticIP(ctx, (*uuid.UUID)(nil), clusterID).
+					Return(nil)
+			},
 			output: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec:       infrav1alpha1.ExoscaleClusterSpec{ClusterID: clusterID.String()},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
 					SecurityGroupControlPlan: &infrav1alpha1.SecurityGroupStatus{
 						ID: "not-a-uuid",
@@ -710,14 +777,42 @@ func Test_clusterService_DeleteCluster(t *testing.T) {
 			err: errInvalidID,
 		},
 		{
+			name: "GetSecurityGroupByName CP error",
+			cluster: infrav1alpha1.ExoscaleCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec:       infrav1alpha1.ExoscaleClusterSpec{ClusterID: clusterID.String()},
+			},
+			eipSvc: func(m *mocks.ElasticIPService) {
+				m.EXPECT().
+					DeleteElasticIP(ctx, (*uuid.UUID)(nil), clusterID).
+					Return(nil)
+			},
+			sgSvc: func(m *mocks.SecurityGroupService) {
+				m.EXPECT().
+					GetSecurityGroupByName(ctx, cpSGName).
+					Return(domain.SecurityGroup{}, assert.AnError)
+			},
+			output: infrav1alpha1.ExoscaleCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec:       infrav1alpha1.ExoscaleClusterSpec{ClusterID: clusterID.String()},
+			},
+			err: assert.AnError,
+		},
+		{
 			name: "PurgeSecurityGroup CP error",
 			cluster: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec:       infrav1alpha1.ExoscaleClusterSpec{ClusterID: clusterID.String()},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
 					SecurityGroupControlPlan: &infrav1alpha1.SecurityGroupStatus{
 						ID: cpSGID.String(),
 					},
 				},
+			},
+			eipSvc: func(m *mocks.ElasticIPService) {
+				m.EXPECT().
+					DeleteElasticIP(ctx, (*uuid.UUID)(nil), clusterID).
+					Return(nil)
 			},
 			sgSvc: func(m *mocks.SecurityGroupService) {
 				m.EXPECT().
@@ -726,6 +821,7 @@ func Test_clusterService_DeleteCluster(t *testing.T) {
 			},
 			output: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec:       infrav1alpha1.ExoscaleClusterSpec{ClusterID: clusterID.String()},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
 					SecurityGroupControlPlan: &infrav1alpha1.SecurityGroupStatus{
 						ID: cpSGID.String(),
@@ -738,14 +834,26 @@ func Test_clusterService_DeleteCluster(t *testing.T) {
 			name: "invalid worker SG ID",
 			cluster: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec:       infrav1alpha1.ExoscaleClusterSpec{ClusterID: clusterID.String()},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
 					SecurityGroupWorker: &infrav1alpha1.SecurityGroupStatus{
 						ID: "not-a-uuid",
 					},
 				},
 			},
+			eipSvc: func(m *mocks.ElasticIPService) {
+				m.EXPECT().
+					DeleteElasticIP(ctx, (*uuid.UUID)(nil), clusterID).
+					Return(nil)
+			},
+			sgSvc: func(m *mocks.SecurityGroupService) {
+				m.EXPECT().
+					GetSecurityGroupByName(ctx, cpSGName).
+					Return(domain.SecurityGroup{}, domain.ErrSecurityGroupNotFound)
+			},
 			output: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec:       infrav1alpha1.ExoscaleClusterSpec{ClusterID: clusterID.String()},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
 					SecurityGroupWorker: &infrav1alpha1.SecurityGroupStatus{
 						ID: "not-a-uuid",
@@ -755,22 +863,57 @@ func Test_clusterService_DeleteCluster(t *testing.T) {
 			err: errInvalidID,
 		},
 		{
+			name: "GetSecurityGroupByName worker error",
+			cluster: infrav1alpha1.ExoscaleCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec:       infrav1alpha1.ExoscaleClusterSpec{ClusterID: clusterID.String()},
+			},
+			eipSvc: func(m *mocks.ElasticIPService) {
+				m.EXPECT().
+					DeleteElasticIP(ctx, (*uuid.UUID)(nil), clusterID).
+					Return(nil)
+			},
+			sgSvc: func(m *mocks.SecurityGroupService) {
+				m.EXPECT().
+					GetSecurityGroupByName(ctx, cpSGName).
+					Return(domain.SecurityGroup{}, domain.ErrSecurityGroupNotFound)
+				m.EXPECT().
+					GetSecurityGroupByName(ctx, workerSGName).
+					Return(domain.SecurityGroup{}, assert.AnError)
+			},
+			output: infrav1alpha1.ExoscaleCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec:       infrav1alpha1.ExoscaleClusterSpec{ClusterID: clusterID.String()},
+			},
+			err: assert.AnError,
+		},
+		{
 			name: "PurgeSecurityGroup worker error",
 			cluster: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec:       infrav1alpha1.ExoscaleClusterSpec{ClusterID: clusterID.String()},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
 					SecurityGroupWorker: &infrav1alpha1.SecurityGroupStatus{
 						ID: workerSGID.String(),
 					},
 				},
 			},
+			eipSvc: func(m *mocks.ElasticIPService) {
+				m.EXPECT().
+					DeleteElasticIP(ctx, (*uuid.UUID)(nil), clusterID).
+					Return(nil)
+			},
 			sgSvc: func(m *mocks.SecurityGroupService) {
+				m.EXPECT().
+					GetSecurityGroupByName(ctx, cpSGName).
+					Return(domain.SecurityGroup{}, domain.ErrSecurityGroupNotFound)
 				m.EXPECT().
 					PurgeSecurityGroup(ctx, workerSGID).
 					Return(assert.AnError)
 			},
 			output: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec:       infrav1alpha1.ExoscaleClusterSpec{ClusterID: clusterID.String()},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
 					SecurityGroupWorker: &infrav1alpha1.SecurityGroupStatus{
 						ID: workerSGID.String(),
@@ -783,22 +926,32 @@ func Test_clusterService_DeleteCluster(t *testing.T) {
 			name: "DeleteSecurityGroup CP error",
 			cluster: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec:       infrav1alpha1.ExoscaleClusterSpec{ClusterID: clusterID.String()},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
 					SecurityGroupControlPlan: &infrav1alpha1.SecurityGroupStatus{
 						ID: cpSGID.String(),
 					},
 				},
 			},
+			eipSvc: func(m *mocks.ElasticIPService) {
+				m.EXPECT().
+					DeleteElasticIP(ctx, (*uuid.UUID)(nil), clusterID).
+					Return(nil)
+			},
 			sgSvc: func(m *mocks.SecurityGroupService) {
 				m.EXPECT().
 					PurgeSecurityGroup(ctx, cpSGID).
 					Return(nil)
+				m.EXPECT().
+					GetSecurityGroupByName(ctx, workerSGName).
+					Return(domain.SecurityGroup{}, domain.ErrSecurityGroupNotFound)
 				m.EXPECT().
 					DeleteSecurityGroup(ctx, cpSGID).
 					Return(assert.AnError)
 			},
 			output: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec:       infrav1alpha1.ExoscaleClusterSpec{ClusterID: clusterID.String()},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
 					SecurityGroupControlPlan: &infrav1alpha1.SecurityGroupStatus{
 						ID: cpSGID.String(),
@@ -811,13 +964,22 @@ func Test_clusterService_DeleteCluster(t *testing.T) {
 			name: "DeleteSecurityGroup worker error",
 			cluster: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec:       infrav1alpha1.ExoscaleClusterSpec{ClusterID: clusterID.String()},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
 					SecurityGroupWorker: &infrav1alpha1.SecurityGroupStatus{
 						ID: workerSGID.String(),
 					},
 				},
 			},
+			eipSvc: func(m *mocks.ElasticIPService) {
+				m.EXPECT().
+					DeleteElasticIP(ctx, (*uuid.UUID)(nil), clusterID).
+					Return(nil)
+			},
 			sgSvc: func(m *mocks.SecurityGroupService) {
+				m.EXPECT().
+					GetSecurityGroupByName(ctx, cpSGName).
+					Return(domain.SecurityGroup{}, domain.ErrSecurityGroupNotFound)
 				m.EXPECT().
 					PurgeSecurityGroup(ctx, workerSGID).
 					Return(nil)
@@ -827,6 +989,7 @@ func Test_clusterService_DeleteCluster(t *testing.T) {
 			},
 			output: infrav1alpha1.ExoscaleCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec:       infrav1alpha1.ExoscaleClusterSpec{ClusterID: clusterID.String()},
 				Status: infrav1alpha1.ExoscaleClusterStatus{
 					SecurityGroupWorker: &infrav1alpha1.SecurityGroupStatus{
 						ID: workerSGID.String(),

@@ -4,14 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/exoscale/cluster-api-provider-exoscale/internal/domain"
 	"github.com/go-logr/logr"
 	"github.com/google/uuid"
 )
 
-// var _ domain.ElasticIPService = (*elasticIPService)(nil)
+var _ domain.ElasticIPService = (*elasticIPService)(nil)
+
+var eipDescriptionTemplate = "capi - clusterID - %s"
 
 type elasticIPService struct {
 	cloud  domain.Cloud
@@ -23,7 +24,7 @@ func NewElasticIPService(client domain.Cloud, logger logr.Logger) *elasticIPServ
 }
 
 func (s *elasticIPService) UpsertElasticIP(ctx context.Context, clusterID uuid.UUID, eipID *uuid.UUID, port int32) (domain.ElasticIP, error) {
-	eipDescription := fmt.Sprintf("capi - clusterID - %s", clusterID.String())
+	eipDescription := fmt.Sprintf(eipDescriptionTemplate, clusterID.String())
 
 	if eipID != nil {
 		eip, err := s.cloud.GetElasticIP(ctx, *eipID)
@@ -82,8 +83,10 @@ func (s *elasticIPService) findElasticIPByClusterID(ctx context.Context, cluster
 	if err != nil {
 		return domain.ElasticIP{}, err
 	}
+
+	eipDescription := fmt.Sprintf(eipDescriptionTemplate, clusterID.String())
 	for i := range eips {
-		if strings.Contains(eips[i].Description, clusterID.String()) {
+		if eips[i].Description == eipDescription {
 			return eips[i], nil
 		}
 	}

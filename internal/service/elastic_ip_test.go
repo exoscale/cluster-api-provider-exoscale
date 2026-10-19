@@ -19,7 +19,7 @@ func Test_elasticIPService_UpsertElasticIP(t *testing.T) {
 	ctx := context.Background()
 	clusterID := uuid.New()
 	port := int32(12345)
-	description := fmt.Sprintf("capi - clusterID - %s", clusterID.String())
+	description := fmt.Sprintf(eipDescriptionTemplate, clusterID.String())
 	eipID := uuid.New()
 
 	tests := []struct {
@@ -256,7 +256,12 @@ func Test_elasticIPService_DeleteElasticIP(t *testing.T) {
 		{
 			name: "nominal - without eip id",
 			cloud: func(m *mocks.Cloud) {
-				m.EXPECT().ListElasticIPs(ctx).Return([]domain.ElasticIP{{ID: id, Description: clusterID.String()}}, nil)
+				m.EXPECT().ListElasticIPs(ctx).
+					Return([]domain.ElasticIP{
+						{
+							ID:          id,
+							Description: fmt.Sprintf(eipDescriptionTemplate, clusterID.String()),
+						}}, nil)
 				m.EXPECT().DeleteElasticIP(ctx, id).Return(nil)
 			},
 		},
